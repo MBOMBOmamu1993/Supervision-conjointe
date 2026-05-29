@@ -1,0 +1,7 @@
+{
+  "framework": "nextjs",
+  "functions": {
+    "app/api/supervision/route.ts": { "maxDuration": 60 },
+    "app/api/supervision/introspect/route.ts": { "maxDuration": 60 }
+  }
+}
