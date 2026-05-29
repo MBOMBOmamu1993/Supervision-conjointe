@@ -1,20 +1,20 @@
 import { NextResponse } from "next/server";
 import { fetchAllSources } from "@/lib/supervision/kobo-client";
-import { detectQuestionColumns, getColumns, resolveGeoColumns, matchComposante } from "@/lib/supervision/schema";
+import { detectScoreQuestions, getColumns, resolveGeoColumns } from "@/lib/supervision/schema";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 /**
  * Diagnostic : expose les colonnes détectées de chaque formulaire Kobo afin
- * d'ajuster, au besoin, les mots-clés de config/supervision.config.ts.
+ * d'ajuster, au besoin, la config (mapping composantes / champs géo).
  */
 export async function GET() {
   try {
     const sources = await fetchAllSources({ force: true });
     const out = sources.map((s) => {
       const columns = getColumns(s.rows);
-      const qCols = detectQuestionColumns(s.rows);
+      const scoreQs = detectScoreQuestions(columns);
       return {
         level: s.level,
         label: s.label,
@@ -22,7 +22,9 @@ export async function GET() {
         error: s.error,
         rowCount: s.rows.length,
         geo: resolveGeoColumns(columns),
-        questionColumns: qCols.map((q) => ({ column: q, composante: matchComposante(q) })),
+        questionCount: scoreQs.length,
+        questions: scoreQs.map((q) => ({ scoreCol: q.scoreCol, maxCol: q.maxCol, token: q.token, composante: q.composante, label: q.label })),
+        unmatchedComposante: scoreQs.filter((q) => !q.composante).map((q) => q.token),
         allColumns: columns,
         sample: s.rows.slice(0, 2),
       };

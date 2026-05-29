@@ -16,7 +16,9 @@ interface IntrospectSource {
   error?: string;
   rowCount: number;
   geo: Record<string, string | null>;
-  questionColumns: { column: string; composante: string | null }[];
+  questionCount: number;
+  questions: { scoreCol: string; token: string; composante: string | null; label: string }[];
+  unmatchedComposante: string[];
   allColumns: string[];
 }
 
@@ -42,8 +44,8 @@ function Diagnostic() {
             {Object.entries(s.geo).filter(([, v]) => v).map(([k, v]) => `${k} → « ${v} »`).join(" · ") || "aucune détectée"}
           </div>
           <div className="text-[11px] text-surface-700 mt-1">
-            <span className="font-medium">{s.questionColumns?.length ?? 0} questions détectées</span>{" "}
-            ({s.questionColumns?.filter((q) => q.composante).length ?? 0} rattachées à une composante)
+            <span className="font-medium">{s.questionCount ?? 0} questions notées détectées</span>
+            {s.unmatchedComposante?.length ? <span className="text-warn-600"> · {s.unmatchedComposante.length} token(s) non rattaché(s) : {s.unmatchedComposante.join(", ")}</span> : <span className="text-good-600"> · toutes rattachées à une composante</span>}
           </div>
         </div>
       ))}

@@ -1,20 +1,24 @@
 /**
- * Résolution tolérante du schéma Kobo.
+ * Résolution du schéma Kobo (calée sur les formulaires réels de Tshuapa).
  *
- * Les noms de colonnes des checklists ne sont pas connus à l'avance : on les
- * résout par correspondance de mots-clés normalisés (sans accents, minuscule).
- * Cela rend le dashboard robuste aux variations de libellés entre formulaires.
+ *  - Les questions notées sont identifiées par leurs colonnes de SCORE/MAX :
+ *      ZS       : q_<token>_NN_score / q_<token>_NN_max
+ *      CS       : sc_<token>_NN      / max_<token>_NN
+ *      Antenne  : sc_<token>_NN      / mx_<token>_NN
+ *  - Le <token> détermine la composante (mot-clé le plus long inclus).
+ *  - Le score d'une question respecte le barème du formulaire (NA → max = 0).
  */
 import {
   ANSWER_MATCHERS,
   COMPOSANTES,
-  SUPERVISION_TYPES,
+  TYPE_KEYWORDS,
   type AnswerValue,
+  type StructureLevel,
   type SupervisionType,
 } from "@/config/supervision.config";
 import type { RawRow } from "./types";
 
-/** minuscule, sans accents, espaces normalisés, ponctuation → espace. */
+/** minuscule, sans accents, espaces normalisés. */
 export function norm(s: unknown): string {
   return String(s ?? "")
     .normalize("NFD")
@@ -24,33 +28,30 @@ export function norm(s: unknown): string {
     .trim();
 }
 
-/** Colonnes techniques Kobo à ignorer pour la détection de questions. */
-const META_PREFIXES = ["_", "meta", "formhub", "instanceid", "deviceid", "today", "start", "end", "username", "phonenumber", "audit", "version", "submission", "validation", "tags", "notes", "geolocation", "gps"];
-
 export function isMetaColumn(col: string): boolean {
   const n = norm(col);
   if (!n) return true;
-  return META_PREFIXES.some((p) => n === norm(p) || n.startsWith(norm(p) + " ") || col.startsWith("_"));
+  if (col.startsWith("_")) return true;
+  return ["start", "end", "today", "deviceid", "username", "instanceid", "version", "submissiontime", "phonenumber", "audit", "validation status"].includes(n);
 }
 
-/** Trouve la première colonne dont le nom contient l'un des mots-clés. */
+/** Première colonne dont le nom contient l'un des mots-clés (exact > startsWith > contains). */
 export function findColumn(columns: string[], keywords: string[]): string | null {
   const ncols = columns.map((c) => ({ c, n: norm(c) }));
   for (const kw of keywords) {
     const nk = norm(kw);
-    // priorité au match exact, puis "commence par", puis "contient"
     const exact = ncols.find((x) => x.n === nk);
     if (exact) return exact.c;
   }
   for (const kw of keywords) {
     const nk = norm(kw);
-    const starts = ncols.find((x) => x.n.startsWith(nk));
-    if (starts) return starts.c;
+    const s = ncols.find((x) => x.n.startsWith(nk));
+    if (s) return s.c;
   }
   for (const kw of keywords) {
     const nk = norm(kw);
-    const contains = ncols.find((x) => x.n.includes(nk));
-    if (contains) return contains.c;
+    const c = ncols.find((x) => x.n.includes(nk));
+    if (c) return c.c;
   }
   return null;
 }
@@ -61,50 +62,36 @@ export interface GeoColumns {
   zone: string | null;
   aire: string | null;
   date: string | null;
-  type: string | null;
+  fonction: string | null;
+  personne: string | null;
+  etablissement: string | null;
 }
 
 export function resolveGeoColumns(columns: string[]): GeoColumns {
+  // On teste à la fois les LIBELLÉS (export « labels/Français ») et les NOMS
+  // techniques (export « valeurs XML »), pour être robuste aux deux formats.
   return {
     province: findColumn(columns, ["province", "dps"]),
-    antenne: findColumn(columns, ["antenne pev", "antenne", "nom antenne", "antenne de"]),
-    zone: findColumn(columns, ["zone de sante", "nom de la zone", "zone sante", "zs", "zone"]),
-    aire: findColumn(columns, ["aire de sante", "nom de l aire", "centre de sante", "formation sanitaire", "fosa", "aire", "cs"]),
-    date: findColumn(columns, ["date de supervision", "date supervision", "date de la visite", "date", "_submission_time", "today", "end"]),
-    type: findColumn(columns, ["type de supervision", "type supervision", "categorie de supervision", "type de visite", "equipe de supervision", "niveau de supervision", "supervision conjointe", "superviseur"]),
+    antenne: findColumn(columns, ["antenne pev", "antenne"]),
+    zone: findColumn(columns, ["zone de sante", "zone sante", "zone_sante", "zone"]),
+    aire: findColumn(columns, ["aire de sante", "aire sante", "aire_sante", "aire"]),
+    date: findColumn(columns, ["date de la supervision", "date de supervision", "date supervision", "date_supervision", "date", "today", "end"]),
+    fonction: findColumn(columns, ["fonction du superviseur", "fonction superviseur", "fonction_superviseur", "fonction de la personne", "equipe de supervision", "fonction"]),
+    personne: findColumn(columns, ["nom du superviseur", "nom_superviseur", "nom et fonction de la personne", "personne rencontree", "personne_rencontree", "superviseur"]),
+    etablissement: findColumn(columns, ["nom de l etablissement", "nom_ess", "etablissement", "centre de sante supervise", "structure supervisee"]),
   };
 }
 
-/** Classe une valeur brute en réponse canonique (ou null si non reconnue). */
-export function classifyAnswer(value: unknown): AnswerValue | null {
-  const n = norm(value);
-  if (!n) return null;
-  // ordre : na avant non (car "non applicable" contient "non")
-  for (const av of ["na", "oui", "partiel", "non"] as AnswerValue[]) {
-    for (const m of ANSWER_MATCHERS[av]) {
-      const nm = norm(m);
-      if (n === nm) return av;
-    }
-  }
-  for (const av of ["na", "partiel", "oui", "non"] as AnswerValue[]) {
-    for (const m of ANSWER_MATCHERS[av]) {
-      const nm = norm(m);
-      if (nm.length >= 3 && (n.startsWith(nm + " ") || n === nm)) return av;
-    }
-  }
-  return null;
-}
-
-/** Rattache un libellé de question à une composante (clé) ou null. */
-export function matchComposante(columnLabel: string): string | null {
-  const n = norm(columnLabel);
+/** Mot-clé composante le plus long inclus dans le token → clé de composante. */
+export function matchComposanteByToken(token: string): string | null {
+  const t = norm(token).replace(/\s+/g, "_");
   let bestKey: string | null = null;
   let bestLen = 0;
   for (const comp of COMPOSANTES) {
-    for (const kw of comp.keywords) {
-      const nk = norm(kw);
-      if (nk && n.includes(nk) && nk.length > bestLen) {
-        bestLen = nk.length;
+    for (const kw of comp.tokens) {
+      const k = norm(kw).replace(/\s+/g, "_");
+      if (k && t.includes(k) && k.length > bestLen) {
+        bestLen = k.length;
         bestKey = comp.key;
       }
     }
@@ -112,46 +99,130 @@ export function matchComposante(columnLabel: string): string | null {
   return bestKey;
 }
 
-/** Classe la valeur du champ « type de supervision ». */
-export function classifySupervisionType(value: unknown): SupervisionType {
-  const n = norm(value);
-  if (!n) return "autre";
-  for (const t of SUPERVISION_TYPES) {
-    for (const m of t.matchers) {
-      if (n.includes(norm(m))) return t.key;
+export interface ScoreQuestion {
+  scoreCol: string;
+  maxCol: string;
+  token: string;
+  composante: string | null;
+  label: string;
+}
+
+/** Jolit un libellé de question (retire numérotation et soulignés). */
+function prettyLabel(raw: string): string {
+  const clean = raw.replace(/^\s*\d+[.)]\s*/, "").replace(/_/g, " ").trim();
+  return clean.length > 90 ? clean.slice(0, 87) + "…" : clean;
+}
+
+/**
+ * Détecte les paires score/max et les rattache à une composante + un libellé.
+ * Le libellé est récupéré par position : [question][commentaire][score][max].
+ */
+export function detectScoreQuestions(columns: string[]): ScoreQuestion[] {
+  const colSet = new Set(columns);
+  const out: ScoreQuestion[] = [];
+  const seen = new Set<string>();
+
+  const resolveLabel = (scoreIdx: number, token: string): string => {
+    for (const back of [2, 1, 3]) {
+      const cand = columns[scoreIdx - back];
+      if (!cand) continue;
+      const n = norm(cand);
+      if (!cand || isMetaColumn(cand)) continue;
+      if (/(^|_)(score|max|mx|sc|pct)(_|$)/.test(norm(cand).replace(/ /g, "_"))) continue;
+      if (n.startsWith("commentaire") || n.startsWith("observation") || n.includes("commentaires")) continue;
+      if (cand.length > 8) return prettyLabel(cand);
     }
+    return prettyLabel(token);
+  };
+
+  columns.forEach((col, idx) => {
+    let token: string | null = null;
+    let maxCol: string | null = null;
+
+    // ZS : q_<token>_NN_score
+    let m = col.match(/^q_(.+)_\d+_score$/i);
+    if (m) {
+      token = m[1];
+      const cand = col.replace(/_score$/i, "_max");
+      if (colSet.has(cand)) maxCol = cand;
+    }
+    // CS / Antenne : sc_<token>_NN
+    if (!token) {
+      m = col.match(/^sc_(.+)_\d+$/i);
+      if (m) {
+        const rest = col.slice(3); // après "sc_"
+        const cMax = "max_" + rest;
+        const cMx = "mx_" + rest;
+        if (colSet.has(cMax)) { token = m[1]; maxCol = cMax; }
+        else if (colSet.has(cMx)) { token = m[1]; maxCol = cMx; }
+      }
+    }
+
+    if (token && maxCol && !seen.has(col)) {
+      seen.add(col);
+      const composante = matchComposanteByToken(token);
+      if (composante) {
+        out.push({ scoreCol: col, maxCol, token, composante, label: resolveLabel(idx, token) });
+      }
+    }
+  });
+
+  return out;
+}
+
+/** Classe une valeur brute (Oui/Partiellement/Non/Non applicable) — usage résiduel. */
+export function classifyAnswer(value: unknown): AnswerValue | null {
+  const n = norm(value);
+  if (!n) return null;
+  for (const av of ["na", "oui", "partiel", "non"] as AnswerValue[]) {
+    for (const matcher of ANSWER_MATCHERS[av]) if (n === norm(matcher)) return av;
+  }
+  for (const av of ["na", "partiel"] as AnswerValue[]) {
+    for (const matcher of ANSWER_MATCHERS[av]) if (n.startsWith(norm(matcher))) return av;
+  }
+  return null;
+}
+
+/** Score brut/max → réponse canonique (barème du formulaire). */
+export function answerFromScore(score: number | null, max: number | null): AnswerValue | null {
+  if (max === null || !Number.isFinite(max) || max <= 0) {
+    // max 0 ou absent : applicable seulement si un score existe
+    return score === null ? null : "na";
+  }
+  if (score === null || !Number.isFinite(score)) return null;
+  const ratio = score / max;
+  if (ratio >= 0.999) return "oui";
+  if (ratio <= 0.001) return "non";
+  return "partiel";
+}
+
+/** Type de supervision déduit de la fonction du superviseur et du niveau. */
+export function classifySupervisionType(level: StructureLevel, fonction: unknown, personne?: unknown): SupervisionType {
+  const f = norm(fonction) + " " + norm(personne);
+  const has = (arr: string[]) => arr.some((k) => f.includes(norm(k)));
+  const joint = String(fonction ?? "").includes("/") || / et |&|conjoint/.test(norm(fonction));
+
+  if (has(TYPE_KEYWORDS.oms)) return "conjointe_pev_oms";
+
+  if (level === "antenne") {
+    // Les antennes sont supervisées par le niveau central/intermédiaire (conjointe).
+    return "conjointe_pev_oms";
+  }
+  if (level === "zs") {
+    if (joint && has(TYPE_KEYWORDS.mca_at)) return "conjointe_mca";
+    if (has(TYPE_KEYWORDS.mca_at)) return "mca_seul";
+    return "conjointe_mca";
+  }
+  if (level === "as") {
+    if (joint) return "conjointe_mca";
+    if (has(TYPE_KEYWORDS.ecz)) return "ecz_seul";
+    return "ecz_seul";
   }
   return "autre";
 }
 
-/**
- * Détecte les colonnes « question » d'un jeu de lignes : celles dont une part
- * significative des valeurs non vides se classe en Oui/Non/Partiel/NA.
- */
-export function detectQuestionColumns(rows: RawRow[]): string[] {
-  if (rows.length === 0) return [];
-  const columns = Object.keys(rows[0] ?? {});
-  const sample = rows.slice(0, Math.min(rows.length, 400));
-  const questions: string[] = [];
-  for (const col of columns) {
-    if (isMetaColumn(col)) continue;
-    let nonEmpty = 0;
-    let answerLike = 0;
-    for (const r of sample) {
-      const v = r[col];
-      if (v === null || v === undefined || String(v).trim() === "") continue;
-      nonEmpty++;
-      if (classifyAnswer(v)) answerLike++;
-    }
-    if (nonEmpty >= 3 && answerLike / nonEmpty >= 0.6) {
-      questions.push(col);
-    }
-  }
-  return questions;
-}
-
 export function getColumns(rows: RawRow[]): string[] {
   const set = new Set<string>();
-  for (const r of rows.slice(0, 50)) for (const k of Object.keys(r)) set.add(k);
+  for (const r of rows.slice(0, 80)) for (const k of Object.keys(r)) set.add(k);
   return Array.from(set);
 }

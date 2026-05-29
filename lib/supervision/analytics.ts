@@ -1,10 +1,9 @@
 /**
  * Moteur analytique : transforme les lignes brutes Kobo des 3 formulaires en
- * un bundle prêt à l'affichage (KPI, scores, cotations, composantes, tendances,
- * comparaisons, top-5 réponses « Non »).
+ * un bundle prêt à l'affichage. Les scores sont lus depuis les colonnes
+ * score/max calculées par le formulaire (barème officiel respecté).
  */
 import {
-  ANSWER_SCORE,
   COMPOSANTES,
   COTATION_COLOR,
   COTATION_LABEL,
@@ -17,13 +16,13 @@ import {
   type SupervisionTargets,
 } from "@/config/supervision.config";
 import {
-  classifyAnswer,
+  answerFromScore,
   classifySupervisionType,
-  detectQuestionColumns,
+  detectScoreQuestions,
   getColumns,
-  matchComposante,
   norm,
   resolveGeoColumns,
+  type ScoreQuestion,
 } from "./schema";
 import type { SourceFetch } from "./kobo-client";
 import type {
@@ -60,8 +59,8 @@ function toMonth(iso: string | null): string | null {
 
 function parseDate(v: unknown): string | null {
   if (v === null || v === undefined || v === "") return null;
+  if (v instanceof Date) return v.toISOString().slice(0, 10);
   const s = String(v).trim();
-  // formats fréquents : ISO, dd/mm/yyyy
   const iso = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
   if (iso) return `${iso[1]}-${iso[2]}-${iso[3]}`;
   const dmy = s.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})/);
@@ -73,8 +72,15 @@ function parseDate(v: unknown): string | null {
   return Number.isNaN(d.getTime()) ? null : d.toISOString().slice(0, 10);
 }
 
+function num(v: unknown): number | null {
+  if (v === null || v === undefined || v === "") return null;
+  const n = typeof v === "number" ? v : parseFloat(String(v).replace(",", "."));
+  return Number.isFinite(n) ? n : null;
+}
+
 function cleanStr(v: unknown): string | null {
   if (v === null || v === undefined) return null;
+  if (v instanceof Date) return v.toISOString().slice(0, 10);
   const s = String(v).trim();
   return s === "" ? null : s;
 }
@@ -88,55 +94,59 @@ const r1 = (n: number | null): number | null => (n === null ? null : Math.round(
 
 /* ----------------------- Construction des enregistrements ----------------------- */
 
-function buildRecords(source: SourceFetch): { records: SupervisionRecord[]; rows: RawRow[]; qCols: string[] } {
+function buildRecords(source: SourceFetch): { records: SupervisionRecord[]; rows: RawRow[]; scoreQs: ScoreQuestion[] } {
   const rows = source.rows;
   const columns = getColumns(rows);
   const geo = resolveGeoColumns(columns);
-  const qCols = detectQuestionColumns(rows);
-
-  // pré-calcul : composante de chaque question
-  const qComp = new Map<string, string | null>();
-  for (const q of qCols) qComp.set(q, matchComposante(q));
+  const scoreQs = detectScoreQuestions(columns);
 
   const records: SupervisionRecord[] = rows.map((row, i) => {
     const answers = EMPTY_ANSWERS();
     const answersByComposante: Record<string, Record<AnswerValue, number>> = {};
-    const compScored: Record<string, number[]> = {};
+    const compSum: Record<string, { score: number; max: number }> = {};
     for (const c of COMPOSANTES) {
       answersByComposante[c.key] = EMPTY_ANSWERS();
-      compScored[c.key] = [];
+      compSum[c.key] = { score: 0, max: 0 };
     }
-    const allScored: number[] = [];
+    let globalScore = 0;
+    let globalMax = 0;
 
-    for (const q of qCols) {
-      const av = classifyAnswer(row[q]);
+    for (const q of scoreQs) {
+      const sc = num(row[q.scoreCol]);
+      const mx = num(row[q.maxCol]);
+      const av = answerFromScore(sc, mx);
       if (!av) continue;
       answers[av]++;
-      const sc = ANSWER_SCORE[av];
-      const ck = qComp.get(q);
-      if (ck) {
-        answersByComposante[ck][av]++;
-        if (sc !== null) compScored[ck].push(sc);
+      const ck = q.composante!;
+      answersByComposante[ck][av]++;
+      if (av !== "na" && mx !== null && mx > 0) {
+        compSum[ck].score += sc ?? 0;
+        compSum[ck].max += mx;
+        globalScore += sc ?? 0;
+        globalMax += mx;
       }
-      if (sc !== null) allScored.push(sc);
     }
 
     const composantes: Record<string, number | null> = {};
     for (const c of COMPOSANTES) {
-      composantes[c.key] = compScored[c.key].length ? r1((compScored[c.key].reduce((a, b) => a + b, 0) / compScored[c.key].length) * 100) : null;
+      composantes[c.key] = compSum[c.key].max > 0 ? r1((compSum[c.key].score / compSum[c.key].max) * 100) : null;
     }
-    const scorePct = allScored.length ? r1((allScored.reduce((a, b) => a + b, 0) / allScored.length) * 100) : null;
+    const scorePct = globalMax > 0 ? r1((globalScore / globalMax) * 100) : null;
 
     const date = geo.date ? parseDate(row[geo.date]) : null;
     const antenne = geo.antenne ? cleanStr(row[geo.antenne]) : null;
     const zone = geo.zone ? cleanStr(row[geo.zone]) : null;
     const aire = geo.aire ? cleanStr(row[geo.aire]) : null;
-    const structure = source.level === "antenne" ? antenne : source.level === "zs" ? zone : aire;
+    const etab = geo.etablissement ? cleanStr(row[geo.etablissement]) : null;
+    const structure =
+      source.level === "antenne" ? antenne :
+      source.level === "zs" ? zone :
+      (aire ?? etab);
 
     return {
       id: `${source.level}-${i}`,
       level: source.level,
-      type: geo.type ? classifySupervisionType(row[geo.type]) : "autre",
+      type: classifySupervisionType(source.level, geo.fonction ? row[geo.fonction] : null, geo.personne ? row[geo.personne] : null),
       province: geo.province ? cleanStr(row[geo.province]) : null,
       antenne,
       zone,
@@ -152,7 +162,7 @@ function buildRecords(source: SourceFetch): { records: SupervisionRecord[]; rows
     };
   });
 
-  return { records, rows, qCols };
+  return { records, rows, scoreQs };
 }
 
 function passFilters(r: SupervisionRecord, f: Filters): boolean {
@@ -180,12 +190,7 @@ function scoreStat(records: SupervisionRecord[]): ScoreStat {
 function cotationDist(records: SupervisionRecord[]): CotationDist[] {
   const counts: Record<CotationLevel, number> = { tres_bon: 0, bon: 0, moyen: 0, faible: 0 };
   let total = 0;
-  for (const r of records) {
-    if (r.cotation) {
-      counts[r.cotation]++;
-      total++;
-    }
-  }
+  for (const r of records) if (r.cotation) { counts[r.cotation]++; total++; }
   return COTATION_ORDER.map((level) => ({
     level,
     label: COTATION_LABEL[level],
@@ -203,7 +208,7 @@ function perStructure(records: SupervisionRecord[]): NamedScore[] {
     if (r.scorePct !== null) map.get(name)!.push(r.scorePct);
   }
   return Array.from(map.entries())
-    .map(([name, scores]) => ({ name, score: avg(scores), count: scores.length }))
+    .map(([name, scores]) => ({ name, score: r1(avg(scores)), count: scores.length }))
     .sort((a, b) => (b.score ?? -1) - (a.score ?? -1));
 }
 
@@ -236,7 +241,7 @@ function trend(records: SupervisionRecord[]): TrendPoint[] {
   }
   return Array.from(map.entries())
     .sort((a, b) => a[0].localeCompare(b[0]))
-    .map(([month, scores]) => ({ month, score: avg(scores), count: scores.length }));
+    .map(([month, scores]) => ({ month, score: r1(avg(scores)), count: scores.length }));
 }
 
 function monthlyMatrix(records: SupervisionRecord[], months: string[]): MonthlyMatrixRow[] {
@@ -261,25 +266,20 @@ function monthlyMatrix(records: SupervisionRecord[], months: string[]): MonthlyM
   return rows.sort((a, b) => (b.last ?? -1) - (a.last ?? -1));
 }
 
-function topNon(rows: RawRow[], qCols: string[]): TopNonItem[] {
+function topNon(rows: RawRow[], scoreQs: ScoreQuestion[]): TopNonItem[] {
   const items: TopNonItem[] = [];
-  for (const q of qCols) {
+  for (const q of scoreQs) {
     let non = 0;
     let total = 0;
     for (const row of rows) {
-      const av = classifyAnswer(row[q]);
+      const av = answerFromScore(num(row[q.scoreCol]), num(row[q.maxCol]));
       if (!av || av === "na") continue;
       total++;
       if (av === "non") non++;
     }
-    if (total >= 3) items.push({ question: shortenQuestion(q), nonCount: non, total, pct: Math.round((non / total) * 100) });
+    if (total >= 1 && non > 0) items.push({ question: q.label, nonCount: non, total, pct: Math.round((non / total) * 100) });
   }
-  return items.sort((a, b) => b.pct - a.pct).slice(0, 5);
-}
-
-function shortenQuestion(q: string): string {
-  const clean = q.replace(/^\d+[.)]\s*/, "").replace(/_/g, " ").trim();
-  return clean.length > 70 ? clean.slice(0, 67) + "…" : clean;
+  return items.sort((a, b) => b.pct - a.pct || b.nonCount - a.nonCount).slice(0, 5);
 }
 
 function radar(records: SupervisionRecord[]): { entities: { name: string; values: number[] }[]; indicators: string[] } {
@@ -294,12 +294,12 @@ function radar(records: SupervisionRecord[]): { entities: { name: string; values
     .slice(0, 8)
     .map(([name, recs]) => ({
       name,
-      values: COMPOSANTES.map((c) => avg(recs.map((r) => r.composantes[c.key] ?? null)) ?? 0).map((n) => Math.round(n)),
+      values: COMPOSANTES.map((c) => Math.round(avg(recs.map((r) => r.composantes[c.key] ?? null)) ?? 0)),
     }));
   return { entities, indicators };
 }
 
-function buildLevel(level: StructureLevel, records: SupervisionRecord[], rows: RawRow[], qCols: string[], months: string[]): LevelBundle {
+function buildLevel(level: StructureLevel, records: SupervisionRecord[], rows: RawRow[], scoreQs: ScoreQuestion[], months: string[]): LevelBundle {
   return {
     level,
     records: records.length,
@@ -310,7 +310,7 @@ function buildLevel(level: StructureLevel, records: SupervisionRecord[], rows: R
     composanteAnswers: composanteAnswers(records),
     trend: trend(records),
     monthlyMatrix: monthlyMatrix(records, months),
-    topNon: topNon(rows, qCols),
+    topNon: topNon(rows, scoreQs),
     radar: radar(records),
   };
 }
@@ -320,7 +320,6 @@ function buildLevel(level: StructureLevel, records: SupervisionRecord[], rows: R
 function distinctStructures(records: SupervisionRecord[]): number {
   return new Set(records.filter((r) => r.structure).map((r) => norm(r.structure))).size;
 }
-
 function kpiBlock(count: number, target: number | null): KpiBlock {
   return { count, target, pct: target && target > 0 ? Math.round((count / target) * 100) : null };
 }
@@ -330,28 +329,25 @@ function kpiBlock(count: number, target: number | null): KpiBlock {
 export function buildBundle(sources: SourceFetch[], filters: Filters, targets: SupervisionTargets): SupervisionBundle {
   const parsed = sources.map((s) => ({ source: s, ...buildRecords(s) }));
 
-  // Application des filtres + filtrage parallèle des lignes brutes (topNon)
-  const byLevel = {} as Record<StructureLevel, { records: SupervisionRecord[]; rows: RawRow[]; qCols: string[] }>;
+  const byLevel = {} as Record<StructureLevel, { records: SupervisionRecord[]; rows: RawRow[]; scoreQs: ScoreQuestion[] }>;
   const allRecords: SupervisionRecord[] = [];
   for (const p of parsed) {
-    const keep: boolean[] = p.records.map((r) => passFilters(r, filters));
+    const keep = p.records.map((r) => passFilters(r, filters));
     const records = p.records.filter((_, i) => keep[i]);
     const rows = p.rows.filter((_, i) => keep[i]);
-    byLevel[p.source.level] = { records, rows, qCols: p.qCols };
+    byLevel[p.source.level] = { records, rows, scoreQs: p.scoreQs };
     allRecords.push(...records);
   }
 
-  // mois présents (triés)
   const months = Array.from(new Set(allRecords.map((r) => r.month).filter((m): m is string => !!m))).sort();
 
   const levels = {} as Record<StructureLevel, LevelBundle>;
   (["antenne", "zs", "as"] as StructureLevel[]).forEach((lvl) => {
-    const d = byLevel[lvl] ?? { records: [], rows: [], qCols: [] };
-    levels[lvl] = buildLevel(lvl, d.records, d.rows, d.qCols, months);
+    const d = byLevel[lvl] ?? { records: [], rows: [], scoreQs: [] };
+    levels[lvl] = buildLevel(lvl, d.records, d.rows, d.scoreQs, months);
   });
 
   const byType = (recs: SupervisionRecord[], t: string) => recs.filter((r) => r.type === t);
-
   const antRecs = byLevel.antenne?.records ?? [];
   const zsRecs = byLevel.zs?.records ?? [];
   const asRecs = byLevel.as?.records ?? [];
@@ -360,16 +356,15 @@ export function buildBundle(sources: SourceFetch[], filters: Filters, targets: S
   const conjointeMca = allRecords.filter((r) => r.type === "conjointe_mca");
   const conjointeAll = allRecords.filter((r) => r.type === "conjointe_pev_oms" || r.type === "conjointe_mca");
 
-  const zsConjointe = zsRecs.filter((r) => r.type !== "ecz_seul" && r.type !== "mca_seul");
-  const csConjointe = asRecs.filter((r) => r.type !== "ecz_seul" && r.type !== "mca_seul");
-  const antConjointe = antRecs;
+  const zsConjointe = zsRecs.filter((r) => r.type === "conjointe_pev_oms" || r.type === "conjointe_mca");
+  const csConjointe = asRecs.filter((r) => r.type === "conjointe_pev_oms" || r.type === "conjointe_mca");
 
   const kpi = {
     conjointe_pev_oms: kpiBlock(conjointePevOms.length, targets.conjointe_pev_oms),
     conjointe_mca: kpiBlock(conjointeMca.length, targets.conjointe_mca),
     mca_seul: kpiBlock(byType(allRecords, "mca_seul").length, targets.mca_seul),
     ecz_seul: kpiBlock(byType(allRecords, "ecz_seul").length, targets.ecz_seul),
-    antennes_sup: kpiBlock(distinctStructures(antConjointe), targets.antennes),
+    antennes_sup: kpiBlock(distinctStructures(antRecs), targets.antennes),
     zs_conjointe: kpiBlock(distinctStructures(zsConjointe), targets.zs_conjointe),
     zs_mca: kpiBlock(distinctStructures(byType(zsRecs, "mca_seul")), targets.zs_mca),
     cs_conjointe: kpiBlock(distinctStructures(csConjointe), targets.cs_conjointe),
@@ -378,12 +373,10 @@ export function buildBundle(sources: SourceFetch[], filters: Filters, targets: S
     total_supervisions: allRecords.length,
   };
 
-  // comparaisons par type (page 2)
   const zsMca = perStructure(byType(zsRecs, "mca_seul"));
   const csEcz = perStructure(byType(asRecs, "ecz_seul"));
 
-  // highlights
-  const levelScores: { level: StructureLevel; label: string; score: number | null }[] = (["antenne", "zs", "as"] as StructureLevel[]).map((lvl) => ({
+  const levelScores = (["antenne", "zs", "as"] as StructureLevel[]).map((lvl) => ({
     level: lvl,
     label: LEVEL_LABEL[lvl].short,
     score: levels[lvl].score.moyen,
@@ -402,11 +395,9 @@ export function buildBundle(sources: SourceFetch[], filters: Filters, targets: S
   const bestComposante = compRanked[0] ?? null;
   const worstComposante = compRanked[compRanked.length - 1] ?? null;
 
-  // meilleure progression antenne (matrice mensuelle)
   const antMatrix = levels.antenne.monthlyMatrix.filter((m) => m.variation !== null);
   const bestProg = antMatrix.length ? [...antMatrix].sort((a, b) => (b.variation ?? 0) - (a.variation ?? 0))[0] : null;
 
-  // alerte : composante faible dans plusieurs ZS
   let alert: string | null = null;
   if (worstComposante) {
     const weakZs = levels.zs.perStructure.filter((s) => {
