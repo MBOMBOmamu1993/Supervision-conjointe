@@ -34,7 +34,7 @@ export default function Sidebar() {
       <div className="px-5 pt-5 pb-4 border-b border-white/10">
         <div className="text-[10px] uppercase tracking-[0.18em] text-white/55 font-semibold">Tableau de bord</div>
         <div className="font-extrabold text-[17px] leading-tight mt-0.5">Supervision conjointe</div>
-        <div className="text-[12px] text-oms-300 font-semibold mt-0.5">PEV-Central · OMS — RDC</div>
+        <div className="text-[12px] text-oms-300 font-semibold mt-0.5">PEV · OMS — RDC</div>
         <div className="mt-2.5 inline-flex items-center gap-1.5 text-[10px] text-white/55">
           <span className="inline-block w-1.5 h-1.5 rounded-full bg-good-500" /> République Démocratique du Congo
         </div>

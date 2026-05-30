@@ -3,7 +3,7 @@ import type { SVGProps } from "react";
 export type IconName =
   | "home" | "time" | "component" | "analyse" | "report"
   | "hands" | "people" | "person" | "clipboard" | "tower"
-  | "pin" | "map" | "clinic" | "trophy" | "alert" | "shield"
+  | "pin" | "map" | "clinic" | "hospital" | "trophy" | "alert" | "shield"
   | "down" | "calendar" | "doc" | "bars" | "refresh";
 
 const P: Record<IconName, JSX.Element> = {
@@ -20,6 +20,7 @@ const P: Record<IconName, JSX.Element> = {
   pin: (<><path d="M12 21s-7-6.3-7-11a7 7 0 0 1 14 0c0 4.7-7 11-7 11Z" /><circle cx="12" cy="10" r="2.5" /></>),
   map: (<><path d="m9 4-6 2.5v13L9 17l6 2.5 6-2.5v-13L15 6 9 4Z" /><path d="M9 4v13M15 6v13" /></>),
   clinic: (<><path d="M4 21V8l8-4 8 4v13" /><path d="M12 9v6M9 12h6" /><path d="M9 21v-4h6v4" /></>),
+  hospital: (<><path d="M3 21h18" /><path d="M5 21V5a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v16" /><path d="M12 7.5v4M10 9.5h4" /><path d="M9.5 21v-3.5h5V21" /></>),
   trophy: (<><path d="M7 4h10v4a5 5 0 0 1-10 0V4Z" /><path d="M7 6H4v1a3 3 0 0 0 3 3M17 6h3v1a3 3 0 0 1-3 3" /><path d="M9 21h6M12 14v4" /></>),
   alert: (<><path d="M12 3 2 20h20L12 3Z" /><path d="M12 10v4M12 17h.01" /></>),
   shield: (<><path d="M12 3 5 6v5c0 4.5 3 7.5 7 9 4-1.5 7-4.5 7-9V6l-7-3Z" /><path d="m9 12 2 2 4-4" /></>),
