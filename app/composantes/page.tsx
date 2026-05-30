@@ -66,15 +66,15 @@ export default function ComposantesPage() {
             <SectionBar icon="component">Radars des 6 composantes</SectionBar>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-2.5">
               <Card>
-                <CardHeader title="Antennes" />
+                <CardHeader icon="tower" title="Antennes" />
                 {d.levels.antenne.radar.entities.length ? <Radar indicators={d.levels.antenne.radar.indicators} entities={d.levels.antenne.radar.entities} /> : <EmptyState />}
               </Card>
               <Card>
-                <CardHeader title="Zones de santé" />
+                <CardHeader icon="map" title="Zones de santé" />
                 {d.levels.zs.radar.entities.length ? <Radar indicators={d.levels.zs.radar.indicators} entities={d.levels.zs.radar.entities} /> : <EmptyState />}
               </Card>
               <Card>
-                <CardHeader title="Aires de santé" />
+                <CardHeader icon="clinic" title="Aires de santé" />
                 {d.levels.as.radar.entities.length ? <Radar indicators={d.levels.as.radar.indicators} entities={d.levels.as.radar.entities} /> : <EmptyState />}
               </Card>
             </div>
@@ -84,9 +84,9 @@ export default function ComposantesPage() {
           <section>
             <SectionBar icon="bars">Tableaux des scores par composante</SectionBar>
             <div className="space-y-2.5">
-              <Card><CardHeader title="Scores par antenne" /><ComposanteTable bundle={d.levels.antenne} /></Card>
-              <Card><CardHeader title="Scores par zone de santé" /><ComposanteTable bundle={d.levels.zs} /></Card>
-              <Card><CardHeader title="Scores par aire de santé / CS" /><ComposanteTable bundle={d.levels.as} /></Card>
+              <Card><CardHeader icon="tower" title="Scores par antenne" /><ComposanteTable bundle={d.levels.antenne} /></Card>
+              <Card><CardHeader icon="map" title="Scores par zone de santé" /><ComposanteTable bundle={d.levels.zs} /></Card>
+              <Card><CardHeader icon="clinic" title="Scores par aire de santé / CS" /><ComposanteTable bundle={d.levels.as} /></Card>
             </div>
           </section>
 
@@ -94,9 +94,9 @@ export default function ComposantesPage() {
           <section>
             <SectionBar icon="component">Répartition des réponses par composante</SectionBar>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-2.5">
-              <Card><CardHeader title="Antennes" /><StackedAnswers rows={d.levels.antenne.composanteAnswers.map((c) => ({ name: c.short, answers: c.answers }))} /></Card>
-              <Card><CardHeader title="Zones de santé" /><StackedAnswers rows={d.levels.zs.composanteAnswers.map((c) => ({ name: c.short, answers: c.answers }))} /></Card>
-              <Card><CardHeader title="Aires de santé" /><StackedAnswers rows={d.levels.as.composanteAnswers.map((c) => ({ name: c.short, answers: c.answers }))} /></Card>
+              <Card><CardHeader icon="tower" title="Antennes" /><StackedAnswers rows={d.levels.antenne.composanteAnswers.map((c) => ({ name: c.short, answers: c.answers }))} /></Card>
+              <Card><CardHeader icon="map" title="Zones de santé" /><StackedAnswers rows={d.levels.zs.composanteAnswers.map((c) => ({ name: c.short, answers: c.answers }))} /></Card>
+              <Card><CardHeader icon="clinic" title="Aires de santé" /><StackedAnswers rows={d.levels.as.composanteAnswers.map((c) => ({ name: c.short, answers: c.answers }))} /></Card>
             </div>
           </section>
 
@@ -104,9 +104,9 @@ export default function ComposantesPage() {
           <section>
             <SectionBar icon="down">Top 5 des réponses « Non »</SectionBar>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-2.5">
-              <Card><CardHeader title="Antennes" subtitle="% de réponses « Non » par question" /><TopNon items={d.levels.antenne.topNon} /></Card>
-              <Card><CardHeader title="Zones de santé" subtitle="% de réponses « Non » par question" /><TopNon items={d.levels.zs.topNon} /></Card>
-              <Card><CardHeader title="Centres de santé" subtitle="% de réponses « Non » par question" /><TopNon items={d.levels.as.topNon} /></Card>
+              <Card><CardHeader icon="tower" title="Antennes" subtitle="% de réponses « Non » par question" /><TopNon items={d.levels.antenne.topNon} /></Card>
+              <Card><CardHeader icon="map" title="Zones de santé" subtitle="% de réponses « Non » par question" /><TopNon items={d.levels.zs.topNon} /></Card>
+              <Card><CardHeader icon="clinic" title="Centres de santé" subtitle="% de réponses « Non » par question" /><TopNon items={d.levels.as.topNon} /></Card>
             </div>
           </section>
 

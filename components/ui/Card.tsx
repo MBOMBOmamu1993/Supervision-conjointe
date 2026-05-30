@@ -5,12 +5,19 @@ export function Card({ className, children }: { className?: string; children: Re
   return <section className={cn("card", className)}>{children}</section>;
 }
 
-export function CardHeader({ title, subtitle, right }: { title: string; subtitle?: string; right?: React.ReactNode }) {
+export function CardHeader({ title, subtitle, right, icon }: { title: string; subtitle?: string; right?: React.ReactNode; icon?: IconName }) {
   return (
     <header className="card-header">
-      <div className="min-w-0">
-        <h2 className="card-title">{title}</h2>
-        {subtitle ? <div className="card-subtitle mt-0.5">{subtitle}</div> : null}
+      <div className="min-w-0 flex items-start gap-2">
+        {icon ? (
+          <span className="mt-px w-[26px] h-[26px] rounded-md flex items-center justify-center shrink-0 text-navy-700" style={{ background: "rgba(0,32,92,0.08)" }}>
+            <Icon name={icon} className="w-[15px] h-[15px]" />
+          </span>
+        ) : null}
+        <div className="min-w-0">
+          <h2 className="card-title">{title}</h2>
+          {subtitle ? <div className="card-subtitle mt-0.5">{subtitle}</div> : null}
+        </div>
       </div>
       {right ? <div className="flex items-center gap-2 shrink-0">{right}</div> : null}
     </header>

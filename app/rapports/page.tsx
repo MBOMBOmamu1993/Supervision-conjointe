@@ -1,8 +1,10 @@
 "use client";
 
 import { Card, CardHeader, SectionBar } from "@/components/ui/Card";
+import { KpiCard } from "@/components/ui/KpiCard";
 import { DataGate } from "@/components/ui/DataGate";
-import { fmtPct } from "@/lib/client/format";
+import { Icon } from "@/components/ui/Icon";
+import { fmtNum, fmtPct } from "@/lib/client/format";
 import { LEVEL_LABEL, type StructureLevel } from "@/config/supervision.config";
 import type { SupervisionBundle } from "@/lib/supervision/types";
 
@@ -25,22 +27,64 @@ function exportCsv(d: SupervisionBundle) {
 export default function RapportsPage() {
   return (
     <div className="space-y-4">
-      <SectionBar>Rapports & exports</SectionBar>
       <DataGate>
         {(d) => (
-          <Card>
-            <CardHeader title="Exporter les données de supervision" subtitle="Générez un fichier ou imprimez la synthèse." />
-            <div className="flex flex-wrap gap-2">
-              <button className="btn-primary" onClick={() => exportCsv(d)}>Exporter en CSV (Excel)</button>
-              <button className="btn" onClick={() => window.print()}>Imprimer / PDF</button>
-            </div>
-            <div className="mt-4 grid grid-cols-2 md:grid-cols-4 gap-2.5">
-              <div className="rounded border border-surface-200 p-3"><div className="kpi-label">Total supervisions</div><div className="kpi-value mt-1">{d.kpi.total_supervisions}</div></div>
-              <div className="rounded border border-surface-200 p-3"><div className="kpi-label">Structures (conjointe)</div><div className="kpi-value mt-1">{d.kpi.structures_conjointe}</div></div>
-              <div className="rounded border border-surface-200 p-3"><div className="kpi-label">Score moyen antennes</div><div className="kpi-value mt-1">{fmtPct(d.levels.antenne.score.moyen)}</div></div>
-              <div className="rounded border border-surface-200 p-3"><div className="kpi-label">Score moyen ZS</div><div className="kpi-value mt-1">{fmtPct(d.levels.zs.score.moyen)}</div></div>
-            </div>
-          </Card>
+          <>
+            {/* Indicateurs de synthèse */}
+            <section>
+              <SectionBar icon="bars">Indicateurs de synthèse</SectionBar>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5">
+                <KpiCard icon="doc" tone="navy" label="Total supervisions" value={fmtNum(d.kpi.total_supervisions)} sub="Toutes structures" />
+                <KpiCard icon="clinic" tone="brand" label="Structures (conjointe)" value={fmtNum(d.kpi.structures_conjointe)} sub="CS · ZS · Antennes" />
+                <KpiCard icon="tower" tone="good" label="Score moyen antennes" value={fmtPct(d.levels.antenne.score.moyen)} sub="Supervision conjointe" />
+                <KpiCard icon="map" tone="teal" label="Score moyen ZS" value={fmtPct(d.levels.zs.score.moyen)} sub="Supervision conjointe" />
+              </div>
+            </section>
+
+            {/* Exports */}
+            <section>
+              <SectionBar icon="report">Rapports & exports</SectionBar>
+              <Card>
+                <CardHeader
+                  icon="doc"
+                  title="Exporter les données de supervision"
+                  subtitle="Générez un fichier exploitable ou imprimez la synthèse complète du tableau de bord."
+                />
+                <div className="flex flex-wrap gap-2.5">
+                  <button className="btn-primary" onClick={() => exportCsv(d)}>
+                    <Icon name="bars" className="w-4 h-4" /> Exporter en CSV (Excel)
+                  </button>
+                  <button className="btn" onClick={() => window.print()}>
+                    <Icon name="report" className="w-4 h-4" /> Imprimer / PDF
+                  </button>
+                </div>
+
+                <div className="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                  <div className="rounded-xl border border-surface-200 bg-surface-50/60 p-3.5 flex items-center gap-3">
+                    <span className="w-[38px] h-[38px] rounded-full bg-navy-700 text-white flex items-center justify-center shrink-0"><Icon name="tower" className="w-4 h-4" /></span>
+                    <div>
+                      <div className="text-[9.5px] uppercase tracking-wider text-surface-700 font-bold">{LEVEL_LABEL.antenne.plural}</div>
+                      <div className="text-[15px] font-extrabold text-navy-700">{fmtNum(d.levels.antenne.perStructure.length)} structures</div>
+                    </div>
+                  </div>
+                  <div className="rounded-xl border border-surface-200 bg-surface-50/60 p-3.5 flex items-center gap-3">
+                    <span className="w-[38px] h-[38px] rounded-full bg-[#0d9488] text-white flex items-center justify-center shrink-0"><Icon name="map" className="w-4 h-4" /></span>
+                    <div>
+                      <div className="text-[9.5px] uppercase tracking-wider text-surface-700 font-bold">{LEVEL_LABEL.zs.plural}</div>
+                      <div className="text-[15px] font-extrabold text-[#0f766e]">{fmtNum(d.levels.zs.perStructure.length)} structures</div>
+                    </div>
+                  </div>
+                  <div className="rounded-xl border border-surface-200 bg-surface-50/60 p-3.5 flex items-center gap-3">
+                    <span className="w-[38px] h-[38px] rounded-full bg-[#7c3aed] text-white flex items-center justify-center shrink-0"><Icon name="clinic" className="w-4 h-4" /></span>
+                    <div>
+                      <div className="text-[9.5px] uppercase tracking-wider text-surface-700 font-bold">{LEVEL_LABEL.as.plural}</div>
+                      <div className="text-[15px] font-extrabold text-[#6d28d9]">{fmtNum(d.levels.as.perStructure.length)} structures</div>
+                    </div>
+                  </div>
+                </div>
+              </Card>
+            </section>
+          </>
         )}
       </DataGate>
     </div>
