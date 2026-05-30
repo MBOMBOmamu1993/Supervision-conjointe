@@ -3,11 +3,15 @@
 import { useState } from "react";
 import useSWR from "swr";
 import { Card, CardHeader, SectionBar } from "@/components/ui/Card";
+import { KpiCard } from "@/components/ui/KpiCard";
 import { DataGate } from "@/components/ui/DataGate";
-import { fmtPct } from "@/lib/client/format";
-import { LEVEL_LABEL, type StructureLevel } from "@/config/supervision.config";
+import { Icon, type IconName } from "@/components/ui/Icon";
+import { fmtNum, fmtPct } from "@/lib/client/format";
+import { LEVEL_LABEL, cotationFor, COTATION_COLOR, type StructureLevel } from "@/config/supervision.config";
 
 const fetcher = (u: string) => fetch(u).then((r) => r.json());
+
+const LEVEL_ICON: Record<StructureLevel, IconName> = { antenne: "tower", zs: "hospital", as: "clinic" };
 
 interface IntrospectSource {
   level: StructureLevel;
@@ -28,6 +32,7 @@ function Diagnostic() {
   return (
     <Card>
       <CardHeader
+        icon="shield"
         title="Diagnostic du schéma KoboToolbox"
         subtitle="Colonnes détectées automatiquement dans chaque formulaire. Sert à ajuster la config si nécessaire."
         right={<button className="btn" onClick={() => setOpen((o) => !o)}>{open ? "Masquer" : "Analyser les colonnes"}</button>}
@@ -53,38 +58,73 @@ function Diagnostic() {
   );
 }
 
+const LEVEL_TONE: Record<StructureLevel, "navy" | "teal" | "violet"> = { antenne: "navy", zs: "teal", as: "violet" };
+
 export default function AnalysePage() {
   return (
     <div className="space-y-4">
-      <SectionBar>Analyse & données détaillées</SectionBar>
       <DataGate>
         {(d) => (
-          <div className="space-y-2.5">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-2.5">
-              {(["antenne", "zs", "as"] as StructureLevel[]).map((lvl) => {
-                const b = d.levels[lvl];
-                return (
-                  <Card key={lvl}>
-                    <CardHeader title={LEVEL_LABEL[lvl].plural} subtitle={`${b.records} supervisions · ${b.perStructure.length} structures`} />
-                    <table className="table-default">
-                      <thead><tr><th>Structure</th><th>Score</th><th>Sup.</th></tr></thead>
-                      <tbody>
-                        {b.perStructure.slice(0, 15).map((s) => (
-                          <tr key={s.name}><td>{s.name}</td><td>{fmtPct(s.score)}</td><td>{s.count}</td></tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </Card>
-                );
-              })}
-            </div>
-            <div className="text-[11px] text-surface-700">
-              Sources : {d.meta.sources.map((s) => `${s.label} (${s.rows} lignes${s.ok ? "" : " — ⚠︎"})`).join(" · ")}
-            </div>
-          </div>
+          <>
+            {/* KPI d'en-tête */}
+            <section>
+              <SectionBar icon="analyse">Synthèse des données analysées</SectionBar>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5">
+                {(["antenne", "zs", "as"] as StructureLevel[]).map((lvl) => (
+                  <KpiCard
+                    key={lvl}
+                    icon={LEVEL_ICON[lvl]}
+                    tone={LEVEL_TONE[lvl]}
+                    label={LEVEL_LABEL[lvl].plural}
+                    value={fmtNum(d.levels[lvl].perStructure.length)}
+                    sub={`${d.levels[lvl].records} supervisions`}
+                  />
+                ))}
+                <KpiCard icon="doc" tone="good" label="Total supervisions" value={fmtNum(d.kpi.total_supervisions)} sub="Toutes structures confondues" />
+              </div>
+            </section>
+
+            {/* Tableaux détaillés par niveau */}
+            <section>
+              <SectionBar icon="bars">Données détaillées par structure</SectionBar>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-2.5">
+                {(["antenne", "zs", "as"] as StructureLevel[]).map((lvl) => {
+                  const b = d.levels[lvl];
+                  return (
+                    <Card key={lvl}>
+                      <CardHeader icon={LEVEL_ICON[lvl]} title={LEVEL_LABEL[lvl].plural} subtitle={`${b.records} supervisions · ${b.perStructure.length} structures`} />
+                      <table className="table-default">
+                        <thead><tr><th>Structure</th><th>Score</th><th>Sup.</th></tr></thead>
+                        <tbody>
+                          {b.perStructure.slice(0, 15).map((s) => (
+                            <tr key={s.name}>
+                              <td>{s.name}</td>
+                              <td>
+                                {s.score === null ? (
+                                  <span className="text-surface-400">—</span>
+                                ) : (
+                                  <span className="font-semibold tabular-nums" style={{ color: COTATION_COLOR[cotationFor(s.score)] }}>{fmtPct(s.score)}</span>
+                                )}
+                              </td>
+                              <td>{s.count}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </Card>
+                  );
+                })}
+              </div>
+              <div className="text-[11px] text-surface-700 mt-2 flex items-center gap-1.5">
+                <Icon name="component" className="w-3.5 h-3.5 text-navy-700" />
+                Sources : {d.meta.sources.map((s) => `${s.label} (${s.rows} lignes${s.ok ? "" : " — ⚠︎"})`).join(" · ")}
+              </div>
+            </section>
+
+            <Diagnostic />
+          </>
         )}
       </DataGate>
-      <Diagnostic />
     </div>
   );
 }
