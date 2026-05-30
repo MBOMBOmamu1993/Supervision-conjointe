@@ -56,7 +56,7 @@ export default function FilterBar() {
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2.5 items-end">
         <Select icon="pin" label="Province" value={f.province} options={opts.provinces} onChange={(v) => f.set({ province: v })} />
         <Select icon="tower" label="Antenne" value={f.antenne} options={opts.antennes} onChange={(v) => f.set({ antenne: v })} />
-        <Select icon="map" label="Zone de santé" value={f.zone} options={opts.zones} onChange={(v) => f.set({ zone: v })} />
+        <Select icon="hospital" label="Zone de santé" value={f.zone} options={opts.zones} onChange={(v) => f.set({ zone: v })} />
         <Select icon="clinic" label="Aire de santé" value={f.aire} options={opts.aires} onChange={(v) => f.set({ aire: v })} />
         <Select icon="calendar" label="Mois" value={f.month} options={opts.months} onChange={(v) => f.set({ month: v })} formatOption={fmtMonth} />
         <div className="flex items-end">
