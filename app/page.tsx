@@ -3,23 +3,30 @@
 import { Card, SectionBar } from "@/components/ui/Card";
 import { KpiCard } from "@/components/ui/KpiCard";
 import { DataGate } from "@/components/ui/DataGate";
+import { Icon, type IconName } from "@/components/ui/Icon";
 import Donut from "@/components/charts/Donut";
 import { fmtNum, fmtPct } from "@/lib/client/format";
 import { LEVEL_LABEL } from "@/config/supervision.config";
 import type { LevelBundle, ScoreStat, CotationDist } from "@/lib/supervision/types";
 
-function ScoreCard({ title, stat }: { title: string; stat: ScoreStat }) {
+function scoreColor(v: number | null): string {
+  if (v === null) return "#94a3b8";
+  return v >= 80 ? "#1f9d57" : v >= 60 ? "#0093d5" : v >= 40 ? "#f59e0b" : "#e23636";
+}
+
+function ScoreCard({ title, stat, icon }: { title: string; stat: ScoreStat; icon: IconName }) {
   const Item = ({ label, v }: { label: string; v: number | null }) => (
     <div className="text-center">
-      <div className="text-[10px] uppercase tracking-wider text-surface-700 font-semibold">{label}</div>
-      <div className="text-[22px] font-semibold text-oms-700 tabular-nums leading-none mt-1">{fmtPct(v)}</div>
+      <div className="text-[10px] uppercase tracking-wider text-surface-700 font-bold">{label}</div>
+      <div className="text-[26px] font-extrabold tabular-nums leading-none mt-1" style={{ color: scoreColor(v) }}>{fmtPct(v)}</div>
     </div>
   );
   return (
-    <Card className="!p-3">
-      <div className="text-[12px] font-semibold text-surface-900 mb-2.5 flex items-center gap-1.5">
-        <span className="inline-block w-1.5 h-1.5 rounded-full bg-oms-500" /> {title}
-        <span className="ml-auto text-[10px] font-normal text-surface-700">{stat.count} sup.</span>
+    <Card className="!p-3.5">
+      <div className="text-[14px] font-extrabold text-navy-700 mb-3 flex items-center gap-2">
+        <span className="w-[30px] h-[30px] rounded-full bg-navy-700 text-white flex items-center justify-center"><Icon name={icon} className="w-4 h-4" /></span>
+        {title}
+        <span className="ml-auto text-[10px] font-medium text-surface-700">{stat.count} sup.</span>
       </div>
       <div className="grid grid-cols-3 gap-1">
         <Item label="Moyen" v={stat.moyen} />
@@ -58,13 +65,18 @@ function CotationCard({ title, dist }: { title: string; dist: CotationDist[] }) 
   );
 }
 
-function SummaryCard({ label, value, sub, tone }: { label: string; value: string; sub?: string; tone: string }) {
+function SummaryCard({ label, value, sub, tone, icon }: { label: string; value: string; sub?: string; tone: string; icon: IconName }) {
   return (
-    <div className="rounded-md border border-surface-200 bg-white p-3 flex flex-col">
-      <div className="text-[9px] uppercase tracking-wider text-surface-700 font-semibold">{label}</div>
-      <div className={`text-[16px] font-bold leading-tight mt-1 ${tone}`}>{value}</div>
-      {sub ? <div className="text-[11px] text-surface-700 mt-0.5">{sub}</div> : null}
-    </div>
+    <Card className="!p-3.5 flex items-center gap-3">
+      <div className="w-[42px] h-[42px] rounded-full flex items-center justify-center shrink-0 text-white" style={{ background: tone }}>
+        <Icon name={icon} className="w-5 h-5" />
+      </div>
+      <div className="min-w-0">
+        <div className="text-[9.5px] uppercase tracking-wider text-surface-700 font-bold">{label}</div>
+        <div className="text-[17px] font-extrabold leading-tight mt-0.5" style={{ color: tone }}>{value}</div>
+        {sub ? <div className="text-[11px] text-surface-700 mt-0.5">{sub}</div> : null}
+      </div>
+    </Card>
   );
 }
 
@@ -80,35 +92,35 @@ export default function VueEnsemblePage() {
           <div className="space-y-4">
             {/* ---- KPI ---- */}
             <section>
-              <SectionBar>Indicateurs clés de réalisation</SectionBar>
+              <SectionBar icon="bars">Indicateurs clés de réalisation</SectionBar>
               <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2.5">
-                <KpiCard tone="brand" label="Sup. conjointe PEV-Central / OMS-VPD" value={fmtNum(k.conjointe_pev_oms.count)} pct={k.conjointe_pev_oms.pct} />
-                <KpiCard tone="good" label="Sup. conjointe MCA / AT / MCZ" value={fmtNum(k.conjointe_mca.count)} pct={k.conjointe_mca.pct} />
-                <KpiCard tone="violet" label="Supervision MCA seul" value={fmtNum(k.mca_seul.count)} pct={k.mca_seul.pct} />
-                <KpiCard tone="warn" label="Supervision ECZ réalisée" value={fmtNum(k.ecz_seul.count)} pct={k.ecz_seul.pct} />
-                <KpiCard tone="teal" label="Antennes supervisées (conjointe)" value={fmtNum(k.antennes_sup.count)} pct={k.antennes_sup.pct} />
+                <KpiCard icon="hands" tone="navy" label={<>Sup. conjointe<br />PEV-Central / OMS-VPD</>} value={fmtNum(k.conjointe_pev_oms.count)} pct={k.conjointe_pev_oms.pct} />
+                <KpiCard icon="people" tone="good" label={<>Sup. conjointe<br />MCA / AT / MCZ</>} value={fmtNum(k.conjointe_mca.count)} pct={k.conjointe_mca.pct} />
+                <KpiCard icon="person" tone="violet" label={<>Supervision<br />MCA seul</>} value={fmtNum(k.mca_seul.count)} pct={k.mca_seul.pct} />
+                <KpiCard icon="clipboard" tone="warn" label={<>Supervision<br />ECZ réalisée</>} value={fmtNum(k.ecz_seul.count)} pct={k.ecz_seul.pct} />
+                <KpiCard icon="tower" tone="teal" label={<>Antennes supervisées<br />(conjointe)</>} value={fmtNum(k.antennes_sup.count)} pct={k.antennes_sup.pct} />
               </div>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5 mt-2.5">
-                <KpiCard tone="bad" label="ZS supervisées (conjointe)" value={fmtNum(k.zs_conjointe.count)} pct={k.zs_conjointe.pct} />
-                <KpiCard tone="brand" label="ZS supervisées (MCA seul)" value={fmtNum(k.zs_mca.count)} pct={k.zs_mca.pct} />
-                <KpiCard tone="teal" label="CS supervisés (conjointe)" value={fmtNum(k.cs_conjointe.count)} pct={k.cs_conjointe.pct} />
-                <KpiCard tone="bad" label="CS supervisés (ECZ seul)" value={fmtNum(k.cs_ecz.count)} pct={k.cs_ecz.pct} />
+                <KpiCard icon="pin" tone="bad" label={<>ZS supervisées<br />(conjointe)</>} value={fmtNum(k.zs_conjointe.count)} pct={k.zs_conjointe.pct} />
+                <KpiCard icon="map" tone="brand" label={<>ZS supervisées<br />(MCA seul)</>} value={fmtNum(k.zs_mca.count)} pct={k.zs_mca.pct} />
+                <KpiCard icon="clinic" tone="good" label={<>CS supervisés<br />(conjointe)</>} value={fmtNum(k.cs_conjointe.count)} pct={k.cs_conjointe.pct} />
+                <KpiCard icon="clinic" tone="bad" label={<>CS supervisés<br />(ECZ seul)</>} value={fmtNum(k.cs_ecz.count)} pct={k.cs_ecz.pct} />
               </div>
             </section>
 
             {/* ---- Scores ---- */}
             <section>
-              <SectionBar>Scores de supervision</SectionBar>
+              <SectionBar icon="bars">Scores de supervision</SectionBar>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-2.5">
-                <ScoreCard title="Score Antennes" stat={lvl(levels.antenne).score} />
-                <ScoreCard title="Score Zones de santé" stat={lvl(levels.zs).score} />
-                <ScoreCard title="Score Aires de santé" stat={lvl(levels.as).score} />
+                <ScoreCard title="Score Antennes" stat={lvl(levels.antenne).score} icon="tower" />
+                <ScoreCard title="Score Zones de santé" stat={lvl(levels.zs).score} icon="map" />
+                <ScoreCard title="Score Aires de santé" stat={lvl(levels.as).score} icon="people" />
               </div>
             </section>
 
             {/* ---- Cotations ---- */}
             <section>
-              <SectionBar>Répartition des cotations</SectionBar>
+              <SectionBar icon="component">Répartition des cotations</SectionBar>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-2.5">
                 <CotationCard title="Cotation Antenne" dist={levels.antenne.cotations} />
                 <CotationCard title="Cotation Zone de santé" dist={levels.zs.cotations} />
@@ -118,17 +130,18 @@ export default function VueEnsemblePage() {
 
             {/* ---- Résumé global ---- */}
             <section>
-              <SectionBar>Résumé global</SectionBar>
+              <SectionBar icon="doc">Résumé global</SectionBar>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5">
-                <SummaryCard label="Meilleur niveau" value={hl.bestLevel.label} sub={`Score moyen : ${fmtPct(hl.bestLevel.score)}`} tone="text-good-600" />
-                <SummaryCard label="Niveau avec score minimum" value={hl.worstLevel.label} sub={`Score min : ${fmtPct(hl.worstLevel.score)}`} tone="text-danger-600" />
+                <SummaryCard icon="trophy" label="Meilleur niveau" value={hl.bestLevel.label} sub={`Score moyen : ${fmtPct(hl.bestLevel.score)}`} tone="#178a44" />
+                <SummaryCard icon="down" label="Niveau avec score minimum" value={hl.worstLevel.label} sub={`Score min. : ${fmtPct(hl.worstLevel.score)}`} tone="#c81e1e" />
                 <SummaryCard
+                  icon="clinic"
                   label="Structures supervisées (conjointe)"
                   value={fmtNum(k.structures_conjointe)}
                   sub={`CS : ${k.cs_conjointe.count} · ZS : ${k.zs_conjointe.count} · Antennes : ${k.antennes_sup.count}`}
-                  tone="text-oms-700"
+                  tone="#0078ae"
                 />
-                <SummaryCard label="Total supervisions réalisées" value={fmtNum(k.total_supervisions)} sub="Toutes structures & types confondus" tone="text-navy-600" />
+                <SummaryCard icon="doc" label="Total supervisions réalisées" value={fmtNum(k.total_supervisions)} sub="% global de réalisation" tone="#00205c" />
               </div>
             </section>
           </div>

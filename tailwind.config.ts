@@ -9,30 +9,31 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        // Palette OMS (World Health Organization)
+        // Bleu clair OMS (emblème World Health Organization)
         oms: {
-          50: "#e6f5fc",
-          100: "#cce9f7",
-          200: "#99d4ef",
-          300: "#66bee7",
-          400: "#33a9df",
+          50: "#e6f3fb",
+          100: "#cce7f7",
+          200: "#99cfef",
+          300: "#66b7e7",
+          400: "#33a0df",
           500: "#0093d5",
           600: "#0078ae",
           700: "#005a82",
           800: "#003d57",
           900: "#001f2c",
         },
-        // Bleu institutionnel foncé (entête / sidebar — cf. maquette PEV)
+        // Bleu marine OFFICIEL OMS #00205c (capture intranet OneWHO) — entête / sidebar / bandeaux
         navy: {
-          500: "#16306b",
-          600: "#122856",
-          700: "#0e1f44",
-          800: "#0a1733",
-          900: "#060e21",
+          400: "#1f54b8",
+          500: "#15479e",
+          600: "#0a3a86",
+          700: "#00205c",
+          800: "#001a45",
+          900: "#00132f",
         },
-        danger: { 50: "#fff1f1", 100: "#ffdede", 500: "#e23636", 600: "#c81e1e", 700: "#9b1616" },
-        warn: { 50: "#fff8eb", 100: "#feecc5", 500: "#f29e0b", 600: "#c87b04" },
-        good: { 50: "#effdf3", 100: "#d6f9e0", 500: "#22b457", 600: "#178a44" },
+        danger: { 50: "#fff1f1", 100: "#ffdede", 200: "#f8b4b4", 500: "#e23636", 600: "#c81e1e", 700: "#9b1616" },
+        warn: { 50: "#fff8eb", 100: "#feecc5", 200: "#fbd88a", 500: "#f59e0b", 600: "#c87b04" },
+        good: { 50: "#eafaf1", 100: "#d2f3e0", 200: "#a7e8c3", 500: "#1f9d57", 600: "#178a44" },
         surface: {
           0: "#ffffff",
           50: "#f8fafc",

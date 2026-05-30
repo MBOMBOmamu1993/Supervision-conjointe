@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/client/cn";
 
@@ -31,18 +30,14 @@ const NAV: { href: string; label: string; icon: IconName }[] = [
 export default function Sidebar() {
   const path = usePathname();
   return (
-    <aside className="hidden md:flex w-60 shrink-0 flex-col bg-navy-700 text-white">
-      <div className="px-4 pt-4 pb-3 border-b border-white/10">
-        <div className="flex items-center gap-2.5">
-          <div className="relative w-9 h-9 shrink-0 bg-white rounded p-0.5">
-            <Image src="/logo/pev.png" alt="PEV" fill sizes="36px" style={{ objectFit: "contain" }} className="p-0.5" priority />
-          </div>
-          <div className="leading-tight">
-            <div className="text-[9px] uppercase tracking-[0.16em] text-white/65 font-medium">Supervision conjointe</div>
-            <div className="font-semibold text-[14px] leading-tight">PEV-Central / OMS</div>
-          </div>
+    <aside className="hidden md:flex w-60 shrink-0 flex-col bg-navy-800 text-white">
+      <div className="px-5 pt-5 pb-4 border-b border-white/10">
+        <div className="text-[10px] uppercase tracking-[0.18em] text-white/55 font-semibold">Tableau de bord</div>
+        <div className="font-extrabold text-[17px] leading-tight mt-0.5">Supervision conjointe</div>
+        <div className="text-[12px] text-oms-300 font-semibold mt-0.5">PEV-Central · OMS — RDC</div>
+        <div className="mt-2.5 inline-flex items-center gap-1.5 text-[10px] text-white/55">
+          <span className="inline-block w-1.5 h-1.5 rounded-full bg-good-500" /> République Démocratique du Congo
         </div>
-        <div className="mt-2 text-[10px] text-white/55">République Démocratique du Congo</div>
       </div>
       <nav className="flex-1 py-2">
         {NAV.map((item) => {
@@ -52,8 +47,8 @@ export default function Sidebar() {
               key={item.href}
               href={item.href}
               className={cn(
-                "flex items-center gap-3 px-4 py-2.5 text-[12.5px] leading-5 transition border-l-2",
-                active ? "bg-white/[0.14] text-white border-white" : "text-white/75 border-transparent hover:bg-white/[0.08] hover:text-white"
+                "flex items-center gap-3 px-4 py-2.5 text-[12.5px] leading-5 transition border-l-[3px] font-semibold",
+                active ? "bg-white/[0.13] text-white border-oms-500" : "text-white/70 border-transparent hover:bg-white/[0.07] hover:text-white"
               )}
             >
               <NavIcon name={item.icon} />
@@ -62,9 +57,9 @@ export default function Sidebar() {
           );
         })}
       </nav>
-      <div className="px-4 py-3 text-[9px] uppercase tracking-wider text-white/60 border-t border-white/10">
+      <div className="px-5 py-3.5 text-[10px] uppercase tracking-wider text-white/55 border-t border-white/10 font-semibold">
         <div>Données KoboToolbox</div>
-        <div className="mt-0.5 normal-case tracking-normal text-white/45">Synchronisation temps réel</div>
+        <div className="mt-0.5 normal-case tracking-normal text-white/40">Synchronisation temps réel</div>
       </div>
     </aside>
   );
