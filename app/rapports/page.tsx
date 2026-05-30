@@ -37,7 +37,7 @@ export default function RapportsPage() {
                 <KpiCard icon="doc" tone="navy" label="Total supervisions" value={fmtNum(d.kpi.total_supervisions)} sub="Toutes structures" />
                 <KpiCard icon="clinic" tone="brand" label="Structures (conjointe)" value={fmtNum(d.kpi.structures_conjointe)} sub="CS · ZS · Antennes" />
                 <KpiCard icon="tower" tone="good" label="Score moyen antennes" value={fmtPct(d.levels.antenne.score.moyen)} sub="Supervision conjointe" />
-                <KpiCard icon="map" tone="teal" label="Score moyen ZS" value={fmtPct(d.levels.zs.score.moyen)} sub="Supervision conjointe" />
+                <KpiCard icon="hospital" tone="teal" label="Score moyen ZS" value={fmtPct(d.levels.zs.score.moyen)} sub="Supervision conjointe" />
               </div>
             </section>
 
@@ -68,7 +68,7 @@ export default function RapportsPage() {
                     </div>
                   </div>
                   <div className="rounded-xl border border-surface-200 bg-surface-50/60 p-3.5 flex items-center gap-3">
-                    <span className="w-[38px] h-[38px] rounded-full bg-[#0d9488] text-white flex items-center justify-center shrink-0"><Icon name="map" className="w-4 h-4" /></span>
+                    <span className="w-[38px] h-[38px] rounded-full bg-[#0d9488] text-white flex items-center justify-center shrink-0"><Icon name="hospital" className="w-4 h-4" /></span>
                     <div>
                       <div className="text-[9.5px] uppercase tracking-wider text-surface-700 font-bold">{LEVEL_LABEL.zs.plural}</div>
                       <div className="text-[15px] font-extrabold text-[#0f766e]">{fmtNum(d.levels.zs.perStructure.length)} structures</div>

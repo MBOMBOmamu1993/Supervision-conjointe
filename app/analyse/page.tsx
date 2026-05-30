@@ -11,7 +11,7 @@ import { LEVEL_LABEL, cotationFor, COTATION_COLOR, type StructureLevel } from "@
 
 const fetcher = (u: string) => fetch(u).then((r) => r.json());
 
-const LEVEL_ICON: Record<StructureLevel, IconName> = { antenne: "tower", zs: "map", as: "clinic" };
+const LEVEL_ICON: Record<StructureLevel, IconName> = { antenne: "tower", zs: "hospital", as: "clinic" };
 
 interface IntrospectSource {
   level: StructureLevel;
