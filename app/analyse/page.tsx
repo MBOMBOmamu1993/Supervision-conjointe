@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import useSWR from "swr";
-import { Card, CardHeader, SectionBar } from "@/components/ui/Card";
+import { Card, CardHeader, SectionBar, type HeaderTone } from "@/components/ui/Card";
 import { KpiCard } from "@/components/ui/KpiCard";
 import { DataGate } from "@/components/ui/DataGate";
 import { Icon, type IconName } from "@/components/ui/Icon";
@@ -12,6 +12,7 @@ import { LEVEL_LABEL, cotationFor, COTATION_COLOR, type StructureLevel } from "@
 const fetcher = (u: string) => fetch(u).then((r) => r.json());
 
 const LEVEL_ICON: Record<StructureLevel, IconName> = { antenne: "tower", zs: "hospital", as: "clinic" };
+const LEVEL_HEADER_TONE: Record<StructureLevel, HeaderTone> = { antenne: "blue", zs: "violet", as: "green" };
 
 interface IntrospectSource {
   level: StructureLevel;
@@ -33,6 +34,7 @@ function Diagnostic() {
     <Card>
       <CardHeader
         icon="shield"
+        iconTone="navy"
         title="Diagnostic du schéma KoboToolbox"
         subtitle="Colonnes détectées automatiquement dans chaque formulaire. Sert à ajuster la config si nécessaire."
         right={<button className="btn" onClick={() => setOpen((o) => !o)}>{open ? "Masquer" : "Analyser les colonnes"}</button>}
@@ -92,7 +94,7 @@ export default function AnalysePage() {
                   const b = d.levels[lvl];
                   return (
                     <Card key={lvl}>
-                      <CardHeader icon={LEVEL_ICON[lvl]} title={LEVEL_LABEL[lvl].plural} subtitle={`${b.records} supervisions · ${b.perStructure.length} structures`} />
+                      <CardHeader icon={LEVEL_ICON[lvl]} iconTone={LEVEL_HEADER_TONE[lvl]} title={LEVEL_LABEL[lvl].plural} subtitle={`${b.records} supervisions · ${b.perStructure.length} structures`} />
                       <table className="table-default">
                         <thead><tr><th>Structure</th><th>Score</th><th>Sup.</th></tr></thead>
                         <tbody>

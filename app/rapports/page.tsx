@@ -47,6 +47,7 @@ export default function RapportsPage() {
               <Card>
                 <CardHeader
                   icon="doc"
+                  iconTone="navy"
                   title="Exporter les données de supervision"
                   subtitle="Générez un fichier exploitable ou imprimez la synthèse complète du tableau de bord."
                 />
@@ -61,24 +62,24 @@ export default function RapportsPage() {
 
                 <div className="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-2.5">
                   <div className="rounded-xl border border-surface-200 bg-surface-50/60 p-3.5 flex items-center gap-3">
-                    <span className="w-[38px] h-[38px] rounded-full bg-navy-700 text-white flex items-center justify-center shrink-0"><Icon name="tower" className="w-4 h-4" /></span>
+                    <span className="w-[38px] h-[38px] rounded-full text-white flex items-center justify-center shrink-0" style={{ backgroundImage: "linear-gradient(145deg,#36b3ec,#0093d5)" }}><Icon name="tower" className="w-4 h-4" /></span>
                     <div>
                       <div className="text-[9.5px] uppercase tracking-wider text-surface-700 font-bold">{LEVEL_LABEL.antenne.plural}</div>
                       <div className="text-[15px] font-extrabold text-navy-700">{fmtNum(d.levels.antenne.perStructure.length)} structures</div>
                     </div>
                   </div>
                   <div className="rounded-xl border border-surface-200 bg-surface-50/60 p-3.5 flex items-center gap-3">
-                    <span className="w-[38px] h-[38px] rounded-full bg-[#0d9488] text-white flex items-center justify-center shrink-0"><Icon name="hospital" className="w-4 h-4" /></span>
+                    <span className="w-[38px] h-[38px] rounded-full text-white flex items-center justify-center shrink-0" style={{ backgroundImage: "linear-gradient(145deg,#9d5cf5,#7c3aed)" }}><Icon name="hospital" className="w-4 h-4" /></span>
                     <div>
                       <div className="text-[9.5px] uppercase tracking-wider text-surface-700 font-bold">{LEVEL_LABEL.zs.plural}</div>
-                      <div className="text-[15px] font-extrabold text-[#0f766e]">{fmtNum(d.levels.zs.perStructure.length)} structures</div>
+                      <div className="text-[15px] font-extrabold text-[#6d28d9]">{fmtNum(d.levels.zs.perStructure.length)} structures</div>
                     </div>
                   </div>
                   <div className="rounded-xl border border-surface-200 bg-surface-50/60 p-3.5 flex items-center gap-3">
-                    <span className="w-[38px] h-[38px] rounded-full bg-[#7c3aed] text-white flex items-center justify-center shrink-0"><Icon name="clinic" className="w-4 h-4" /></span>
+                    <span className="w-[38px] h-[38px] rounded-full text-white flex items-center justify-center shrink-0" style={{ backgroundImage: "linear-gradient(145deg,#2bbd6b,#1f9d57)" }}><Icon name="clinic" className="w-4 h-4" /></span>
                     <div>
                       <div className="text-[9.5px] uppercase tracking-wider text-surface-700 font-bold">{LEVEL_LABEL.as.plural}</div>
-                      <div className="text-[15px] font-extrabold text-[#6d28d9]">{fmtNum(d.levels.as.perStructure.length)} structures</div>
+                      <div className="text-[15px] font-extrabold text-[#178a44]">{fmtNum(d.levels.as.perStructure.length)} structures</div>
                     </div>
                   </div>
                 </div>

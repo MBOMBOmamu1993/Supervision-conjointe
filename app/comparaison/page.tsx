@@ -63,7 +63,6 @@ export default function ComparaisonPage() {
         const periodLabel = months.length ? `${fmtMonth(months[0])} – ${fmtMonth(months[months.length - 1])}` : "—";
         const toBars = (s: NamedScore[]) => s.map((x) => ({ name: x.name, value: x.score }));
 
-        // meilleure progression / stabilité / baisse (page highlights + matrices)
         const zsMatrix = d.levels.zs.monthlyMatrix;
         const asMatrix = d.levels.as.monthlyMatrix;
         const asDrops = asMatrix.filter((m) => m.variation !== null && m.variation < -0.5).sort((a, b) => (a.variation ?? 0) - (b.variation ?? 0));
@@ -84,24 +83,24 @@ export default function ComparaisonPage() {
               <SectionBar icon="bars">Comparaison globale de performance</SectionBar>
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-2.5">
                 <Card>
-                  <CardHeader icon="tower" title="Par antenne (supervision conjointe)" />
+                  <CardHeader icon="tower" iconTone="blue" title="Par antenne (supervision conjointe)" />
                   {d.levels.antenne.perStructure.length ? <HBar data={toBars(d.levels.antenne.perStructure)} /> : <EmptyState />}
                 </Card>
                 <Card>
-                  <CardHeader icon="hospital" title="Par zone de santé (supervision conjointe)" />
+                  <CardHeader icon="hospital" iconTone="violet" title="Par zone de santé (supervision conjointe)" />
                   {d.levels.zs.perStructure.length ? <HBar data={toBars(d.levels.zs.perStructure.slice(0, 12))} /> : <EmptyState />}
                 </Card>
                 <Card>
-                  <CardHeader icon="clinic" title="Par centre de santé (supervision conjointe)" />
+                  <CardHeader icon="clinic" iconTone="green" title="Par centre de santé (supervision conjointe)" />
                   {d.levels.as.perStructure.length ? <HBar data={toBars(d.levels.as.perStructure.slice(0, 12))} /> : <EmptyState />}
                 </Card>
                 <div className="grid grid-rows-2 gap-2.5">
                   <Card>
-                    <CardHeader icon="hospital" title="Par zone de santé (supervision MCA)" />
+                    <CardHeader icon="hospital" iconTone="orange" title="Par zone de santé (supervision MCA)" />
                     {d.zsMca.length ? <HBar data={toBars(d.zsMca.slice(0, 8))} /> : <EmptyState message="Aucune supervision MCA seul détectée." />}
                   </Card>
                   <Card>
-                    <CardHeader icon="clinic" title="Par centre de santé (supervision ECZ)" />
+                    <CardHeader icon="clinic" iconTone="red" title="Par centre de santé (supervision ECZ)" />
                     {d.csEcz.length ? <HBar data={toBars(d.csEcz.slice(0, 8))} /> : <EmptyState message="Aucune supervision ECZ seul détectée." />}
                   </Card>
                 </div>
@@ -113,15 +112,15 @@ export default function ComparaisonPage() {
               <SectionBar icon="time">Évolution des scores globaux par mois (supervision conjointe)</SectionBar>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-2.5">
                 <Card>
-                  <CardHeader icon="tower" title="Toutes les antennes" />
+                  <CardHeader icon="tower" iconTone="blue" title="Toutes les antennes" />
                   <LineTrend months={months} series={[{ name: "Antennes", data: trendSeries(d.levels.antenne.trend, months), color: "#0d9488" }]} />
                 </Card>
                 <Card>
-                  <CardHeader icon="hospital" title="Toutes les zones de santé" />
+                  <CardHeader icon="hospital" iconTone="violet" title="Toutes les zones de santé" />
                   <LineTrend months={months} series={[{ name: "ZS", data: trendSeries(d.levels.zs.trend, months), color: "#22b457" }]} />
                 </Card>
                 <Card>
-                  <CardHeader icon="clinic" title="Toutes les aires de santé" />
+                  <CardHeader icon="clinic" iconTone="green" title="Toutes les aires de santé" />
                   <LineTrend months={months} series={[{ name: "AS", data: trendSeries(d.levels.as.trend, months), color: "#7c3aed" }]} />
                 </Card>
               </div>
@@ -132,11 +131,11 @@ export default function ComparaisonPage() {
               <SectionBar icon="component">Comparaison du score global par mois successifs</SectionBar>
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-2.5">
                 <Card>
-                  <CardHeader icon="hospital" title="Par zone de santé (supervision conjointe)" />
+                  <CardHeader icon="hospital" iconTone="violet" title="Par zone de santé (supervision conjointe)" />
                   <MonthlyTable rows={zsMatrix} months={months} />
                 </Card>
                 <Card>
-                  <CardHeader icon="clinic" title="Par aire de santé (supervision conjointe)" />
+                  <CardHeader icon="clinic" iconTone="green" title="Par aire de santé (supervision conjointe)" />
                   <MonthlyTable rows={asMatrix} months={months} />
                 </Card>
               </div>
