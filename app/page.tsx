@@ -1,6 +1,6 @@
 "use client";
 
-import { Card, SectionBar } from "@/components/ui/Card";
+import { Card, SectionBar, HEADER_TONE, type HeaderTone } from "@/components/ui/Card";
 import { KpiCard } from "@/components/ui/KpiCard";
 import { DataGate } from "@/components/ui/DataGate";
 import { Icon, type IconName } from "@/components/ui/Icon";
@@ -14,7 +14,19 @@ function scoreColor(v: number | null): string {
   return v >= 80 ? "#1f9d57" : v >= 60 ? "#0093d5" : v >= 40 ? "#f59e0b" : "#e23636";
 }
 
-function ScoreCard({ title, stat, icon }: { title: string; stat: ScoreStat; icon: IconName }) {
+function ToneBadge({ icon, tone, size = 30 }: { icon: IconName; tone: HeaderTone; size?: number }) {
+  const t = HEADER_TONE[tone];
+  return (
+    <span
+      className="rounded-[9px] flex items-center justify-center shrink-0 text-white"
+      style={{ width: size, height: size, backgroundImage: `linear-gradient(145deg, ${t.from}, ${t.to})`, boxShadow: `0 5px 13px -5px ${t.to}` }}
+    >
+      <Icon name={icon} style={{ width: size * 0.55, height: size * 0.55 }} strokeWidth={2} />
+    </span>
+  );
+}
+
+function ScoreCard({ title, stat, icon, tone }: { title: string; stat: ScoreStat; icon: IconName; tone: HeaderTone }) {
   const Item = ({ label, v }: { label: string; v: number | null }) => (
     <div className="text-center">
       <div className="text-[10px] uppercase tracking-wider text-surface-700 font-bold">{label}</div>
@@ -23,8 +35,8 @@ function ScoreCard({ title, stat, icon }: { title: string; stat: ScoreStat; icon
   );
   return (
     <Card className="!p-3.5">
-      <div className="text-[14px] font-extrabold text-navy-700 mb-3 flex items-center gap-2">
-        <span className="w-[30px] h-[30px] rounded-full bg-navy-700 text-white flex items-center justify-center"><Icon name={icon} className="w-4 h-4" /></span>
+      <div className="text-[14px] font-extrabold text-navy-700 mb-3 flex items-center gap-2.5">
+        <ToneBadge icon={icon} tone={tone} size={32} />
         {title}
         <span className="ml-auto text-[10px] font-medium text-surface-700">{stat.count} sup.</span>
       </div>
@@ -37,11 +49,14 @@ function ScoreCard({ title, stat, icon }: { title: string; stat: ScoreStat; icon
   );
 }
 
-function CotationCard({ title, dist }: { title: string; dist: CotationDist[] }) {
+function CotationCard({ title, dist, icon, tone }: { title: string; dist: CotationDist[]; icon: IconName; tone: HeaderTone }) {
   const total = dist.reduce((a, b) => a + b.count, 0);
   return (
     <Card className="!p-3">
-      <div className="text-[12px] font-semibold text-surface-900 mb-1 text-center">{title}</div>
+      <div className="flex items-center justify-center gap-2 mb-2">
+        <ToneBadge icon={icon} tone={tone} size={26} />
+        <div className="text-[13px] font-bold text-surface-900">{title}</div>
+      </div>
       <div className="grid grid-cols-5 gap-1 items-center">
         <div className="col-span-2">
           <Donut height={150} data={dist.map((d) => ({ name: d.label, value: d.count, color: d.color }))} />
@@ -112,9 +127,9 @@ export default function VueEnsemblePage() {
             <section>
               <SectionBar icon="bars">Scores de supervision</SectionBar>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-2.5">
-                <ScoreCard title="Score Antennes" stat={lvl(levels.antenne).score} icon="tower" />
-                <ScoreCard title="Score Zones de santé" stat={lvl(levels.zs).score} icon="map" />
-                <ScoreCard title="Score Aires de santé" stat={lvl(levels.as).score} icon="people" />
+                <ScoreCard title="Score Antennes" stat={lvl(levels.antenne).score} icon="tower" tone="blue" />
+                <ScoreCard title="Score Zones de santé" stat={lvl(levels.zs).score} icon="hospital" tone="violet" />
+                <ScoreCard title="Score Aires de santé" stat={lvl(levels.as).score} icon="clinic" tone="green" />
               </div>
             </section>
 
@@ -122,9 +137,9 @@ export default function VueEnsemblePage() {
             <section>
               <SectionBar icon="component">Répartition des cotations</SectionBar>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-2.5">
-                <CotationCard title="Cotation Antenne" dist={levels.antenne.cotations} />
-                <CotationCard title="Cotation Zone de santé" dist={levels.zs.cotations} />
-                <CotationCard title="Cotation Aire de santé" dist={levels.as.cotations} />
+                <CotationCard title="Cotation Antenne" dist={levels.antenne.cotations} icon="tower" tone="blue" />
+                <CotationCard title="Cotation Zone de santé" dist={levels.zs.cotations} icon="hospital" tone="violet" />
+                <CotationCard title="Cotation Aire de santé" dist={levels.as.cotations} icon="clinic" tone="green" />
               </div>
             </section>
 
