@@ -1,4 +1,5 @@
 import { cn } from "@/lib/client/cn";
+import { Icon, type IconName } from "@/components/ui/Icon";
 
 export function Card({ className, children }: { className?: string; children: React.ReactNode }) {
   return <section className={cn("card", className)}>{children}</section>;
@@ -16,7 +17,12 @@ export function CardHeader({ title, subtitle, right }: { title: string; subtitle
   );
 }
 
-/** Bandeau de section bleu (cf. maquette). */
-export function SectionBar({ children }: { children: React.ReactNode }) {
-  return <div className="section-bar">{children}</div>;
+/** Bandeau de section bleu marine OMS (cf. maquette). */
+export function SectionBar({ children, icon }: { children: React.ReactNode; icon?: IconName }) {
+  return (
+    <div className="section-bar">
+      {icon ? <Icon name={icon} /> : null}
+      {children}
+    </div>
+  );
 }

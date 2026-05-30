@@ -105,7 +105,7 @@ export const ANSWER_MATCHERS: Record<AnswerValue, string[]> = {
   na: ["non applicable", "non_applicable", "na", "n/a", "sans objet", "nsp"],
 };
 
-export const ANSWER_COLOR: Record<AnswerValue, string> = { oui: "#22b457", partiel: "#f29e0b", non: "#e23636", na: "#cbd5e1" };
+export const ANSWER_COLOR: Record<AnswerValue, string> = { oui: "#1f9d57", partiel: "#f59e0b", non: "#e23636", na: "#cbd5e1" };
 export const ANSWER_LABEL: Record<AnswerValue, string> = { oui: "Oui", partiel: "Partiel", non: "Non", na: "N/A" };
 
 /* --------- Détection du TYPE de supervision (Fonction du superviseur) --------- */
@@ -132,9 +132,9 @@ export const SUPERVISION_TYPES: SupervisionTypeDef[] = [
 
 /* ------------------------ Seuils de cotation ------------------------ */
 export const COTATION_THRESHOLDS: { level: CotationLevel; label: string; min: number; color: string }[] = [
-  { level: "tres_bon", label: "Très bon", min: 80, color: "#22b457" },
+  { level: "tres_bon", label: "Très bon", min: 80, color: "#1f9d57" },
   { level: "bon", label: "Bon", min: 60, color: "#0093d5" },
-  { level: "moyen", label: "Moyen", min: 40, color: "#f29e0b" },
+  { level: "moyen", label: "Moyen", min: 40, color: "#f59e0b" },
   { level: "faible", label: "Faible", min: 0, color: "#e23636" },
 ];
 export function cotationFor(scorePct: number): CotationLevel {
@@ -142,7 +142,7 @@ export function cotationFor(scorePct: number): CotationLevel {
   return "faible";
 }
 export const COTATION_LABEL: Record<CotationLevel, string> = { tres_bon: "Très bon", bon: "Bon", moyen: "Moyen", faible: "Faible" };
-export const COTATION_COLOR: Record<CotationLevel, string> = { tres_bon: "#22b457", bon: "#0093d5", moyen: "#f29e0b", faible: "#e23636" };
+export const COTATION_COLOR: Record<CotationLevel, string> = { tres_bon: "#1f9d57", bon: "#0093d5", moyen: "#f59e0b", faible: "#e23636" };
 export const COTATION_ORDER: CotationLevel[] = ["tres_bon", "bon", "moyen", "faible"];
 
 /* ------------------------ Cibles attendues ------------------------ */

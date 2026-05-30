@@ -73,15 +73,15 @@ export default function ComparaisonPage() {
           <div className="space-y-4">
             {/* KPIs en-tête */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5">
-              <KpiCard tone="teal" label="Antennes actives" value={fmtNum(d.levels.antenne.perStructure.length)} />
-              <KpiCard tone="bad" label="Zones de santé" value={fmtNum(d.levels.zs.perStructure.length)} />
-              <KpiCard tone="brand" label="Centres de santé" value={fmtNum(d.levels.as.perStructure.length)} />
-              <KpiCard tone="violet" label="Période couverte" value={`${months.length} mois`} hint={periodLabel} />
+              <KpiCard icon="tower" tone="brand" label="Antennes comparées" value={fmtNum(d.levels.antenne.perStructure.length)} sub="Antennes actives" />
+              <KpiCard icon="people" tone="good" label="Zones de santé comparées" value={fmtNum(d.levels.zs.perStructure.length)} sub="Zones de santé" />
+              <KpiCard icon="clinic" tone="warn" label="Centres de santé comparés" value={fmtNum(d.levels.as.perStructure.length)} sub="Centres de santé" />
+              <KpiCard icon="calendar" tone="violet" label="Période analysée" value={`${months.length} mois`} sub={periodLabel} />
             </div>
 
             {/* Comparaison globale de performance */}
             <section>
-              <SectionBar>Comparaison globale de performance</SectionBar>
+              <SectionBar icon="bars">Comparaison globale de performance</SectionBar>
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-2.5">
                 <Card>
                   <CardHeader title="Par antenne (supervision conjointe)" />
@@ -110,7 +110,7 @@ export default function ComparaisonPage() {
 
             {/* Évolution des scores globaux par mois */}
             <section>
-              <SectionBar>Évolution des scores globaux par mois (supervision conjointe)</SectionBar>
+              <SectionBar icon="time">Évolution des scores globaux par mois (supervision conjointe)</SectionBar>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-2.5">
                 <Card>
                   <CardHeader title="Toutes les antennes" />
@@ -129,7 +129,7 @@ export default function ComparaisonPage() {
 
             {/* Comparaison du score par mois successifs */}
             <section>
-              <SectionBar>Comparaison du score global par mois successifs</SectionBar>
+              <SectionBar icon="component">Comparaison du score global par mois successifs</SectionBar>
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-2.5">
                 <Card>
                   <CardHeader title="Par zone de santé (supervision conjointe)" />
