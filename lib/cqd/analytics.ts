@@ -64,6 +64,29 @@ function boolFr(v: unknown): boolean | null {
   return null;
 }
 
+/** Met en forme un nom de structure : « lofima 2 » → « Lofima 2 ». */
+function prettifyName(s: string): string {
+  return s
+    .split(/[_\s]+/)
+    .filter(Boolean)
+    .map((w) => (/^\d+$/.test(w) ? w : w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()))
+    .join(" ");
+}
+
+/**
+ * Nettoie un nom de centre/aire encodé « aire_zs_antenne » (valeurs XML Kobo)
+ * en retirant les segments terminaux correspondant à la ZS et à l'antenne, puis
+ * met le résultat en forme. Ex. « lofima_2_bokungu_bokungu » → « Lofima 2 ».
+ */
+function cleanStructureName(raw: string | null, zone: string | null, antenne: string | null): string | null {
+  if (!raw) return raw;
+  const suffixes = new Set([zone, antenne].filter((x): x is string => !!x).map((x) => norm(x)));
+  const parts = raw.split("_").filter(Boolean);
+  while (parts.length > 1 && suffixes.has(norm(parts[parts.length - 1]))) parts.pop();
+  const cleaned = prettifyName(parts.join("_"));
+  return cleaned || prettifyName(raw);
+}
+
 function classify(taux: number | null): ConcordanceClass {
   if (taux === null) return "na";
   if (taux < 95) return "sous";
@@ -124,12 +147,14 @@ function buildRecords(src: CqdFetch): CqdRecord[] {
     const z = zone ? str(row[zone]) : null;
     const a = aire ? str(row[aire]) : null;
     const e = ess ? str(row[ess]) : null;
-    const structure = src.key === "zs" ? z : (a ?? e);
+    const an = antenne ? str(row[antenne]) : null;
+    const rawStruct = src.key === "zs" ? z : (a ?? e);
+    const structure = cleanStructureName(rawStruct, z, an);
     return {
       id: `cqd-${src.key}-${i}`,
       level: src.key,
       province: province ? str(row[province]) : null,
-      antenne: antenne ? str(row[antenne]) : null,
+      antenne: an,
       zone: z,
       aire: a,
       structure: structure ?? `${src.key.toUpperCase()} ${i + 1}`,

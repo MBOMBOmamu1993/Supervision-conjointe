@@ -31,6 +31,7 @@ import type { SourceFetch } from "./kobo-client";
 import type {
   ComposanteAnswerDist,
   ComposanteScore,
+  ComposanteMonthly,
   CotationDist,
   KpiBlock,
   LevelBundle,
@@ -254,6 +255,17 @@ function composanteScores(records: SupervisionRecord[]): ComposanteScore[] {
   }));
 }
 
+function composantesMonthly(records: SupervisionRecord[], months: string[]): ComposanteMonthly[] {
+  return COMPOSANTES.map((c) => {
+    const scores: Record<string, number | null> = {};
+    for (const mo of months) {
+      const vals = records.filter((r) => r.month === mo).map((r) => r.composantes[c.key] ?? null);
+      scores[mo] = r1(avg(vals));
+    }
+    return { key: c.key, label: c.label, short: c.short, scores };
+  });
+}
+
 function composanteAnswers(records: SupervisionRecord[]): ComposanteAnswerDist[] {
   return COMPOSANTES.map((c) => {
     const acc = EMPTY_ANSWERS();
@@ -345,6 +357,7 @@ function buildLevel(level: StructureLevel, records: SupervisionRecord[], rows: R
     perStructure: perStructure(records),
     composantes: composanteScores(records),
     composanteAnswers: composanteAnswers(records),
+    composantesMonthly: composantesMonthly(records, months),
     trend: trend(records),
     monthlyMatrix: monthlyMatrix(records, months),
     topNon: topNon(rows, scoreQs),
