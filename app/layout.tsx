@@ -16,11 +16,12 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <div className="flex h-screen overflow-hidden">
           <Sidebar />
           <div className="flex-1 flex flex-col min-w-0">
-            <div className="sticky top-0 z-40 shadow-sm">
-              <Header />
-            </div>
+            {/* En-tête FIXE — hors de la zone de défilement */}
+            <Header />
+            {/* Barre de filtres FIXE — ne défile jamais (bug : « figer la barre ») */}
+            <FilterBar />
+            {/* Seul <main> défile */}
             <main className="flex-1 overflow-y-auto overflow-x-hidden bg-surface-50">
-              <FilterBar />
               <div className="p-3 md:p-5">{children}</div>
             </main>
           </div>

@@ -22,7 +22,7 @@ const NAV: MainTab[] = [
   {
     key: "supervision",
     label: "Supervision conjointe PEV OMS RDC",
-    icon: "clipboard",
+    icon: "hands",
     subs: [
       { href: "/", label: "Vue d'ensemble" },
       { href: "/comparaison", label: "Performance structures et temps" },
@@ -30,7 +30,7 @@ const NAV: MainTab[] = [
     ],
   },
   { key: "qualite", label: "Qualité des données", icon: "database", href: "/qualite-donnees" },
-  { key: "etat", label: "État de lieux", icon: "layers", href: "/etat-lieux" },
+  { key: "etat", label: "État de lieux Tshuapa", icon: "map", href: "/etat-lieux" },
   { key: "rapport", label: "Télécharger Rapport", icon: "download", href: "/telecharger-rapport" },
 ];
 
@@ -43,10 +43,14 @@ export function Sidebar() {
   const [openKey, setOpenKey] = useState<string>(activeMain.key);
 
   return (
-    <aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col border-r border-slate-200 bg-navy text-white lg:flex">
-      <div className="border-b border-white/10 px-4 py-4">
-        <p className="text-lg font-extrabold leading-tight">Tshuapa</p>
-        <p className="text-xs text-white/60">République Démocratique du Congo</p>
+    <aside className="hidden h-screen w-64 shrink-0 flex-col bg-navy-800 text-white lg:flex">
+      <div className="border-b border-white/10 px-5 pt-5 pb-4">
+        <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-white/55">Tableau de bord</p>
+        <p className="mt-0.5 text-[20px] font-extrabold leading-tight">Tshuapa</p>
+        <p className="mt-0.5 text-[11.5px] font-semibold leading-tight text-oms-300">République Démocratique du Congo</p>
+        <p className="mt-2.5 inline-flex items-center gap-1.5 text-[10px] text-white/55">
+          <span className="inline-block h-1.5 w-1.5 rounded-full bg-good-500" /> Programme Élargi de Vaccination
+        </p>
       </div>
 
       <nav className="flex-1 overflow-y-auto p-3 thin-scroll">
@@ -76,8 +80,10 @@ export function Sidebar() {
                         key={s.href}
                         href={s.href}
                         className={cn(
-                          "block rounded-lg px-3 py-1.5 text-[13px] transition",
-                          pathname === s.href ? "bg-white/20 font-semibold text-white" : "text-white/70 hover:bg-white/10"
+                          "block rounded-lg border-l-[3px] px-3 py-1.5 text-[13px] transition",
+                          pathname === s.href
+                            ? "border-oms-500 bg-white/[0.14] font-semibold text-white"
+                            : "border-transparent text-white/70 hover:bg-white/10"
                         )}
                       >
                         {s.label}
@@ -105,8 +111,12 @@ export function Sidebar() {
         })}
       </nav>
 
-      <div className="border-t border-white/10 px-4 py-3 text-[11px] text-white/50">
-        PEV · OMS — RDC
+      <div className="border-t border-white/10 px-5 py-3">
+        <div className="text-[10px] font-semibold uppercase tracking-wider text-white/55">Données KoboToolbox</div>
+        <div className="mt-0.5 flex items-center gap-1.5 text-[10.5px] text-white/40">
+          <Icon name="refresh" className="h-3.5 w-3.5" />
+          Synchronisation temps réel
+        </div>
       </div>
     </aside>
   );

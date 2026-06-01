@@ -79,7 +79,7 @@ export default function ComparaisonPage() {
           <div className="space-y-4">
             {/* KPIs en-tête */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5">
-              <KpiCard icon="tower" tone="brand" label="Nombre d'antenne supervisé" value={fmtNum(d.levels.antenne.perStructure.length)} sub="Antennes supervisées" />
+              <KpiCard icon="tower" tone="brand" label="Nombre d'antennes supervisées" value={fmtNum(d.levels.antenne.perStructure.length)} sub="Antennes supervisées" />
               <KpiCard icon="hospital" tone="good" label="Nombre des ZS supervisées" value={fmtNum(d.levels.zs.perStructure.length)} sub="Zones de santé" />
               <KpiCard icon="clinic" tone="warn" label="Nombre des Aires de Santé supervisées" value={fmtNum(d.levels.as.perStructure.length)} sub="Aires / centres de santé" />
               <KpiCard icon="calendar" tone="violet" label="Période analysée" value={`${months.length} mois`} sub={periodLabel} />
