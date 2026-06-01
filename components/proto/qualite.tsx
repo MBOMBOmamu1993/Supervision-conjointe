@@ -15,7 +15,7 @@ import { ProtoGroupedBar, ProtoHBar } from "./charts";
 
 function TauxErrTable({ rows }: { rows: { lab: string; snis: number; dhis2: number }[] }) {
   return (
-    <table className="grid">
+    <table className="dtable">
       <thead><tr><th className="name">Antigène</th><th>SNIS</th><th>DHIS2</th><th>Concordance</th></tr></thead>
       <tbody>
         {rows.map((r) => (
@@ -124,7 +124,7 @@ export function CqDetailCS() {
   const EvoTable = ({ title, icon, tone, col }: { title: string; icon: "scale" | "alert"; tone: "green" | "violet" | "orange" | "red"; col: (r: typeof cs.rows[0]) => React.ReactNode }) => (
     <div className="card card-pad">
       <CardTitle icon={icon} tone={tone} title={title} sub="Évolution par mois" />
-      <table className="grid">
+      <table className="dtable">
         <thead><tr><th className="name">Centre de santé</th>{CQ.moisDisponibles.map((m) => <th key={m}>{m}</th>)}</tr></thead>
         <tbody>
           {cs.rows.map((r) => (
@@ -203,7 +203,7 @@ export function CqZS() {
       <section>
         <SectionBar icon="component">Concordance & qualité de saisie par ZS et par mois</SectionBar>
         <div className="card card-pad">
-          <table className="grid">
+          <table className="dtable">
             <thead><tr>
               <th className="name">Zone de santé</th><th>Concordance PENTA3</th><th>Appréciation</th>
               <th>Concordance RR2</th><th>Appréciation</th><th>Taux d'erreur SNIS/DHIS2</th><th>Qualité saisie DHIS2</th>
