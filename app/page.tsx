@@ -41,8 +41,8 @@ function ScoreCard({ title, stat, icon, tone }: { title: string; stat: ScoreStat
         <span className="ml-auto text-[10px] font-medium text-surface-700">{stat.count} sup.</span>
       </div>
       <div className="grid grid-cols-3 gap-1">
-        <Item label="Moyen" v={stat.moyen} />
         <Item label="Max" v={stat.max} />
+        <Item label="Moyen" v={stat.moyen} />
         <Item label="Min" v={stat.min} />
       </div>
     </Card>
@@ -124,7 +124,7 @@ export default function VueEnsemblePage() {
 
             {/* ---- Scores ---- */}
             <section>
-              <SectionBar icon="bars">Score global de toutes les composantes</SectionBar>
+              <SectionBar icon="bars">Score global des composantes ACD</SectionBar>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-2.5">
                 <ScoreCard title="Score global Antenne" stat={lvl(levels.antenne).score} icon="tower" tone="navy" />
                 <ScoreCard title="Score global ZS" stat={lvl(levels.zs).score} icon="hospital" tone="green" />
@@ -134,11 +134,11 @@ export default function VueEnsemblePage() {
 
             {/* ---- Cotations ---- */}
             <section>
-              <SectionBar icon="component">Appréciation du score</SectionBar>
+              <SectionBar icon="component">Appréciation des structures sur base du score global ACD</SectionBar>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-2.5">
-                <CotationCard title="Appréciation du score — Antenne" dist={levels.antenne.cotations} icon="tower" tone="blue" />
-                <CotationCard title="Appréciation du score — ZS" dist={levels.zs.cotations} icon="hospital" tone="violet" />
-                <CotationCard title="Appréciation du score — AS" dist={levels.as.cotations} icon="clinic" tone="green" />
+                <CotationCard title="Appréciation — Antenne" dist={levels.antenne.cotations} icon="tower" tone="blue" />
+                <CotationCard title="Appréciation — ZS" dist={levels.zs.cotations} icon="hospital" tone="violet" />
+                <CotationCard title="Appréciation — AS" dist={levels.as.cotations} icon="clinic" tone="green" />
               </div>
             </section>
 

@@ -90,15 +90,15 @@ export default function ComparaisonPage() {
               <SectionBar icon="bars">Comparaison globale de performance</SectionBar>
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-2.5">
                 <Card>
-                  <CardHeader icon="tower" iconTone="blue" title="Par antenne (supervision conjointe)" />
+                  <CardHeader icon="tower" iconTone="blue" title="Par antenne" />
                   {d.levels.antenne.perStructure.length ? <HBar data={toBars(d.levels.antenne.perStructure)} /> : <EmptyState />}
                 </Card>
                 <Card>
-                  <CardHeader icon="hospital" iconTone="violet" title="Par zone de santé (supervision conjointe)" />
+                  <CardHeader icon="hospital" iconTone="violet" title="Par zone de santé" />
                   {d.levels.zs.perStructure.length ? <HBar data={toBars(d.levels.zs.perStructure.slice(0, 12))} /> : <EmptyState />}
                 </Card>
                 <Card>
-                  <CardHeader icon="clinic" iconTone="green" title="Par centre de santé (supervision conjointe)" />
+                  <CardHeader icon="clinic" iconTone="green" title="Par centre de santé" />
                   {d.levels.as.perStructure.length ? <HBar data={toBars(d.levels.as.perStructure.slice(0, 12))} /> : <EmptyState />}
                 </Card>
                 <div className="grid grid-rows-2 gap-2.5">
@@ -116,7 +116,7 @@ export default function ComparaisonPage() {
 
             {/* Évolution des scores globaux par mois */}
             <section>
-              <SectionBar icon="time">Évolution des scores globaux par mois (supervision conjointe)</SectionBar>
+              <SectionBar icon="time">Évolution des scores globaux par mois</SectionBar>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-2.5">
                 <Card>
                   <CardHeader icon="tower" iconTone="blue" title="Toutes les antennes" />
@@ -138,11 +138,11 @@ export default function ComparaisonPage() {
               <SectionBar icon="component">Comparaison du score global — variation des 2 derniers mois</SectionBar>
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-2.5">
                 <Card>
-                  <CardHeader icon="hospital" iconTone="violet" title="Par zone de santé (supervision conjointe)" />
+                  <CardHeader icon="hospital" iconTone="violet" title="Par zone de santé" />
                   <MonthlyTable rows={zsMatrix} months={months} />
                 </Card>
                 <Card>
-                  <CardHeader icon="clinic" iconTone="green" title="Par aire de santé (supervision conjointe)" />
+                  <CardHeader icon="clinic" iconTone="green" title="Par aire de santé" />
                   <MonthlyTable rows={asMatrix} months={months} />
                 </Card>
               </div>

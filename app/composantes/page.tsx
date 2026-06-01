@@ -56,9 +56,9 @@ export default function ComposantesPage() {
           {/* KPIs en-tête */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5">
             <KpiCard icon="clipboard" tone="brand" label="Composantes suivies" value={d.levels.antenne.composantes.length || 6} sub="Référentiel checklist" />
-            <KpiCard icon="tower" tone="good" label="Antennes analysées" value={d.levels.antenne.radar.entities.length} sub="Antennes évaluées" />
-            <KpiCard icon="hospital" tone="violet" label="ZS analysées" value={d.levels.zs.radar.entities.length} sub="Zones de santé évaluées" />
-            <KpiCard icon="clinic" tone="warn" label="AS / CS analysés" value={d.levels.as.radar.entities.length} sub="Aires / centres évalués" />
+            <KpiCard icon="tower" tone="good" label="Antennes" value={d.levels.antenne.radar.entities.length} sub="Antennes évaluées" />
+            <KpiCard icon="hospital" tone="violet" label="Zones de santé" value={d.levels.zs.radar.entities.length} sub="Zones de santé évaluées" />
+            <KpiCard icon="clinic" tone="warn" label="AS / CS" value={d.levels.as.radar.entities.length} sub="Aires / centres évalués" />
           </div>
 
           {/* Radars */}
