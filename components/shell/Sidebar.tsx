@@ -80,7 +80,6 @@ export function Sidebar() {
               <div key={tab.key} className="mb-1">
                 <button
                   type="button"
-                  onMouseEnter={() => setOpenKey(tab.key)}
                   onClick={() => setOpenKey((k) => (k === tab.key ? "" : tab.key))}
                   className={cn(
                     "flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-left text-sm font-medium transition",
@@ -116,7 +115,7 @@ export function Sidebar() {
             <Link
               key={tab.key}
               href={tab.href ?? "#"}
-              onMouseEnter={() => setOpenKey(tab.key)}
+              onClick={() => setOpenKey("")}
               className={cn(
                 "mb-1 flex items-center gap-2 rounded-xl px-3 py-2.5 text-sm font-medium transition",
                 pathname === tab.href ? "bg-white/15 text-white" : "text-white/80 hover:bg-white/10"

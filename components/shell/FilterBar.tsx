@@ -32,7 +32,8 @@ function FieldLabel({ children }: { children: React.ReactNode }) {
 function Select({
   label,
   icon,
-  tone,
+  from,
+  to,
   value,
   onChange,
   options,
@@ -40,7 +41,8 @@ function Select({
 }: {
   label: string;
   icon: IconName;
-  tone: string;
+  from: string;
+  to: string;
   value: string | null;
   onChange: (v: string | null) => void;
   options: string[];
@@ -49,12 +51,12 @@ function Select({
   return (
     <div className="flex min-w-0 flex-col gap-[3px]">
       <FieldLabel>{label}</FieldLabel>
-      <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2">
-        <span className="inline-flex h-7 w-7 items-center justify-center rounded-lg" style={{ backgroundColor: `${tone}1a`, color: tone }}>
-          <Icon name={icon} className="h-4 w-4" />
+      <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-2.5 py-2 shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition hover:border-oms-500">
+        <span className="inline-flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-md text-white" style={{ background: `linear-gradient(145deg, ${from}, ${to})` }}>
+          <Icon name={icon} className="h-[13px] w-[13px]" strokeWidth={2} />
         </span>
         <select
-          className="w-full bg-transparent text-sm text-slate-700 outline-none"
+          className="w-full cursor-pointer bg-transparent text-[12.5px] font-bold text-navy-700 outline-none"
           value={value ?? ""}
           onChange={(e) => onChange(e.target.value || null)}
         >
@@ -91,7 +93,8 @@ export function FilterBar() {
           <Select
             label="Province"
             icon="map-pin"
-            tone="#00205c"
+            from="#19c2b1"
+            to="#0d9488"
             placeholder="Tshuapa"
             value={f.province}
             onChange={(v) => f.set({ province: v })}
@@ -99,8 +102,9 @@ export function FilterBar() {
           />
           <Select
             label="Antenne"
-            icon="layers"
-            tone="#0093d5"
+            icon="tower"
+            from="#36b3ec"
+            to="#0093d5"
             placeholder="Toutes"
             value={f.antenne}
             onChange={(v) => f.set({ antenne: v })}
@@ -109,7 +113,8 @@ export function FilterBar() {
           <Select
             label="Zone de santé"
             icon="building"
-            tone="#7c3aed"
+            from="#9d5cf5"
+            to="#7c3aed"
             placeholder="Toutes"
             value={f.zone}
             onChange={(v) => f.set({ zone: v })}
@@ -117,8 +122,9 @@ export function FilterBar() {
           />
           <Select
             label="Aire de santé"
-            icon="home"
-            tone="#1f9d57"
+            icon="clinic"
+            from="#2bbd6b"
+            to="#1f9d57"
             placeholder="Toutes"
             value={f.aire}
             onChange={(v) => f.set({ aire: v })}
@@ -126,8 +132,9 @@ export function FilterBar() {
           />
           <Select
             label="Type de supervision"
-            icon="clipboard"
-            tone="#2a5fd0"
+            icon="hands"
+            from="#5b8def"
+            to="#2a5fd0"
             placeholder="Tous les types"
             value={f.types[0] ?? null}
             onChange={(v) => f.set({ types: v ? [v] : [] })}
