@@ -80,7 +80,7 @@ export const EDL: EdlData = {
     },
     {
       "zs": "Bokungu",
-      "antenne": "Bonkungu",
+      "antenne": "Bokungu",
       "nAS": 25,
       "popSnis": 263117,
       "popAj": 339597,
@@ -188,7 +188,7 @@ export const EDL: EdlData = {
     },
     {
       "zs": "Mondombe",
-      "antenne": "Bonkungu",
+      "antenne": "Bokungu",
       "nAS": 22,
       "popSnis": 226575,
       "popAj": 338196,
@@ -1441,7 +1441,7 @@ export const EDL: EdlData = {
       "attendu": 0
     },
     {
-      "antenne": "Bonkungu",
+      "antenne": "Bokungu",
       "zs": "Bokungu",
       "as": "AS Basekaokoli",
       "popSnis": 10313,
@@ -1461,7 +1461,7 @@ export const EDL: EdlData = {
       "attendu": 0
     },
     {
-      "antenne": "Bonkungu",
+      "antenne": "Bokungu",
       "zs": "Bokungu",
       "as": "AS Bokaindembe",
       "popSnis": 11831,
@@ -1481,7 +1481,7 @@ export const EDL: EdlData = {
       "attendu": 0
     },
     {
-      "antenne": "Bonkungu",
+      "antenne": "Bokungu",
       "zs": "Bokungu",
       "as": "AS Bokau",
       "popSnis": 9962,
@@ -1501,7 +1501,7 @@ export const EDL: EdlData = {
       "attendu": 0
     },
     {
-      "antenne": "Bonkungu",
+      "antenne": "Bokungu",
       "zs": "Bokungu",
       "as": "AS Bokoka",
       "popSnis": 6500,
@@ -1521,7 +1521,7 @@ export const EDL: EdlData = {
       "attendu": 0
     },
     {
-      "antenne": "Bonkungu",
+      "antenne": "Bokungu",
       "zs": "Bokungu",
       "as": "AS Bokolo",
       "popSnis": 5512,
@@ -1541,7 +1541,7 @@ export const EDL: EdlData = {
       "attendu": 0
     },
     {
-      "antenne": "Bonkungu",
+      "antenne": "Bokungu",
       "zs": "Bokungu",
       "as": "AS Bokolongo",
       "popSnis": 9283,
@@ -1561,7 +1561,7 @@ export const EDL: EdlData = {
       "attendu": 0
     },
     {
-      "antenne": "Bonkungu",
+      "antenne": "Bokungu",
       "zs": "Bokungu",
       "as": "AS Bompongo",
       "popSnis": 8910,
@@ -1581,7 +1581,7 @@ export const EDL: EdlData = {
       "attendu": 0
     },
     {
-      "antenne": "Bonkungu",
+      "antenne": "Bokungu",
       "zs": "Bokungu",
       "as": "AS Bonkone",
       "popSnis": 5592,
@@ -1601,7 +1601,7 @@ export const EDL: EdlData = {
       "attendu": 0
     },
     {
-      "antenne": "Bonkungu",
+      "antenne": "Bokungu",
       "zs": "Bokungu",
       "as": "AS Bulukutu",
       "popSnis": 15275,
@@ -1621,7 +1621,7 @@ export const EDL: EdlData = {
       "attendu": 0
     },
     {
-      "antenne": "Bonkungu",
+      "antenne": "Bokungu",
       "zs": "Bokungu",
       "as": "AS Ekofo",
       "popSnis": 7905,
@@ -1641,7 +1641,7 @@ export const EDL: EdlData = {
       "attendu": 0
     },
     {
-      "antenne": "Bonkungu",
+      "antenne": "Bokungu",
       "zs": "Bokungu",
       "as": "AS Elongo",
       "popSnis": 10818,
@@ -1661,7 +1661,7 @@ export const EDL: EdlData = {
       "attendu": 0
     },
     {
-      "antenne": "Bonkungu",
+      "antenne": "Bokungu",
       "zs": "Bokungu",
       "as": "AS Ikengolaka 2",
       "popSnis": 14514,
@@ -1681,7 +1681,7 @@ export const EDL: EdlData = {
       "attendu": 0
     },
     {
-      "antenne": "Bonkungu",
+      "antenne": "Bokungu",
       "zs": "Bokungu",
       "as": "AS Lendisa",
       "popSnis": 17382,
@@ -1701,7 +1701,7 @@ export const EDL: EdlData = {
       "attendu": 0
     },
     {
-      "antenne": "Bonkungu",
+      "antenne": "Bokungu",
       "zs": "Bokungu",
       "as": "AS Liangola",
       "popSnis": 7971,
@@ -1721,7 +1721,7 @@ export const EDL: EdlData = {
       "attendu": 0
     },
     {
-      "antenne": "Bonkungu",
+      "antenne": "Bokungu",
       "zs": "Bokungu",
       "as": "AS Liunga",
       "popSnis": 7262,
@@ -1741,7 +1741,7 @@ export const EDL: EdlData = {
       "attendu": 0
     },
     {
-      "antenne": "Bonkungu",
+      "antenne": "Bokungu",
       "zs": "Bokungu",
       "as": "AS Lofima 2",
       "popSnis": 11347,
@@ -1761,7 +1761,7 @@ export const EDL: EdlData = {
       "attendu": 0
     },
     {
-      "antenne": "Bonkungu",
+      "antenne": "Bokungu",
       "zs": "Bokungu",
       "as": "AS Lofoy",
       "popSnis": 9395,
@@ -1781,7 +1781,7 @@ export const EDL: EdlData = {
       "attendu": 0
     },
     {
-      "antenne": "Bonkungu",
+      "antenne": "Bokungu",
       "zs": "Bokungu",
       "as": "AS Lolingo",
       "popSnis": 9256,
@@ -1801,7 +1801,7 @@ export const EDL: EdlData = {
       "attendu": 0
     },
     {
-      "antenne": "Bonkungu",
+      "antenne": "Bokungu",
       "zs": "Bokungu",
       "as": "AS Lomama",
       "popSnis": 9546,
@@ -1821,7 +1821,7 @@ export const EDL: EdlData = {
       "attendu": 0
     },
     {
-      "antenne": "Bonkungu",
+      "antenne": "Bokungu",
       "zs": "Bokungu",
       "as": "AS Lotakamela",
       "popSnis": 8201,
@@ -1841,7 +1841,7 @@ export const EDL: EdlData = {
       "attendu": 0
     },
     {
-      "antenne": "Bonkungu",
+      "antenne": "Bokungu",
       "zs": "Bokungu",
       "as": "AS Marie Reine d'afrique",
       "popSnis": 18777,
@@ -1861,7 +1861,7 @@ export const EDL: EdlData = {
       "attendu": 0
     },
     {
-      "antenne": "Bonkungu",
+      "antenne": "Bokungu",
       "zs": "Bokungu",
       "as": "AS Yakili",
       "popSnis": 10894,
@@ -1881,7 +1881,7 @@ export const EDL: EdlData = {
       "attendu": 0
     },
     {
-      "antenne": "Bonkungu",
+      "antenne": "Bokungu",
       "zs": "Bokungu",
       "as": "AS Yemo",
       "popSnis": 14172,
@@ -1901,7 +1901,7 @@ export const EDL: EdlData = {
       "attendu": 0
     },
     {
-      "antenne": "Bonkungu",
+      "antenne": "Bokungu",
       "zs": "Bokungu",
       "as": "AS Yokamba",
       "popSnis": 9659,
@@ -1921,7 +1921,7 @@ export const EDL: EdlData = {
       "attendu": 0
     },
     {
-      "antenne": "Bonkungu",
+      "antenne": "Bokungu",
       "zs": "Bokungu",
       "as": "AS Yosasa",
       "popSnis": 12840,
@@ -4078,7 +4078,7 @@ export const EDL: EdlData = {
       "attendu": 0
     },
     {
-      "antenne": "Bonkungu",
+      "antenne": "Bokungu",
       "zs": "Mondombe",
       "as": "AS Bikombi",
       "popSnis": 10450,
@@ -4098,7 +4098,7 @@ export const EDL: EdlData = {
       "attendu": 0
     },
     {
-      "antenne": "Bonkungu",
+      "antenne": "Bokungu",
       "zs": "Mondombe",
       "as": "AS Bisoke",
       "popSnis": 8580,
@@ -4118,7 +4118,7 @@ export const EDL: EdlData = {
       "attendu": 0
     },
     {
-      "antenne": "Bonkungu",
+      "antenne": "Bokungu",
       "zs": "Mondombe",
       "as": "AS Bomoi",
       "popSnis": 9861,
@@ -4138,7 +4138,7 @@ export const EDL: EdlData = {
       "attendu": 0
     },
     {
-      "antenne": "Bonkungu",
+      "antenne": "Bokungu",
       "zs": "Mondombe",
       "as": "AS Cedimo",
       "popSnis": 12452,
@@ -4158,7 +4158,7 @@ export const EDL: EdlData = {
       "attendu": 0
     },
     {
-      "antenne": "Bonkungu",
+      "antenne": "Bokungu",
       "zs": "Mondombe",
       "as": "AS Ekanga",
       "popSnis": 14756,
@@ -4178,7 +4178,7 @@ export const EDL: EdlData = {
       "attendu": 0
     },
     {
-      "antenne": "Bonkungu",
+      "antenne": "Bokungu",
       "zs": "Mondombe",
       "as": "AS Lolanga",
       "popSnis": 9003,
@@ -4198,7 +4198,7 @@ export const EDL: EdlData = {
       "attendu": 0
     },
     {
-      "antenne": "Bonkungu",
+      "antenne": "Bokungu",
       "zs": "Mondombe",
       "as": "AS Lomongo",
       "popSnis": 6748,
@@ -4218,7 +4218,7 @@ export const EDL: EdlData = {
       "attendu": 0
     },
     {
-      "antenne": "Bonkungu",
+      "antenne": "Bokungu",
       "zs": "Mondombe",
       "as": "AS M Cmondombe",
       "popSnis": 11747,
@@ -4238,7 +4238,7 @@ export const EDL: EdlData = {
       "attendu": 0
     },
     {
-      "antenne": "Bonkungu",
+      "antenne": "Bokungu",
       "zs": "Mondombe",
       "as": "AS Ngoseki",
       "popSnis": 8808,
@@ -4258,7 +4258,7 @@ export const EDL: EdlData = {
       "attendu": 0
     },
     {
-      "antenne": "Bonkungu",
+      "antenne": "Bokungu",
       "zs": "Mondombe",
       "as": "AS Topoke",
       "popSnis": 7936,
@@ -4278,7 +4278,7 @@ export const EDL: EdlData = {
       "attendu": 0
     },
     {
-      "antenne": "Bonkungu",
+      "antenne": "Bokungu",
       "zs": "Mondombe",
       "as": "AS Yalikungu",
       "popSnis": 9137,
@@ -4298,7 +4298,7 @@ export const EDL: EdlData = {
       "attendu": 0
     },
     {
-      "antenne": "Bonkungu",
+      "antenne": "Bokungu",
       "zs": "Mondombe",
       "as": "AS Yalokuli",
       "popSnis": 10699,
@@ -4318,7 +4318,7 @@ export const EDL: EdlData = {
       "attendu": 0
     },
     {
-      "antenne": "Bonkungu",
+      "antenne": "Bokungu",
       "zs": "Mondombe",
       "as": "AS Yalomboka",
       "popSnis": 11212,
@@ -4338,7 +4338,7 @@ export const EDL: EdlData = {
       "attendu": 0
     },
     {
-      "antenne": "Bonkungu",
+      "antenne": "Bokungu",
       "zs": "Mondombe",
       "as": "AS Yalusaka",
       "popSnis": 11316,
@@ -4358,7 +4358,7 @@ export const EDL: EdlData = {
       "attendu": 0
     },
     {
-      "antenne": "Bonkungu",
+      "antenne": "Bokungu",
       "zs": "Mondombe",
       "as": "AS Yambili",
       "popSnis": 10242,
@@ -4378,7 +4378,7 @@ export const EDL: EdlData = {
       "attendu": 0
     },
     {
-      "antenne": "Bonkungu",
+      "antenne": "Bokungu",
       "zs": "Mondombe",
       "as": "AS Yanseka",
       "popSnis": 12639,
@@ -4398,7 +4398,7 @@ export const EDL: EdlData = {
       "attendu": 0
     },
     {
-      "antenne": "Bonkungu",
+      "antenne": "Bokungu",
       "zs": "Mondombe",
       "as": "AS Yanyangombula 2",
       "popSnis": 9613,
@@ -4418,7 +4418,7 @@ export const EDL: EdlData = {
       "attendu": 0
     },
     {
-      "antenne": "Bonkungu",
+      "antenne": "Bokungu",
       "zs": "Mondombe",
       "as": "AS Yelia Nkang'Itoko",
       "popSnis": 10468,
@@ -4438,7 +4438,7 @@ export const EDL: EdlData = {
       "attendu": 0
     },
     {
-      "antenne": "Bonkungu",
+      "antenne": "Bokungu",
       "zs": "Mondombe",
       "as": "AS Yetsi",
       "popSnis": 10809,
@@ -4458,7 +4458,7 @@ export const EDL: EdlData = {
       "attendu": 0
     },
     {
-      "antenne": "Bonkungu",
+      "antenne": "Bokungu",
       "zs": "Mondombe",
       "as": "AS Yokolo",
       "popSnis": 10118,
@@ -4478,7 +4478,7 @@ export const EDL: EdlData = {
       "attendu": 0
     },
     {
-      "antenne": "Bonkungu",
+      "antenne": "Bokungu",
       "zs": "Mondombe",
       "as": "AS Yolonga 2",
       "popSnis": 10400,
@@ -4498,7 +4498,7 @@ export const EDL: EdlData = {
       "attendu": 0
     },
     {
-      "antenne": "Bonkungu",
+      "antenne": "Bokungu",
       "zs": "Mondombe",
       "as": "AS Yongoli 2",
       "popSnis": 9581,

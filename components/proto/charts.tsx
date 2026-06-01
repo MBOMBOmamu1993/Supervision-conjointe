@@ -72,16 +72,18 @@ export function ProtoLine({ series, color, height = 175, months = MONTHS }: { se
   );
 }
 
-export function ProtoGroupedBar({ cats, series, height = 200, unit = "", max, colors }: {
+export function ProtoGroupedBar({ cats, series, height = 200, unit = "", max, colors, rotateLabels = false }: {
   cats: string[]; series: { name: string; data: number[] }[]; height?: number; unit?: string; max?: number; colors?: string[];
+  /** Affiche les libellés de l'axe X à la verticale (utile pour des noms de ZS longs). */
+  rotateLabels?: boolean;
 }) {
   return (
     <EChart height={height} option={{
       color: colors || [C.navy, C.blue, C.orange, C.green],
       tooltip: { trigger: "axis", axisPointer: { type: "shadow" }, confine: true },
       legend: { show: true, top: 0, itemWidth: 11, itemHeight: 8, textStyle: { fontSize: 10, color: "#334155" } },
-      grid: { left: 42, right: 14, top: 28, bottom: 22 },
-      xAxis: { type: "category", data: cats, axisLabel: { fontSize: 10, color: "#1e293b", fontWeight: 600, interval: 0 } },
+      grid: { left: 42, right: 14, top: 28, bottom: rotateLabels ? 66 : 22 },
+      xAxis: { type: "category", data: cats, axisLabel: { fontSize: 10, color: "#1e293b", fontWeight: 600, interval: 0, rotate: rotateLabels ? 90 : 0 } },
       yAxis: { type: "value", max, axisLabel: { fontSize: 9, color: C.axis, formatter: "{value}" + unit }, splitLine: { lineStyle: { color: C.grid } } },
       series: series.map((s) => ({ name: s.name, type: "bar", data: s.data, barGap: "6%", barWidth: series.length > 3 ? "13%" : "17%", label: { show: true, position: "top", fontSize: 8.5, fontWeight: 700, color: "#475569", formatter: "{c}" } })),
     }} />

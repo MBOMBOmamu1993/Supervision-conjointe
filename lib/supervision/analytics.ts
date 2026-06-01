@@ -26,6 +26,7 @@ import {
   resolveTypeLabel,
   type ScoreQuestion,
 } from "./schema";
+import { canonAntenne } from "@/lib/geo";
 import type { SourceFetch } from "./kobo-client";
 import type {
   ComposanteAnswerDist,
@@ -180,16 +181,28 @@ function buildRecords(source: SourceFetch): { records: SupervisionRecord[]; rows
   return { records, rows, scoreQs };
 }
 
+/**
+ * Groupes de « Type de supervision » : chaque clé envoyée par le filtre
+ * regroupe plusieurs types canoniques. Doit rester aligné avec
+ * lib/state/filters.ts (TYPE_GROUPS).
+ */
+const TYPE_GROUP_TYPES: Record<string, string[]> = {
+  conjointe: ["conjointe_pev_oms", "conjointe_mca"],
+  moh_seul: ["auto_eval", "mca_seul", "ecz_seul"],
+};
+
 function passFilters(r: SupervisionRecord, f: Filters): boolean {
   if (f.province && r.province && norm(r.province) !== norm(f.province)) return false;
-  if (f.antenne && r.antenne && norm(r.antenne) !== norm(f.antenne)) return false;
+  if (f.antenne && r.antenne && norm(canonAntenne(r.antenne) ?? "") !== norm(canonAntenne(f.antenne) ?? "")) return false;
   if (f.zone && r.zone && norm(r.zone) !== norm(f.zone)) return false;
   if (f.aire && r.aire && norm(r.aire) !== norm(f.aire)) return false;
   if (f.months && f.months.length) {
     if (!r.month || !f.months.includes(r.month)) return false;
   }
   if (f.types && f.types.length) {
-    if (!r.typeLabel || !f.types.some((t) => norm(t) === norm(r.typeLabel))) return false;
+    // Les jetons sont des clés de groupe ; on tolère aussi un type canonique brut.
+    const allowed = new Set(f.types.flatMap((t) => TYPE_GROUP_TYPES[t] ?? [t]));
+    if (!allowed.has(r.type)) return false;
   }
   return true;
 }
@@ -473,6 +486,14 @@ export function buildBundle(sources: SourceFetch[], filters: Filters, targets: S
       aires: uniqueSorted(allUnfiltered.map((r) => r.aire)),
       months: Array.from(new Set(allUnfiltered.map((r) => r.month).filter((m): m is string => !!m))).sort(),
       types: uniqueSorted(allUnfiltered.map((r) => r.typeLabel)),
+      // Tuples géographiques (antennes canonicalisées) pour les filtres en
+      // cascade Province → Antenne → ZS → Aire côté client.
+      geo: allUnfiltered.map((r) => ({
+        province: r.province,
+        antenne: canonAntenne(r.antenne),
+        zone: r.zone,
+        aire: r.aire,
+      })),
     },
     kpi,
     levels,

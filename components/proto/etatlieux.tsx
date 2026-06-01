@@ -1,27 +1,65 @@
 "use client";
 
 /* =========================================================================
-   etatlieux.tsx — Onglet « État de lieux Tshuapa » (fidèle à apercu/etatlieux.js)
-   3 pages : Informations générales · Planification & communauté · Ressources
-   Données réelles : Excel « Final base état de lieu Tshuapa » (data/edl-data.ts).
+   etatlieux.tsx — Onglet « État de lieux Tshuapa »
+   3 pages : Informations générales · Accessibilité/stratégies/engagement · Ressources
+   Données réelles : Excel « Final base état de lieu Tshuapa » (data/edl-data.ts),
+   filtrées par la sélection Province / Antenne / ZS / Aire (lib/etat-lieux/edl-filter).
    ========================================================================= */
-import { EDL, type EdlZsPop } from "@/data/edl-data";
+import { useFilters } from "@/lib/state/filters";
+import { filterEdl } from "@/lib/etat-lieux/edl-filter";
+import type { EdlZsPop, EdlData } from "@/data/edl-data";
 import { SectionBar } from "@/components/ui/Card";
 import { C, TONES, cotColor, fmt, KpiTile, CardTitle, Badge, StatTile, Banner, type Tone } from "./proto";
 import { ProtoGroupedBar, ProtoHBar } from "./charts";
 
-const E = EDL;
 const sortZS = (arr: EdlZsPop[]) => arr.slice().sort((a, b) => a.zs.localeCompare(b.zs));
+/** Parse un nombre éventuellement stocké en texte (« 140 », « 12,5 »). */
+const dn = (v?: string | null): number | null => {
+  const n = parseFloat(String(v ?? "").replace(",", "."));
+  return Number.isFinite(n) ? n : null;
+};
+const sumN = (xs: number[]) => xs.reduce((a, b) => a + b, 0);
+
+/** Bandeau affiché lorsque la sélection ne renvoie aucune donnée. */
+function NoData() {
+  return (
+    <div className="card card-pad flex items-center gap-3" style={{ background: TONES.orange.bg, borderColor: TONES.orange.border }}>
+      <Badge icon="alert" tone="orange" size={32} />
+      <div className="text-[12px] text-surface-700">Aucune donnée « État de lieux » pour cette sélection de filtres. Réinitialisez ou élargissez les filtres.</div>
+    </div>
+  );
+}
+
+function useEdl(): EdlData {
+  const f = useFilters();
+  return filterEdl({ province: f.province, antenne: f.antenne, zone: f.zone, aire: f.aire });
+}
 
 /* ---------------- Informations générales ---------------- */
 export function Edl1() {
+  const E = useEdl();
   const st = E.structure, pt = E.popTotals;
   const ecart = pt.enf0_11_ajuste - pt.enf0_11_micro;
   const zss = sortZS(E.zsPop);
+  if (!zss.length) return <div className="space-y-4"><Banner icon="map" tone="navy" title="Informations générales — Province de la Tshuapa" sub="Sélection filtrée" /><NoData /></div>;
+
+  // Top 50 aires de santé par poids démographique (0–11 mois ajustée).
+  const topAs = E.asPop.slice().sort((a, b) => b.cAj - a.cAj).slice(0, 50);
+
+  // Niveaux de priorité + nombre de visites attendues / mois (auto-calcul) :
+  // très haute = quotidien (≈30), haute = 4×, moyenne = 2×, faible = 1×.
+  const prio = zss.map((z) => {
+    const il = E.infoZS.find((i) => i.zs.toUpperCase().startsWith(z.zs.toUpperCase().slice(0, 4))) ?? ({} as Partial<typeof E.infoZS[0]>);
+    const th = il.ilots ?? 0, ha = il.campPech ?? 0, mo = il.campElev ?? 0, fa = Math.max(0, (z.nAS || 0) - 1);
+    return { zs: z.zs, th, ha, mo, fa, visites: th * 30 + ha * 4 + mo * 2 + fa * 1 };
+  });
+  const topPrio = prio.slice().sort((a, b) => (b.th + b.ha) - (a.th + a.ha)).slice(0, 6);
+
   return (
     <div className="space-y-4">
       <Banner icon="map" tone="navy" title="Informations générales — Province de la Tshuapa"
-        sub={`2 antennes · ${st.zs} zones de santé · ${st.as} aires de santé`} />
+        sub={`${st.antennes} antenne(s) · ${st.zs} zones de santé · ${st.as} aires de santé`} />
 
       <section>
         <SectionBar icon="home">Structures sanitaires</SectionBar>
@@ -30,7 +68,7 @@ export function Edl1() {
           <KpiTile icon="hospital" tone="violet" label="Zones de santé" value={st.zs} />
           <KpiTile icon="clinic" tone="green" label="Aires de santé" value={st.as} />
           <KpiTile icon="home" tone="blue" label="Total ESS" value={fmt(st.essTotal)} />
-          <KpiTile icon="syringe" tone="orange" label="ESS qui vaccinent" value={fmt(st.essVac)} sub={`${Math.round(st.essVac / st.essTotal * 100)}% des ESS`} />
+          <KpiTile icon="syringe" tone="orange" label="ESS qui vaccinent" value={fmt(st.essVac)} sub={st.essTotal ? `${Math.round(st.essVac / st.essTotal * 100)}% des ESS` : undefined} />
         </div>
       </section>
 
@@ -48,63 +86,89 @@ export function Edl1() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
         <div className="card card-pad">
           <CardTitle icon="child" tone="violet" title="Population cible 0–11 mois par ZS" sub="Administrative (microplan) vs ajustée" />
-          <ProtoGroupedBar height={240} colors={[C.violet, C.green]} cats={zss.map((z) => z.zs)} series={[
+          <ProtoGroupedBar height={260} rotateLabels colors={[C.violet, C.green]} cats={zss.map((z) => z.zs)} series={[
             { name: "0–11 mois admin.", data: zss.map((z) => z.cMicro) },
             { name: "0–11 mois ajustée", data: zss.map((z) => z.cAj) },
           ]} />
         </div>
         <div className="card card-pad">
           <CardTitle icon="syringe" tone="green" title="% des ESS qui vaccinent par ZS" sub="Total possible par zone de santé" />
-          <ProtoHBar height={240} maxName={90} rows={zss.map((z) => [z.zs, z.pctVac])} />
+          <ProtoHBar height={260} maxName={90} rows={zss.map((z) => [z.zs, z.pctVac])} />
         </div>
       </div>
 
       <section>
         <SectionBar icon="bars">Population cible administrative & ajustée — par aire de santé</SectionBar>
-        <div className="card card-pad">
-          <div className="mb-2 text-[11px] text-surface-500">{E.asPop.length} aires de santé · tableau défilable</div>
-          <div className="overflow-auto" style={{ maxHeight: 330 }}>
-            <table className="dtable">
-              <thead><tr><th className="name">Aire de santé</th><th className="name">Zone de santé</th><th>Pop. admin.</th><th>Pop. ajustée</th><th>0–11 mois (micro)</th><th>0–11 mois (ajustée)</th></tr></thead>
-              <tbody>
-                {E.asPop.map((a, i) => (
-                  <tr key={i}><td className="name">{a.as}</td><td className="name">{a.zs}</td><td>{fmt(a.popSnis)}</td><td>{fmt(a.popAj)}</td><td>{fmt(a.cMicro)}</td><td>{fmt(a.cAj)}</td></tr>
-                ))}
-              </tbody>
-            </table>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
+          <div className="card card-pad lg:col-span-2">
+            <div className="mb-2 text-[11px] text-surface-500">{E.asPop.length} aires de santé · tableau défilable · écart = ajustée − administrative</div>
+            <div className="overflow-auto" style={{ maxHeight: 330 }}>
+              <table className="dtable">
+                <thead><tr><th className="name">Aire de santé</th><th className="name">Zone de santé</th><th>Pop. admin.</th><th>Pop. ajustée</th><th>0–11 mois (micro)</th><th>0–11 mois (ajustée)</th><th>Écart 0–11</th></tr></thead>
+                <tbody>
+                  {E.asPop.map((a, i) => {
+                    const ec = a.cAj - a.cMicro;
+                    return <tr key={i}><td className="name">{a.as}</td><td className="name">{a.zs}</td><td>{fmt(a.popSnis)}</td><td>{fmt(a.popAj)}</td><td>{fmt(a.cMicro)}</td><td>{fmt(a.cAj)}</td><td style={{ color: ec >= 0 ? C.orange : C.red, fontWeight: 700 }}>{(ec >= 0 ? "+" : "") + fmt(ec)}</td></tr>;
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+          <div className="card card-pad">
+            <CardTitle icon="child" tone="green" title="Top 50 aires de santé" sub="Plus grand poids démographique (0–11 mois ajustée)" />
+            <div className="overflow-auto" style={{ maxHeight: 300 }}>
+              <table className="dtable">
+                <thead><tr><th>#</th><th className="name">Aire de santé</th><th className="name">ZS</th><th>0–11 (ajustée)</th></tr></thead>
+                <tbody>
+                  {topAs.map((a, i) => (
+                    <tr key={i}><td style={{ fontWeight: 700, color: C.navy }}>{i + 1}</td><td className="name">{a.as}</td><td className="name">{a.zs}</td><td style={{ color: C.green, fontWeight: 700 }}>{fmt(a.cAj)}</td></tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
       </section>
 
       <section>
         <SectionBar icon="alert">Sites par niveau de priorité (risque) — par zone de santé</SectionBar>
-        <div className="card card-pad">
-          <table className="dtable">
-            <thead><tr><th className="name">Zone de santé</th><th>Très haute priorité</th><th>Haute priorité</th><th>Moyenne priorité</th><th>Faible priorité</th></tr></thead>
-            <tbody>
-              {zss.map((z) => {
-                const il = E.infoZS.find((i) => i.zs.toUpperCase().startsWith(z.zs.toUpperCase().slice(0, 4))) ?? ({} as Partial<typeof E.infoZS[0]>);
-                const th = il.ilots ?? 0, ha = il.campPech ?? 0, mo = il.campElev ?? 0, fa = Math.max(0, (z.nAS || 0) - 1);
-                return (
-                  <tr key={z.zs}>
-                    <td className="name">{z.zs}</td>
-                    <td style={{ background: TONES.red.bg, color: C.red, fontWeight: 700 }}>{th}</td>
-                    <td style={{ background: TONES.orange.bg, color: C.orange, fontWeight: 700 }}>{ha}</td>
-                    <td style={{ background: TONES.blue.bg, color: C.blue, fontWeight: 700 }}>{mo}</td>
-                    <td style={{ background: TONES.green.bg, color: C.green, fontWeight: 700 }}>{fa}</td>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
+          <div className="card card-pad lg:col-span-2">
+            <table className="dtable">
+              <thead><tr><th className="name">Zone de santé</th><th>Très haute priorité</th><th>Haute priorité</th><th>Moyenne priorité</th><th>Faible priorité</th><th>Visites/mois attendues</th></tr></thead>
+              <tbody>
+                {prio.map((p) => (
+                  <tr key={p.zs}>
+                    <td className="name">{p.zs}</td>
+                    <td style={{ background: TONES.red.bg, color: C.red, fontWeight: 700 }}>{p.th}</td>
+                    <td style={{ background: TONES.orange.bg, color: C.orange, fontWeight: 700 }}>{p.ha}</td>
+                    <td style={{ background: TONES.blue.bg, color: C.blue, fontWeight: 700 }}>{p.mo}</td>
+                    <td style={{ background: TONES.green.bg, color: C.green, fontWeight: 700 }}>{p.fa}</td>
+                    <td style={{ background: TONES.navy.bg, color: C.navy, fontWeight: 800 }}>{fmt(p.visites)}</td>
                   </tr>
-                );
-              })}
-            </tbody>
-          </table>
-          <div className="mt-2 text-[11px] text-surface-500">Niveaux estimés à partir des îlots, campements de pêcheurs et d'éleveurs recensés par ZS (base état de lieux).</div>
+                ))}
+              </tbody>
+            </table>
+            <div className="mt-2 text-[11px] text-surface-500">Visites/mois = très haute×30 (quotidien) + haute×4 + moyenne×2 + faible×1. Niveaux estimés à partir des îlots, campements de pêcheurs et d'éleveurs recensés par ZS.</div>
+          </div>
+          <div className="card card-pad">
+            <CardTitle icon="alert" tone="red" title="Top 6 ZS à haute priorité" sub="Plus de sites très haute + haute priorité" />
+            <table className="dtable">
+              <thead><tr><th>#</th><th className="name">Zone de santé</th><th>Sites prioritaires</th></tr></thead>
+              <tbody>
+                {topPrio.map((p, i) => (
+                  <tr key={p.zs}><td style={{ fontWeight: 700, color: C.navy }}>{i + 1}</td><td className="name">{p.zs}</td><td style={{ color: C.red, fontWeight: 700 }}>{fmt(p.th + p.ha)}</td></tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       </section>
     </div>
   );
 }
 
-/* ---------------- Planification & participation communautaire ---------------- */
+/* ---------------- Accessibilité, stratégies & engagement communautaire ---------------- */
 function CondCell({ v = "", kind }: { v?: string; kind?: "reseau" }) {
   const n = parseFloat(("" + v).replace(",", ".")) || 0;
   let tone: Tone = n >= 100 ? "red" : n >= 50 ? "orange" : "green";
@@ -114,58 +178,175 @@ function CondCell({ v = "", kind }: { v?: string; kind?: "reseau" }) {
 }
 
 export function Edl2() {
+  const E = useEdl();
   const zss = sortZS(E.zsPop);
+  if (!zss.length) return <div className="space-y-4"><Banner icon="road" tone="orange" title="Accessibilité, stratégie de vaccination et engagement communautaire" sub="Sélection filtrée" /><NoData /></div>;
+
+  // --- Stratégies planifiées (microplan) : agrégats par ZS + comparaison ACD ---
+  const stratRows = zss.map((z) => ({ zs: z.zs, fix: z.sFix, av: z.sAv, mob: z.sMob, spe: z.sSpe, tot: z.sFix + z.sAv + z.sMob + z.sSpe, attendu: z.attendu }));
+  const totPlan = sumN(stratRows.map((r) => r.tot));
+  const totAttendu = sumN(stratRows.map((r) => r.attendu));
+  const ecartPlan = totPlan - totAttendu;
+  // Top 50 aires de santé par écart positif (planifié − attendu ACD).
+  const topGapAs = E.asPop
+    .map((a) => ({ as: a.as, zs: a.zs, plan: a.sFix + a.sAv + a.sMob + a.sSpe, attendu: a.attendu, ecart: a.sFix + a.sAv + a.sMob + a.sSpe - a.attendu }))
+    .filter((a) => a.ecart > 0)
+    .sort((a, b) => b.ecart - a.ecart)
+    .slice(0, 50);
+
+  // --- Accessibilité par ZS (depuis les aires de santé) ---
+  const zsList = Array.from(new Set(E.asPop.map((a) => a.zs)));
+  const acc = zsList.map((zs) => {
+    const as = E.asPop.filter((a) => a.zs === zs);
+    const far = as.filter((a) => { const d = dn(a.distBCZ); return d !== null && d > 50; }).length;
+    const vil20 = as.filter((a) => { const d = dn(a.distVil); return d !== null && d > 20; }).length;
+    return { zs, tot: as.length, far, pctFar: as.length ? Math.round(far / as.length * 100) : 0, vil20 };
+  }).sort((a, b) => a.zs.localeCompare(b.zs));
+  const topVil20 = acc.slice().filter((a) => a.vil20 > 0).sort((a, b) => b.vil20 - a.vil20).slice(0, 5);
+
+  // --- Spécificités géographiques : top 6 ZS îlots/campements ---
   const sum = (f: (z: typeof E.infoZS[0]) => number) => E.infoZS.reduce((s, z) => s + f(z), 0);
+  const topDisp = E.infoZS
+    .map((z) => ({ zs: z.zs, n: (z.ilots || 0) + (z.campPech || 0) + (z.campElev || 0) + (z.campMin || 0) }))
+    .filter((z) => z.n > 0)
+    .sort((a, b) => b.n - a.n)
+    .slice(0, 6);
+
   return (
     <div className="space-y-4">
-      <Banner icon="road" tone="orange" title="Planification, stratégies avancées & participation communautaire"
+      <Banner icon="road" tone="orange" title="Accessibilité, stratégie de vaccination et engagement communautaire"
         sub="Accessibilité, microplanification et mobilisation communautaire" />
 
+      {/* 1) Stratégies de vaccination planifiées — placées en tête de l'onglet */}
       <section>
-        <SectionBar icon="road">Accessibilité — distances & réseau par aire de santé</SectionBar>
-        <div className="card card-pad">
-          <div className="mb-2 text-[11px] text-surface-500">Mise en forme conditionnée : vert &lt; 50 km · orange 50–99 km · rouge ≥ 100 km. Tableau défilable.</div>
-          <div className="overflow-auto" style={{ maxHeight: 300 }}>
-            <table className="dtable">
-              <thead><tr><th className="name">Aire de santé</th><th className="name">Zone de santé</th><th>Distance AS–BCZ (km)</th><th>Dernier village (km)</th><th>Voie d'accès</th><th>Réseau</th></tr></thead>
-              <tbody>
-                {E.asPop.map((a, i) => (
-                  <tr key={i}><td className="name">{a.as}</td><td className="name">{a.zs}</td><CondCell v={a.distBCZ} /><CondCell v={a.distVil} /><td>{a.voie || "—"}</td><CondCell v={a.reseau} kind="reseau" /></tr>
-                ))}
-              </tbody>
-            </table>
+        <SectionBar icon="flag">Stratégies de vaccination planifiées (microplan)</SectionBar>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
+          <div className="card card-pad lg:col-span-2">
+            <CardTitle icon="flag" tone="navy" title="Stratégies planifiées par zone de santé" sub="Somme par type de stratégie" />
+            <div className="overflow-auto" style={{ maxHeight: 300 }}>
+              <table className="dtable">
+                <thead><tr><th className="name">Zone de santé</th><th>Fixes</th><th>Avancées</th><th>Mobiles</th><th>Spéciales</th><th>Total planifié</th></tr></thead>
+                <tbody>
+                  {stratRows.map((r) => (
+                    <tr key={r.zs}><td className="name">{r.zs}</td><td>{fmt(r.fix)}</td><td>{fmt(r.av)}</td><td>{fmt(r.mob)}</td><td>{fmt(r.spe)}</td><td style={{ color: C.navy, fontWeight: 800 }}>{fmt(r.tot)}</td></tr>
+                  ))}
+                </tbody>
+                <tfoot><tr><td className="name">Total province</td><td>{fmt(sumN(stratRows.map((r) => r.fix)))}</td><td>{fmt(sumN(stratRows.map((r) => r.av)))}</td><td>{fmt(sumN(stratRows.map((r) => r.mob)))}</td><td>{fmt(sumN(stratRows.map((r) => r.spe)))}</td><td>{fmt(totPlan)}</td></tr></tfoot>
+              </table>
+            </div>
+          </div>
+          <div className="card card-pad flex flex-col gap-3">
+            <CardTitle icon="scale" tone="orange" title="Planifié vs attendu (ACD)" sub="Comparaison & écart" />
+            <StatTile icon="flag" tone="navy" label="Total stratégies planifiées" big={fmt(totPlan)} />
+            <StatTile icon="clip" tone="blue" label="Total attendu selon l'ACD" big={fmt(totAttendu)} />
+            <StatTile icon="scale" tone={ecartPlan >= 0 ? "orange" : "red"} label="Écart (planifié − attendu)" big={(ecartPlan >= 0 ? "+" : "") + fmt(ecartPlan)} />
+            {totAttendu === 0 ? <div className="text-[10.5px] text-surface-500">Cible « attendu ACD » non encore renseignée dans la base — à brancher à la synchronisation.</div> : null}
           </div>
         </div>
-      </section>
-
-      <section>
-        <SectionBar icon="map">Spécificités géographiques & populations dispersées — par ZS</SectionBar>
-        <div className="card card-pad">
-          <table className="dtable">
-            <thead><tr><th className="name">Zone de santé</th><th>Îlots</th><th>Campements pêcheurs</th><th>Campements éleveurs</th><th>Camps déplacés internes</th></tr></thead>
-            <tbody>
-              {E.infoZS.map((z) => (
-                <tr key={z.zs}><td className="name">{z.zs}</td><td>{fmt(z.ilots)}</td><td>{fmt(z.campPech)}</td><td>{fmt(z.campElev)}</td><td>{fmt(z.campsDepl)}</td></tr>
-              ))}
-            </tbody>
-            <tfoot><tr><td className="name">Total province</td><td>{fmt(sum((z) => z.ilots))}</td><td>{fmt(sum((z) => z.campPech))}</td><td>{fmt(sum((z) => z.campElev))}</td><td>{fmt(sum((z) => z.campsDepl))}</td></tr></tfoot>
-          </table>
-        </div>
-      </section>
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-        <div className="card card-pad">
-          <CardTitle icon="flag" tone="navy" title="Stratégies de vaccination planifiées (microplan)" sub="Somme par zone de santé" />
-          <ProtoGroupedBar height={230} cats={zss.map((z) => z.zs)} series={[
+        <div className="card card-pad mt-3">
+          <CardTitle icon="bars" tone="navy" title="Stratégies par zone de santé" sub="Fixes · Avancées · Mobiles · Spéciales" />
+          <ProtoGroupedBar height={250} rotateLabels cats={zss.map((z) => z.zs)} series={[
             { name: "Fixes", data: zss.map((z) => z.sFix) },
             { name: "Avancées", data: zss.map((z) => z.sAv) },
             { name: "Mobiles", data: zss.map((z) => z.sMob) },
             { name: "Spéciales", data: zss.map((z) => z.sSpe) },
           ]} />
         </div>
+        <div className="card card-pad mt-3">
+          <CardTitle icon="clinic" tone="green" title="Top 50 aires de santé par écart positif" sub="Stratégies planifiées − attendu (ACD)" />
+          <div className="overflow-auto" style={{ maxHeight: 280 }}>
+            <table className="dtable">
+              <thead><tr><th>#</th><th className="name">Aire de santé</th><th className="name">ZS</th><th>Planifié</th><th>Attendu ACD</th><th>Écart</th></tr></thead>
+              <tbody>
+                {topGapAs.length ? topGapAs.map((a, i) => (
+                  <tr key={i}><td style={{ fontWeight: 700, color: C.navy }}>{i + 1}</td><td className="name">{a.as}</td><td className="name">{a.zs}</td><td>{fmt(a.plan)}</td><td>{fmt(a.attendu)}</td><td style={{ color: C.orange, fontWeight: 700 }}>{"+" + fmt(a.ecart)}</td></tr>
+                )) : <tr><td colSpan={6} className="name" style={{ color: "#94a3b8" }}>Aucun écart positif pour cette sélection.</td></tr>}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      {/* 2) Accessibilité — distances & réseau */}
+      <section>
+        <SectionBar icon="road">Accessibilité — distances & réseau par aire de santé</SectionBar>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
+          <div className="card card-pad lg:col-span-2">
+            <div className="mb-2 text-[11px] text-surface-500">Mise en forme conditionnée : vert &lt; 50 km · orange 50–99 km · rouge ≥ 100 km. Tableau défilable.</div>
+            <div className="overflow-auto" style={{ maxHeight: 300 }}>
+              <table className="dtable">
+                <thead><tr><th className="name">Aire de santé</th><th className="name">Zone de santé</th><th>Distance AS–BCZ (km)</th><th>Dernier village (km)</th><th>Voie d'accès</th><th>Réseau</th></tr></thead>
+                <tbody>
+                  {E.asPop.map((a, i) => (
+                    <tr key={i}><td className="name">{a.as}</td><td className="name">{a.zs}</td><CondCell v={a.distBCZ} /><CondCell v={a.distVil} /><td>{a.voie || "—"}</td><CondCell v={a.reseau} kind="reseau" /></tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+          <div className="card card-pad flex flex-col gap-3">
+            <div>
+              <CardTitle icon="road" tone="orange" title="% des AS à plus de 50 km par ZS" sub="Distance AS → BCZ" />
+              <div className="overflow-auto" style={{ maxHeight: 150 }}>
+                <table className="dtable">
+                  <thead><tr><th className="name">Zone de santé</th><th>AS &gt; 50 km</th><th>%</th></tr></thead>
+                  <tbody>
+                    {acc.map((a) => (
+                      <tr key={a.zs}><td className="name">{a.zs}</td><td>{fmt(a.far)}/{fmt(a.tot)}</td><td style={{ color: cotColor(100 - a.pctFar), fontWeight: 700 }}>{a.pctFar}%</td></tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+            <div>
+              <CardTitle icon="map" tone="red" title="Top 5 ZS — dernier village &gt; 20 km" sub="Nombre d'AS concernées" />
+              <table className="dtable">
+                <thead><tr><th>#</th><th className="name">Zone de santé</th><th>AS &gt; 20 km</th></tr></thead>
+                <tbody>
+                  {topVil20.length ? topVil20.map((a, i) => (
+                    <tr key={a.zs}><td style={{ fontWeight: 700, color: C.navy }}>{i + 1}</td><td className="name">{a.zs}</td><td style={{ color: C.red, fontWeight: 700 }}>{fmt(a.vil20)}</td></tr>
+                  )) : <tr><td colSpan={3} className="name" style={{ color: "#94a3b8" }}>—</td></tr>}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* 3) Spécificités géographiques */}
+      <section>
+        <SectionBar icon="map">Spécificités géographiques & populations dispersées — par ZS</SectionBar>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
+          <div className="card card-pad lg:col-span-2">
+            <table className="dtable">
+              <thead><tr><th className="name">Zone de santé</th><th>Îlots</th><th>Campements pêcheurs</th><th>Campements éleveurs</th><th>Camps déplacés internes</th></tr></thead>
+              <tbody>
+                {E.infoZS.map((z) => (
+                  <tr key={z.zs}><td className="name">{z.zs}</td><td>{fmt(z.ilots)}</td><td>{fmt(z.campPech)}</td><td>{fmt(z.campElev)}</td><td>{fmt(z.campsDepl)}</td></tr>
+                ))}
+              </tbody>
+              <tfoot><tr><td className="name">Total province</td><td>{fmt(sum((z) => z.ilots))}</td><td>{fmt(sum((z) => z.campPech))}</td><td>{fmt(sum((z) => z.campElev))}</td><td>{fmt(sum((z) => z.campsDepl))}</td></tr></tfoot>
+            </table>
+          </div>
+          <div className="card card-pad">
+            <CardTitle icon="map" tone="violet" title="Top 6 ZS — îlots & campements" sub="Total îlots + campements (pêcheurs, éleveurs, miniers)" />
+            <table className="dtable">
+              <thead><tr><th>#</th><th className="name">Zone de santé</th><th>Total</th></tr></thead>
+              <tbody>
+                {topDisp.length ? topDisp.map((z, i) => (
+                  <tr key={z.zs}><td style={{ fontWeight: 700, color: C.navy }}>{i + 1}</td><td className="name">{z.zs}</td><td style={{ color: C.violet, fontWeight: 700 }}>{fmt(z.n)}</td></tr>
+                )) : <tr><td colSpan={3} className="name" style={{ color: "#94a3b8" }}>—</td></tr>}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      {/* 4) Participation communautaire & points d'entrée — côte à côte */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
         <div className="card card-pad">
           <CardTitle icon="people" tone="green" title="Participation communautaire — CAC & RECO" sub="Cellules d'animation communautaire par ZS" />
-          <div className="overflow-auto" style={{ maxHeight: 230 }}>
+          <div className="overflow-auto" style={{ maxHeight: 300 }}>
             <table className="dtable">
               <thead><tr><th className="name">Zone de santé</th><th>Villages</th><th>CAC prévus</th><th>CAC actifs</th></tr></thead>
               <tbody>
@@ -176,35 +357,43 @@ export function Edl2() {
             </table>
           </div>
         </div>
-      </div>
-
-      <section>
-        <SectionBar icon="home">Points d'entrée communautaires & localités résistantes — par ZS</SectionBar>
         <div className="card card-pad">
+          <CardTitle icon="home" tone="navy" title="Points d'entrée communautaires & localités résistantes" sub="Par zone de santé" />
           <div className="overflow-auto" style={{ maxHeight: 300 }}>
             <table className="dtable">
-              <thead><tr><th className="name">Zone de santé</th><th>Marchés</th><th>Églises</th><th>École maternelle</th><th>École primaire</th><th>École secondaire</th><th>Localités résistantes</th></tr></thead>
+              <thead><tr><th className="name">Zone de santé</th><th>Marchés</th><th>Églises</th><th>Éc. mat.</th><th>Éc. prim.</th><th>Éc. sec.</th><th>Localités résistantes</th></tr></thead>
               <tbody>
-                {E.infoZS.map((z) => (
-                  <tr key={z.zs}><td className="name">{z.zs}</td><td>{fmt(z.marches)}</td><td>{fmt(z.eglises)}</td><td>{fmt(z.ecoleMat)}</td><td>{fmt(z.ecolePrim)}</td><td>{fmt(z.ecoleSec)}</td><td style={{ color: C.red, fontWeight: 700 }}>{z.refractaires || "0"}</td></tr>
-                ))}
+                {E.infoZS.map((z) => {
+                  // Certaines lignes contiennent un nom de localité au lieu d'un
+                  // décompte : on affiche alors le nombre (1) et le nom en info-bulle.
+                  const raw = ("" + (z.refractaires ?? "")).trim();
+                  const parsed = dn(raw);
+                  const count = parsed !== null ? parsed : raw ? 1 : 0;
+                  const title = parsed === null && raw ? `Localité résistante : ${raw}` : undefined;
+                  return (
+                    <tr key={z.zs}><td className="name">{z.zs}</td><td>{fmt(z.marches)}</td><td>{fmt(z.eglises)}</td><td>{fmt(z.ecoleMat)}</td><td>{fmt(z.ecolePrim)}</td><td>{fmt(z.ecoleSec)}</td><td style={{ color: C.red, fontWeight: 700 }} title={title}>{fmt(count)}</td></tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
         </div>
-      </section>
+      </div>
     </div>
   );
 }
 
 /* ---------------- Ressources humaines, matérielles & financières ---------------- */
 export function Edl3() {
+  const E = useEdl();
   const cold = E.cold.slice().sort((a, b) => a.zs.localeCompare(b.zs));
   const energie: Record<string, number> = {};
   E.coldAS.forEach((a) => { const k = (a.energie || "Non précisé").trim() || "Non précisé"; energie[k] = (energie[k] || 0) + 1; });
   const energieRows = Object.entries(energie).sort((a, b) => b[1] - a[1]);
   const etatF = E.coldAS.filter((a) => ("" + a.etat).toUpperCase().startsWith("F")).length;
   const totNAS = cold.reduce((s, c) => s + c.nAS, 0), totFrigo = cold.reduce((s, c) => s + c.frigo, 0);
+
+  if (!cold.length) return <div className="space-y-4"><Banner icon="fridge" tone="teal" title="Ressources humaines, matérielles & financières" sub="Sélection filtrée" /><NoData /></div>;
 
   return (
     <div className="space-y-4">
@@ -219,17 +408,17 @@ export function Edl3() {
               <table className="dtable">
                 <thead><tr><th className="name">Zone de santé</th><th>Nbr AS</th><th>AS avec réfrigérateur fonctionnel</th><th>Couverture</th></tr></thead>
                 <tbody>
-                  {cold.map((c) => { const p = Math.round(c.frigo / c.nAS * 100); return (
+                  {cold.map((c) => { const p = c.nAS ? Math.round(c.frigo / c.nAS * 100) : 0; return (
                     <tr key={c.zs}><td className="name">{c.zs}</td><td>{c.nAS}</td><td style={{ color: C.teal, fontWeight: 700 }}>{c.frigo}</td><td style={{ background: cotColor(p) + "22", fontWeight: 800 }}>{p}%</td></tr>
                   ); })}
                 </tbody>
-                <tfoot><tr><td className="name">Total province</td><td>{totNAS}</td><td>{totFrigo}</td><td>{Math.round(totFrigo / totNAS * 100)}%</td></tr></tfoot>
+                <tfoot><tr><td className="name">Total province</td><td>{totNAS}</td><td>{totFrigo}</td><td>{totNAS ? Math.round(totFrigo / totNAS * 100) : 0}%</td></tr></tfoot>
               </table>
             </div>
           </div>
           <div className="card card-pad">
             <CardTitle icon="fridge" tone="teal" title="Couverture en réfrigérateurs fonctionnels" sub="% des AS équipées par ZS" />
-            <ProtoHBar height={250} maxName={90} rows={cold.map((c) => [c.zs, Math.round(c.frigo / c.nAS * 100)])} />
+            <ProtoHBar height={250} maxName={90} rows={cold.map((c) => [c.zs, c.nAS ? Math.round(c.frigo / c.nAS * 100) : 0])} />
           </div>
         </div>
       </section>

@@ -2,6 +2,24 @@
 
 import { create } from "zustand";
 
+/**
+ * Groupes de « Type de supervision » exposés dans le filtre. Chaque groupe
+ * agrège un ou plusieurs types canoniques (cf. config/supervision.config.ts) :
+ *  - « Supervision conjointe »  → toutes les supervisions conjointes ;
+ *  - « Supervision par MoH (seul) » → auto-évaluation (antenne), MCA seul, ECZ/MCZ seul.
+ */
+export interface TypeGroupDef {
+  key: string;
+  label: string;
+  /** Types canoniques regroupés (SupervisionType). */
+  types: string[];
+}
+
+export const TYPE_GROUPS: TypeGroupDef[] = [
+  { key: "conjointe", label: "Supervision conjointe", types: ["conjointe_pev_oms", "conjointe_mca"] },
+  { key: "moh_seul", label: "Supervision par MoH (seul)", types: ["auto_eval", "mca_seul", "ecz_seul"] },
+];
+
 export interface FiltersState {
   province: string | null;
   antenne: string | null;
@@ -9,10 +27,13 @@ export interface FiltersState {
   aire: string | null;
   /** Mois sélectionnés (ISO "YYYY-MM"), multi-sélection. */
   months: string[];
-  /** Types de supervision sélectionnés (libellés bruts). */
+  /** Groupes de types de supervision sélectionnés (clés de TYPE_GROUPS). */
   types: string[];
-  set: (patch: Partial<Omit<FiltersState, "set" | "reset">>) => void;
+  set: (patch: Partial<Omit<FiltersState, "set" | "reset" | "resetField">>) => void;
+  /** Réinitialise tous les filtres. */
   reset: () => void;
+  /** Réinitialise un champ précis (et ses dépendants pour la cascade géo). */
+  resetField: (field: "province" | "antenne" | "zone" | "aire" | "months" | "types") => void;
 }
 
 export const useFilters = create<FiltersState>((set) => ({
@@ -24,6 +45,27 @@ export const useFilters = create<FiltersState>((set) => ({
   types: [],
   set: (patch) => set(patch),
   reset: () => set({ province: null, antenne: null, zone: null, aire: null, months: [], types: [] }),
+  resetField: (field) =>
+    set((s) => {
+      switch (field) {
+        // Réinitialiser un niveau géographique réinitialise aussi ses enfants
+        // (cohérence de la cascade Province → Antenne → ZS → Aire).
+        case "province":
+          return { province: null, antenne: null, zone: null, aire: null };
+        case "antenne":
+          return { antenne: null, zone: null, aire: null };
+        case "zone":
+          return { zone: null, aire: null };
+        case "aire":
+          return { aire: null };
+        case "months":
+          return { months: [] };
+        case "types":
+          return { types: [] };
+        default:
+          return s;
+      }
+    }),
 }));
 
 export type QueryFilters = Pick<FiltersState, "province" | "antenne" | "zone" | "aire" | "months" | "types">;
