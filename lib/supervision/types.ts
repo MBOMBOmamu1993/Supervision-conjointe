@@ -129,6 +129,8 @@ export interface SupervisionBundle {
     aires: string[];
     months: string[];
     types: string[];
+    /** Tuples géographiques pour la cascade Province → Antenne → ZS → Aire. */
+    geo: { province: string | null; antenne: string | null; zone: string | null; aire: string | null }[];
   };
   kpi: {
     conjointe_pev_oms: KpiBlock;
