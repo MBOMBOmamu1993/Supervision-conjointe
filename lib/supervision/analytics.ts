@@ -457,7 +457,8 @@ export function buildBundle(sources: SourceFetch[], filters: Filters, targets: S
     // Supervision conjointe PEV central-OMS : compteur réel (0 tant que le PEV
     // central/OMS n'a pas supervisé) vs 1/trimestre.
     conjointe_pev_oms: kpiBlock(conjointePevOms.length, T(targets.conjointe_pev_oms_per_month)),
-    // Supervision conjointe (équipe) : 2 antennes/trim + 4 ZS/mois + 6 aires/mois.
+    // Supervision conjointe (équipe) : 2 antennes/trim + 4 ZS/mois + 12 aires/mois
+    // (2 antennes × 2 ZS supervisées × 3 aires de santé = 12 aires/mois).
     conjointe_mca: kpiBlock(conjointeMca.length, T(targets.conjointe_antennes_per_month + targets.conjointe_zs_per_month + targets.conjointe_aires_per_month)),
     auto_eval: kpiBlock(autoEval.length, T(targets.auto_eval_per_month)),
     mca_seul: kpiBlock(byType(allRecords, "mca_seul").length, T(targets.mca_seul_per_month)),
