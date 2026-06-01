@@ -213,7 +213,7 @@ export const SUPERVISION_TARGETS: SupervisionTargets = {
   conjointe_pev_oms_per_month: 1 / 3,
   conjointe_antennes_per_month: 2 / 3,
   conjointe_zs_per_month: 4,
-  conjointe_aires_per_month: 6,
+  conjointe_aires_per_month: 12,
   auto_eval_per_month: 2,
   mca_seul_per_month: 8,
   ecz_seul_per_month: 23,
