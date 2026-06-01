@@ -107,13 +107,13 @@ export default function VueEnsemblePage() {
           <div className="space-y-4">
             {/* ---- KPI ---- */}
             <section>
-              <SectionBar icon="bars">Indicateurs clés de réalisation</SectionBar>
+              <SectionBar icon="bars">Nombre des supervisions réalisées</SectionBar>
               <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2.5">
-                <KpiCard icon="hands" tone="navy" label={<>Sup. conjointe<br />PEV-Central / OMS-VPD</>} value={fmtNum(k.conjointe_pev_oms.count)} pct={k.conjointe_pev_oms.pct} />
-                <KpiCard icon="people" tone="good" label={<>Sup. conjointe<br />MCA / AT / MCZ</>} value={fmtNum(k.conjointe_mca.count)} pct={k.conjointe_mca.pct} />
+                <KpiCard icon="hands" tone="navy" label={<>Sup. conjointe<br />PEV-Central / OMS</>} value={fmtNum(k.conjointe_pev_oms.count)} pct={k.conjointe_pev_oms.pct} />
+                <KpiCard icon="people" tone="good" label={<>Supervision<br />conjointe (équipe)</>} value={fmtNum(k.conjointe_mca.count)} pct={k.conjointe_mca.pct} />
+                <KpiCard icon="clipboard" tone="brand" label={<>Antenne par<br />auto-évaluation</>} value={fmtNum(k.auto_eval.count)} pct={k.auto_eval.pct} />
                 <KpiCard icon="person" tone="violet" label={<>Supervision<br />MCA seul</>} value={fmtNum(k.mca_seul.count)} pct={k.mca_seul.pct} />
-                <KpiCard icon="clipboard" tone="warn" label={<>Supervision<br />ECZ réalisée</>} value={fmtNum(k.ecz_seul.count)} pct={k.ecz_seul.pct} />
-                <KpiCard icon="tower" tone="teal" label={<>Antennes supervisées<br />(conjointe)</>} value={fmtNum(k.antennes_sup.count)} pct={k.antennes_sup.pct} />
+                <KpiCard icon="clipboard" tone="warn" label={<>Supervision<br />ECZ / MCZ seul</>} value={fmtNum(k.ecz_seul.count)} pct={k.ecz_seul.pct} />
               </div>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5 mt-2.5">
                 <KpiCard icon="pin" tone="bad" label={<>ZS supervisées<br />(conjointe)</>} value={fmtNum(k.zs_conjointe.count)} pct={k.zs_conjointe.pct} />
@@ -125,7 +125,7 @@ export default function VueEnsemblePage() {
 
             {/* ---- Scores ---- */}
             <section>
-              <SectionBar icon="bars">Scores de supervision</SectionBar>
+              <SectionBar icon="bars">Score global de toutes les composantes</SectionBar>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-2.5">
                 <ScoreCard title="Score Antennes" stat={lvl(levels.antenne).score} icon="tower" tone="blue" />
                 <ScoreCard title="Score Zones de santé" stat={lvl(levels.zs).score} icon="hospital" tone="violet" />
@@ -135,7 +135,7 @@ export default function VueEnsemblePage() {
 
             {/* ---- Cotations ---- */}
             <section>
-              <SectionBar icon="component">Répartition des cotations</SectionBar>
+              <SectionBar icon="component">Appréciation du score</SectionBar>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-2.5">
                 <CotationCard title="Cotation Antenne" dist={levels.antenne.cotations} icon="tower" tone="blue" />
                 <CotationCard title="Cotation Zone de santé" dist={levels.zs.cotations} icon="hospital" tone="violet" />
@@ -147,8 +147,24 @@ export default function VueEnsemblePage() {
             <section>
               <SectionBar icon="doc">Résumé global</SectionBar>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5">
-                <SummaryCard icon="trophy" label="Meilleur niveau" value={hl.bestLevel.label} sub={`Score moyen : ${fmtPct(hl.bestLevel.score)}`} tone="#178a44" />
-                <SummaryCard icon="down" label="Niveau avec score minimum" value={hl.worstLevel.label} sub={`Score min. : ${fmtPct(hl.worstLevel.score)}`} tone="#c81e1e" />
+                <SummaryCard
+                  icon="trophy"
+                  label="Meilleur niveau"
+                  value={hl.bestStructure ? hl.bestStructure.name : hl.bestLevel.label}
+                  sub={hl.bestStructure
+                    ? `${hl.bestStructure.levelLabel} · ${fmtPct(hl.bestStructure.score)}`
+                    : `Score moyen : ${fmtPct(hl.bestLevel.score)}`}
+                  tone="#178a44"
+                />
+                <SummaryCard
+                  icon="down"
+                  label="Niveau avec score minimum"
+                  value={hl.worstStructure ? hl.worstStructure.name : hl.worstLevel.label}
+                  sub={hl.worstStructure
+                    ? `${hl.worstStructure.levelLabel} · ${fmtPct(hl.worstStructure.score)}`
+                    : `Score min. : ${fmtPct(hl.worstLevel.score)}`}
+                  tone="#c81e1e"
+                />
                 <SummaryCard
                   icon="clinic"
                   label="Structures supervisées (conjointe)"
@@ -156,7 +172,7 @@ export default function VueEnsemblePage() {
                   sub={`CS : ${k.cs_conjointe.count} · ZS : ${k.zs_conjointe.count} · Antennes : ${k.antennes_sup.count}`}
                   tone="#0078ae"
                 />
-                <SummaryCard icon="doc" label="Total supervisions réalisées" value={fmtNum(k.total_supervisions)} sub="% global de réalisation" tone="#00205c" />
+                <SummaryCard icon="doc" label="Total supervisions réalisées" value={fmtNum(k.total_supervisions)} sub="Toutes catégories confondues" tone="#00205c" />
               </div>
             </section>
           </div>

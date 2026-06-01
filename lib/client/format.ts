@@ -23,6 +23,24 @@ export function fmtMonth(m: string): string {
   return `${MONTHS_FR[idx] ?? match[2]} ${match[1]}`;
 }
 
+/**
+ * Insère des retours à la ligne dans un texte long (par défaut ~40 caractères),
+ * en coupant sur les espaces. Utilisé pour les tooltips de graphiques afin que
+ * les questions longues soient lisibles en totalité.
+ */
+export function wrapText(text: string, width = 40, sep = "\n"): string {
+  const words = String(text ?? "").split(/\s+/);
+  const lines: string[] = [];
+  let line = "";
+  for (const w of words) {
+    if (!line) line = w;
+    else if ((line + " " + w).length <= width) line += " " + w;
+    else { lines.push(line); line = w; }
+  }
+  if (line) lines.push(line);
+  return lines.join(sep);
+}
+
 export function fmtDateTime(iso: string | null | undefined): string {
   if (!iso) return "—";
   const d = new Date(iso);
