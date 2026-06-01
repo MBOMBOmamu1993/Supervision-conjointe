@@ -79,6 +79,14 @@ export interface ComposanteScore {
   score: number | null;
 }
 
+/** Score d'une composante par mois (clé "YYYY-MM" → %). */
+export interface ComposanteMonthly {
+  key: string;
+  label: string;
+  short: string;
+  scores: Record<string, number | null>;
+}
+
 export interface ComposanteAnswerDist {
   key: string;
   label: string;
@@ -102,6 +110,8 @@ export interface LevelBundle {
   perStructure: NamedScore[];
   composantes: ComposanteScore[];
   composanteAnswers: ComposanteAnswerDist[];
+  /** Score par composante et par mois (évolution). */
+  composantesMonthly: ComposanteMonthly[];
   trend: TrendPoint[];
   monthlyMatrix: MonthlyMatrixRow[];
   topNon: TopNonItem[];
