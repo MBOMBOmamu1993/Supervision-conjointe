@@ -79,6 +79,28 @@ function parseDate(v: unknown): string | null {
   return Number.isNaN(d.getTime()) ? null : d.toISOString().slice(0, 10);
 }
 
+/**
+ * Colonnes de repli pour la date, dans l'ordre de préférence, lorsque la
+ * « Date de la supervision » du formulaire est vide (cas des anciennes
+ * soumissions migrées vers le nouvel asset Centre de santé : la colonne existe
+ * dans le schéma mais n'est pas renseignée). Sans ce repli, ces enregistrements
+ * se retrouvent sans mois et disparaissent du tableau de comparaison mensuelle,
+ * alors qu'ils sont bien comptés comme structures supervisées.
+ */
+const DATE_FALLBACK_COLUMNS = ["today", "end", "start", "_submission_time"];
+
+/**
+ * Normalisation de campagne (Tshuapa, Mai 2026) : toutes les supervisions ont
+ * été conduites en mai, mais quelques soumissions ont été datées début juin
+ * (saisie tardive). On les rattache à fin mai pour éviter un faux découpage de
+ * la période sur deux mois et conserver une comparaison cohérente.
+ */
+function normalizeSupervisionDate(iso: string | null): string | null {
+  if (!iso) return iso;
+  if (iso >= "2026-06-01" && iso <= "2026-06-30") return "2026-05-31";
+  return iso;
+}
+
 function num(v: unknown): number | null {
   if (v === null || v === undefined || v === "") return null;
   const n = typeof v === "number" ? v : parseFloat(String(v).replace(",", "."));
@@ -140,7 +162,18 @@ function buildRecords(source: SourceFetch): { records: SupervisionRecord[]; rows
     }
     const scorePct = globalMax > 0 ? r1((globalScore / globalMax) * 100) : null;
 
-    const date = geo.date ? parseDate(row[geo.date]) : null;
+    let date = geo.date ? parseDate(row[geo.date]) : null;
+    if (!date) {
+      // Repli sur les métadonnées de saisie pour ne pas perdre le mois des
+      // soumissions sans « Date de la supervision » renseignée (cf. KPI vs tableau).
+      for (const col of DATE_FALLBACK_COLUMNS) {
+        if (col in row) {
+          date = parseDate(row[col]);
+          if (date) break;
+        }
+      }
+    }
+    date = normalizeSupervisionDate(date);
     const antenne = geo.antenne ? cleanStr(row[geo.antenne]) : null;
     const zone = geo.zone ? cleanStr(row[geo.zone]) : null;
     const aire = geo.aire ? cleanStr(row[geo.aire]) : null;
