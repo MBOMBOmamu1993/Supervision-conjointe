@@ -179,14 +179,20 @@ export async function fetchCqdSource(src: CqdSource, opts: { force?: boolean } =
   try {
     const rows = await pRetry(
       async () => {
+        // Données LIVE (data.json) prioritaires : l'export XLSX figé d'une
+        // export-setting Kobo n'est pas régénéré à chaque soumission et peut
+        // donc ne refléter qu'une partie des contrôles (ex. 1 CS au lieu de 3).
+        // Le JSON expose les noms techniques attendus par l'analytique CQD.
         try {
-          const buf = await fetchBuffer(exportUrl, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
-          return parseXlsx(buf);
-        } catch (e) {
-          if (e instanceof AbortError) throw e;
           const buf = await fetchBuffer(dataUrl, "application/json");
           const json = JSON.parse(new TextDecoder().decode(buf));
-          return (Array.isArray(json) ? json : json.results ?? []) as RawRow[];
+          const live = (Array.isArray(json) ? json : json.results ?? []) as RawRow[];
+          if (live.length) return live;
+          throw new Error("data.json vide → repli sur l'export XLSX");
+        } catch (e) {
+          if (e instanceof AbortError) throw e;
+          const buf = await fetchBuffer(exportUrl, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+          return parseXlsx(buf);
         }
       },
       { retries: MAX_ATTEMPTS - 1, minTimeout: 1000, maxTimeout: 4000 }

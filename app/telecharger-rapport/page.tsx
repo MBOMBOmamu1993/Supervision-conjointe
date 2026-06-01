@@ -84,7 +84,11 @@ export default function TelechargerRapportPage() {
     setBusy(r.id); setErr(null);
     try {
       const res = await fetch(`/api/rapports/${r.id}`);
-      if (!res.ok) { const t = await res.text().catch(() => ""); throw new Error(`HTTP ${res.status} — ${t.slice(0, 200)}`); }
+      if (!res.ok) {
+        let msg = "Le rapport n'a pas pu être généré. Veuillez réessayer dans un instant.";
+        try { const j = await res.json(); if (j?.error) msg = j.error; } catch { /* réponse non-JSON */ }
+        throw new Error(msg);
+      }
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
