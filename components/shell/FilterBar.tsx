@@ -6,8 +6,19 @@ import { useSupervision } from "@/lib/client/api";
 import { Icon, type IconName } from "@/components/ui/Icon";
 import { PeriodFilter } from "./PeriodFilter";
 
-/** Routes où la barre de filtres (supervision/CQD) est pertinente. */
-const FILTERED_ROUTES = ["/", "/comparaison", "/composantes", "/qualite-donnees"];
+/** Pastille de titre court (à gauche de la barre), comme le prototype. */
+const PILL: Record<string, string> = {
+  "/": "Vue d'ensemble",
+  "/comparaison": "Performance structures & temps",
+  "/composantes": "Performance par composantes",
+  "/qualite-donnees": "Qualité · Vue globale CS",
+  "/qualite-donnees/detail": "Qualité · Détail par CS",
+  "/qualite-donnees/zs": "Qualité · Par ZS",
+  "/etat-lieux": "État de lieux · Informations",
+  "/etat-lieux/planification": "État de lieux · Planification",
+  "/etat-lieux/ressources": "État de lieux · Ressources",
+  "/telecharger-rapport": "Télécharger Rapport",
+};
 
 /** Libellé de filtre (au-dessus du contrôle) — corrige le bug « titres invisibles ». */
 function FieldLabel({ children }: { children: React.ReactNode }) {
@@ -65,13 +76,17 @@ export function FilterBar() {
   const f = useFilters();
   const { data } = useSupervision();
   const opt = data?.filters;
-
-  // Masquer la barre sur les pages sans filtres (État de lieux, Télécharger).
-  if (!FILTERED_ROUTES.includes(pathname)) return null;
+  const pill = PILL[pathname] ?? "Tableau de bord";
 
   return (
     <div className="relative z-20 shrink-0 border-b border-slate-200 bg-white">
-      <div className="mx-auto max-w-7xl px-4 py-2.5">
+      <div className="px-4 py-2.5">
+        <div className="mb-2 flex items-center gap-2">
+          <span className="inline-flex items-center gap-2 rounded-lg px-4 py-1.5 text-[13px] font-extrabold uppercase tracking-[0.04em] text-white shadow-[0_4px_14px_-6px_rgba(0,32,92,.5)]"
+            style={{ background: "linear-gradient(90deg,#00205c,#0a3a86)" }}>
+            {pill}
+          </span>
+        </div>
         <div className="grid grid-cols-1 items-end gap-2 sm:grid-cols-2 lg:grid-cols-6">
           <Select
             label="Province"

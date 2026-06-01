@@ -29,8 +29,26 @@ const NAV: MainTab[] = [
       { href: "/composantes", label: "Performance par composantes" },
     ],
   },
-  { key: "qualite", label: "Qualité des données", icon: "database", href: "/qualite-donnees" },
-  { key: "etat", label: "État de lieux Tshuapa", icon: "map", href: "/etat-lieux" },
+  {
+    key: "qualite",
+    label: "Qualité des données",
+    icon: "database",
+    subs: [
+      { href: "/qualite-donnees", label: "Vue globale — centres de santé" },
+      { href: "/qualite-donnees/detail", label: "Détail par centre de santé" },
+      { href: "/qualite-donnees/zs", label: "Par zones de santé" },
+    ],
+  },
+  {
+    key: "etat",
+    label: "État de lieux Tshuapa",
+    icon: "map",
+    subs: [
+      { href: "/etat-lieux", label: "Informations générales" },
+      { href: "/etat-lieux/planification", label: "Planification & communauté" },
+      { href: "/etat-lieux/ressources", label: "Ressources & partenaires" },
+    ],
+  },
   { key: "rapport", label: "Télécharger Rapport", icon: "download", href: "/telecharger-rapport" },
 ];
 
