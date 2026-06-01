@@ -56,6 +56,15 @@ function toMonth(v: unknown): string | null {
   const d = new Date(s);
   return Number.isNaN(d.getTime()) ? null : d.toISOString().slice(0, 7);
 }
+/**
+ * Normalisation de campagne (Tshuapa, Mai 2026) : les contrôles qualité ont été
+ * menés en mai, mais quelques soumissions ont été datées début juin (saisie
+ * tardive). On rattache juin 2026 à mai 2026 pour éviter un faux découpage de la
+ * période sur deux mois — cohérent avec l'analytique de supervision.
+ */
+function normalizeCqdMonth(month: string | null): string | null {
+  return month === "2026-06" ? "2026-05" : month;
+}
 function boolFr(v: unknown): boolean | null {
   const n = norm(v);
   if (!n) return null;
@@ -158,7 +167,7 @@ function buildRecords(src: CqdFetch): CqdRecord[] {
       zone: z,
       aire: a,
       structure: structure ?? `${src.key.toUpperCase()} ${i + 1}`,
-      month: dateCol ? toMonth(row[dateCol]) : null,
+      month: normalizeCqdMonth(dateCol ? toMonth(row[dateCol]) : null),
       typeLabel: typeCol ? resolveTypeLabel(row[typeCol]) : resolveTypeLabel(null),
       registre: grab(row, reg),
       pointage: grab(row, poi),
