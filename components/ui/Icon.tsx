@@ -4,8 +4,9 @@ export type IconName =
   | "home" | "time" | "component" | "analyse" | "report"
   | "hands" | "people" | "person" | "clipboard" | "tower"
   | "pin" | "map" | "clinic" | "hospital" | "trophy" | "alert" | "shield"
-  | "down" | "calendar" | "doc" | "bars" | "refresh"
+  | "down" | "up" | "calendar" | "doc" | "bars" | "refresh"
   | "map-pin" | "layers" | "building" | "database" | "download"
+  | "scale" | "child" | "pop" | "road" | "fridge" | "syringe" | "flag" | "truck" | "hand" | "clip"
   | "chevron-down" | "chevron-left" | "chevron-right" | "check";
 
 const P: Record<IconName, JSX.Element> = {
@@ -27,6 +28,17 @@ const P: Record<IconName, JSX.Element> = {
   alert: (<><path d="M12 3 2 20h20L12 3Z" /><path d="M12 10v4M12 17h.01" /></>),
   shield: (<><path d="M12 3 5 6v5c0 4.5 3 7.5 7 9 4-1.5 7-4.5 7-9V6l-7-3Z" /><path d="m9 12 2 2 4-4" /></>),
   down: (<><path d="M3 7l6 6 4-3 8 8" /><path d="M21 18v-5h-5" /></>),
+  up: (<><path d="M3 17l6-6 4 3 8-8" /><path d="M21 6v5h-5" /></>),
+  scale: (<><path d="M12 3v18M5 7h14M5 7l-2.5 6a3 3 0 0 0 5 0L5 7Zm14 0-2.5 6a3 3 0 0 0 5 0L19 7Z" /></>),
+  child: (<><circle cx="12" cy="6" r="2.6" /><path d="M9 21v-5H7l2.2-5.2A3 3 0 0 1 12 9a3 3 0 0 1 2.8 1.8L17 16h-2v5" /></>),
+  pop: (<><circle cx="9" cy="7" r="3" /><circle cx="17" cy="8" r="2.2" /><path d="M3 20a6 6 0 0 1 12 0M15 20a4.5 4.5 0 0 1 6 0" /></>),
+  road: (<><path d="M6 3 4 21M18 3l2 18M12 4v3M12 11v3M12 18v2" /></>),
+  fridge: (<><rect x="6" y="3" width="12" height="18" rx="2" /><path d="M6 10h12M9 6v2M9 13v3" /></>),
+  syringe: (<><path d="m18 2 4 4M17 3l4 4M20.5 6.5 9 18l-5 1 1-5L16.5 2.5M11 9l4 4M7 13l4 4" /></>),
+  flag: (<><path d="M4 21V4M4 4h13l-2 4 2 4H4" /></>),
+  truck: (<><path d="M3 16V6h11v10M14 9h4l3 3v4h-7" /><circle cx="7" cy="18" r="2" /><circle cx="17" cy="18" r="2" /></>),
+  hand: (<><path d="M7 11V6a1.5 1.5 0 0 1 3 0v5M10 11V4.5a1.5 1.5 0 0 1 3 0V11M13 11V6a1.5 1.5 0 0 1 3 0v7a6 6 0 0 1-6 6h-1a5 5 0 0 1-4-2l-3-4a1.6 1.6 0 0 1 2.5-2L7 13" /></>),
+  clip: (<><rect x="6" y="4" width="12" height="17" rx="2" /><path d="M9 4V3h6v1" /><path d="M9 10h6M9 14h4" /></>),
   calendar: (<><rect x="3" y="4.5" width="18" height="16" rx="2" /><path d="M3 9h18M8 2.5v4M16 2.5v4" /></>),
   doc: (<><path d="M7 3h7l5 5v13H7z" /><path d="M14 3v5h5" /></>),
   bars: (<><path d="M4 20V9M9 20V4M14 20v-8M19 20v-5" /></>),

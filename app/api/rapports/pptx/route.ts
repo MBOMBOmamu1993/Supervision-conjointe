@@ -1,29 +1,34 @@
 import { NextRequest, NextResponse } from "next/server";
-import { fetchAllSources, fetchAllCqdSources } from "@/lib/supervision/kobo-client";
+import { fetchAllSources } from "@/lib/supervision/kobo-client";
 import { buildBundle } from "@/lib/supervision/analytics";
-import { buildCqdBundle } from "@/lib/cqd/analytics";
-import { buildZsReport, buildCsReport } from "@/lib/reports/pptx";
+import { buildSupReport, buildCqdZsReport, buildCqdCsReport } from "@/lib/reports/pptx";
 import { TARGETS } from "@/lib/server/env";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-// Génération PPTX : peut être un peu longue (téléchargement Kobo + rendu).
 export const maxDuration = 60;
 
+const FILES: Record<string, string> = {
+  sup: "Rapport_Supervision_Conjointe_PEV_OMS_Tshuapa.pptx",
+  cqzs: "Rapport_Automatise_CQD_ZS_Tshuapa.pptx",
+  cqas: "Rapport_Automatise_CQD_Centres_Sante_Tshuapa.pptx",
+};
+
 export async function GET(req: NextRequest) {
-  const sp = req.nextUrl.searchParams;
-  const type = sp.get("type") === "cs" ? "cs" : "zs";
+  const type = req.nextUrl.searchParams.get("type") ?? "sup";
   try {
-    const [supSources, cqdSources] = await Promise.all([fetchAllSources(), fetchAllCqdSources()]);
-    const sup = buildBundle(supSources, {}, TARGETS);
-    const cqd = buildCqdBundle(cqdSources, {});
-
-    const buffer = type === "cs" ? await buildCsReport(sup, cqd) : await buildZsReport(sup, cqd);
-    const filename =
-      type === "cs"
-        ? "Rapport_Supervision_PEV_CQD_Centres_Sante_Tshuapa.pptx"
-        : "Rapport_Supervision_PEV_CQD_ZS_Tshuapa.pptx";
-
+    let buffer: Buffer;
+    if (type === "cqzs") {
+      buffer = await buildCqdZsReport();
+    } else if (type === "cqas") {
+      buffer = await buildCqdCsReport();
+    } else {
+      // Rapport supervision : alimenté en temps réel par les données KOBO.
+      const sources = await fetchAllSources();
+      const sup = buildBundle(sources, {}, TARGETS);
+      buffer = await buildSupReport(sup);
+    }
+    const filename = FILES[type] ?? FILES.sup;
     return new NextResponse(new Uint8Array(buffer), {
       status: 200,
       headers: {

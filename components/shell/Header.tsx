@@ -7,11 +7,15 @@ import { fmtDateTime } from "@/lib/client/format";
 
 const TITLES: Record<string, string> = {
   "/": "Vue d'ensemble — Supervision conjointe",
-  "/comparaison": "Performance structures et temps",
+  "/comparaison": "Performance par structures & dans le temps",
   "/composantes": "Performance par composantes",
-  "/qualite-donnees": "Qualité des données (Contrôle Qualité)",
-  "/etat-lieux": "État de lieux — Tshuapa",
-  "/telecharger-rapport": "Télécharger un rapport",
+  "/qualite-donnees": "Qualité des données — Vue globale des centres de santé",
+  "/qualite-donnees/detail": "Qualité des données — Détail par centre de santé",
+  "/qualite-donnees/zs": "Qualité des données — Par zones de santé",
+  "/etat-lieux": "État de lieux — Informations générales",
+  "/etat-lieux/planification": "État de lieux — Planification & participation communautaire",
+  "/etat-lieux/ressources": "État de lieux — Ressources humaines, matérielles & financières",
+  "/telecharger-rapport": "Télécharger Rapport — Génération automatique (PPTX)",
 };
 
 export default function Header() {

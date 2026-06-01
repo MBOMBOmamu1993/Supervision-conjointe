@@ -108,18 +108,17 @@ export default function VueEnsemblePage() {
             {/* ---- KPI ---- */}
             <section>
               <SectionBar icon="bars">Nombre des supervisions réalisées</SectionBar>
-              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2.5">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5">
                 <KpiCard icon="hands" tone="navy" label={<>Sup. conjointe<br />PEV-Central / OMS</>} value={fmtNum(k.conjointe_pev_oms.count)} pct={k.conjointe_pev_oms.pct} />
-                <KpiCard icon="people" tone="good" label={<>Supervision<br />conjointe (équipe)</>} value={fmtNum(k.conjointe_mca.count)} pct={k.conjointe_mca.pct} />
-                <KpiCard icon="clipboard" tone="brand" label={<>Antenne par<br />auto-évaluation</>} value={fmtNum(k.auto_eval.count)} pct={k.auto_eval.pct} />
-                <KpiCard icon="person" tone="violet" label={<>Supervision<br />MCA seul</>} value={fmtNum(k.mca_seul.count)} pct={k.mca_seul.pct} />
-                <KpiCard icon="clipboard" tone="warn" label={<>Supervision<br />ECZ / MCZ seul</>} value={fmtNum(k.ecz_seul.count)} pct={k.ecz_seul.pct} />
+                <KpiCard icon="people" tone="good" label={<>Sup. conjointe<br />antennes</>} value={fmtNum(k.antennes_sup.count)} pct={k.antennes_sup.pct} />
+                <KpiCard icon="pin" tone="violet" label={<>Sup. conjointe<br />zones de santé</>} value={fmtNum(k.zs_conjointe.count)} pct={k.zs_conjointe.pct} />
+                <KpiCard icon="clinic" tone="warn" label={<>Sup. conjointe<br />aires de santé</>} value={fmtNum(k.cs_conjointe.count)} pct={k.cs_conjointe.pct} />
               </div>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5 mt-2.5">
-                <KpiCard icon="pin" tone="bad" label={<>ZS supervisées<br />(conjointe)</>} value={fmtNum(k.zs_conjointe.count)} pct={k.zs_conjointe.pct} />
-                <KpiCard icon="map" tone="brand" label={<>ZS supervisées<br />(MCA seul)</>} value={fmtNum(k.zs_mca.count)} pct={k.zs_mca.pct} />
-                <KpiCard icon="clinic" tone="good" label={<>CS supervisés<br />(conjointe)</>} value={fmtNum(k.cs_conjointe.count)} pct={k.cs_conjointe.pct} />
-                <KpiCard icon="clinic" tone="bad" label={<>CS supervisés<br />(ECZ seul)</>} value={fmtNum(k.cs_ecz.count)} pct={k.cs_ecz.pct} />
+                <KpiCard icon="tower" tone="teal" label={<>Auto-évaluation<br />antenne</>} value={fmtNum(k.auto_eval.count)} pct={k.auto_eval.pct} />
+                <KpiCard icon="map" tone="brand" label={<>Supervision ZS<br />par MCA seul</>} value={fmtNum(k.zs_mca.count)} pct={k.zs_mca.pct} />
+                <KpiCard icon="clinic" tone="good" label={<>Supervision AS<br />par ECZ / MCZ seul</>} value={fmtNum(k.cs_ecz.count)} pct={k.cs_ecz.pct} />
+                <KpiCard icon="clipboard" tone="bad" label={<>Total supervisions<br />réalisées</>} value={fmtNum(k.total_supervisions)} sub="Toutes catégories" />
               </div>
             </section>
 
@@ -127,9 +126,9 @@ export default function VueEnsemblePage() {
             <section>
               <SectionBar icon="bars">Score global de toutes les composantes</SectionBar>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-2.5">
-                <ScoreCard title="Score Antennes" stat={lvl(levels.antenne).score} icon="tower" tone="blue" />
-                <ScoreCard title="Score Zones de santé" stat={lvl(levels.zs).score} icon="hospital" tone="violet" />
-                <ScoreCard title="Score Aires de santé" stat={lvl(levels.as).score} icon="clinic" tone="green" />
+                <ScoreCard title="Score global Antenne" stat={lvl(levels.antenne).score} icon="tower" tone="navy" />
+                <ScoreCard title="Score global ZS" stat={lvl(levels.zs).score} icon="hospital" tone="green" />
+                <ScoreCard title="Score global AS" stat={lvl(levels.as).score} icon="clinic" tone="violet" />
               </div>
             </section>
 
@@ -137,9 +136,9 @@ export default function VueEnsemblePage() {
             <section>
               <SectionBar icon="component">Appréciation du score</SectionBar>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-2.5">
-                <CotationCard title="Cotation Antenne" dist={levels.antenne.cotations} icon="tower" tone="blue" />
-                <CotationCard title="Cotation Zone de santé" dist={levels.zs.cotations} icon="hospital" tone="violet" />
-                <CotationCard title="Cotation Aire de santé" dist={levels.as.cotations} icon="clinic" tone="green" />
+                <CotationCard title="Appréciation du score — Antenne" dist={levels.antenne.cotations} icon="tower" tone="blue" />
+                <CotationCard title="Appréciation du score — ZS" dist={levels.zs.cotations} icon="hospital" tone="violet" />
+                <CotationCard title="Appréciation du score — AS" dist={levels.as.cotations} icon="clinic" tone="green" />
               </div>
             </section>
 
@@ -149,7 +148,7 @@ export default function VueEnsemblePage() {
               <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5">
                 <SummaryCard
                   icon="trophy"
-                  label="Meilleur niveau"
+                  label="Niveau au meilleur score"
                   value={hl.bestStructure ? hl.bestStructure.name : hl.bestLevel.label}
                   sub={hl.bestStructure
                     ? `${hl.bestStructure.levelLabel} · ${fmtPct(hl.bestStructure.score)}`
@@ -158,7 +157,7 @@ export default function VueEnsemblePage() {
                 />
                 <SummaryCard
                   icon="down"
-                  label="Niveau avec score minimum"
+                  label="Niveau au score minimum"
                   value={hl.worstStructure ? hl.worstStructure.name : hl.worstLevel.label}
                   sub={hl.worstStructure
                     ? `${hl.worstStructure.levelLabel} · ${fmtPct(hl.worstStructure.score)}`

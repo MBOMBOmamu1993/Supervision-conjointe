@@ -102,11 +102,11 @@ export default function ComposantesPage() {
 
           {/* Top 5 réponses NON */}
           <section>
-            <SectionBar icon="down">Top 5 des questions ayant plusieurs réponses Non</SectionBar>
+            <SectionBar icon="down">Top 5 des questions ayant plusieurs réponses « Non »</SectionBar>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-2.5">
-              <Card><CardHeader icon="tower" iconTone="blue" title="Antennes" subtitle="% de réponses « Non » par question" /><TopNon items={d.levels.antenne.topNon} /></Card>
-              <Card><CardHeader icon="hospital" iconTone="violet" title="Zones de santé" subtitle="% de réponses « Non » par question" /><TopNon items={d.levels.zs.topNon} /></Card>
-              <Card><CardHeader icon="clinic" iconTone="green" title="Centres de santé" subtitle="% de réponses « Non » par question" /><TopNon items={d.levels.as.topNon} /></Card>
+              <Card><CardHeader icon="tower" iconTone="blue" title="Antennes" subtitle="Survolez une barre pour lire la question complète" /><TopNon items={d.levels.antenne.topNon} /></Card>
+              <Card><CardHeader icon="hospital" iconTone="violet" title="Zones de santé" subtitle="Survolez une barre pour lire la question complète" /><TopNon items={d.levels.zs.topNon} /></Card>
+              <Card><CardHeader icon="clinic" iconTone="green" title="Centres de santé" subtitle="Survolez une barre pour lire la question complète" /><TopNon items={d.levels.as.topNon} /></Card>
             </div>
           </section>
 

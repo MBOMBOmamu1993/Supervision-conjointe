@@ -31,7 +31,7 @@ function MonthlyTable({ rows, months }: { rows: MonthlyMatrixRow[]; months: stri
           <tr>
             <th>Structure</th>
             {months.map((m) => <th key={m}>{fmtMonth(m)}</th>)}
-            <th>Variation</th>
+            <th>Variation<br />(dernier vs avant-dernier mois)</th>
           </tr>
         </thead>
         <tbody>
@@ -135,7 +135,7 @@ export default function ComparaisonPage() {
 
             {/* Comparaison du score par mois successifs */}
             <section>
-              <SectionBar icon="component">Comparaison du score global par mois successifs</SectionBar>
+              <SectionBar icon="component">Comparaison du score global — variation des 2 derniers mois</SectionBar>
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-2.5">
                 <Card>
                   <CardHeader icon="hospital" iconTone="violet" title="Par zone de santé (supervision conjointe)" />
