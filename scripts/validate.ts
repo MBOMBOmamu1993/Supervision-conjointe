@@ -23,8 +23,8 @@ const srcDefs: { level: StructureLevel; label: string; file: string }[] = [
 const sources: SourceFetch[] = srcDefs.map((d) => ({ level: d.level, label: d.label, rows: parse(d.file), ok: true }));
 sources.push({ level: "antenne", label: "Antenne", rows: [], ok: true });
 
-const targets = { conjointe_pev_oms: null, conjointe_mca: null, mca_seul: null, ecz_seul: null, antennes: null, zs_conjointe: null, zs_mca: null, cs_conjointe: null, cs_ecz: null };
-const b = buildBundle(sources as SourceFetch[], {}, targets);
+import { SUPERVISION_TARGETS } from "@/config/supervision.config";
+const b = buildBundle(sources as SourceFetch[], {}, SUPERVISION_TARGETS);
 
 console.log("MONTHS:", b.meta.months);
 console.log("SOURCES:", b.meta.sources.map((s) => `${s.label}:${s.rows}`).join(" "));

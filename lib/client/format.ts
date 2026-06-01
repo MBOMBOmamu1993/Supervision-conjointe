@@ -10,6 +10,11 @@ export function fmtNum(n: number | null | undefined): string {
 
 const MONTHS_FR = ["Jan", "Fév", "Mar", "Avr", "Mai", "Juin", "Juil", "Août", "Sep", "Oct", "Nov", "Déc"];
 
+/** Libellé court d'un mois par index 0–11 ("Jan", "Fév", …). */
+export function monthLabel(idx: number): string {
+  return MONTHS_FR[idx] ?? String(idx + 1);
+}
+
 /** "2025-03" → "Mar 2025" */
 export function fmtMonth(m: string): string {
   const match = m.match(/(\d{4})-(\d{2})/);

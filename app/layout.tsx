@@ -1,8 +1,8 @@
 import "./globals.css";
 import type { Metadata } from "next";
-import Sidebar from "@/components/shell/Sidebar";
+import { Sidebar } from "@/components/shell/Sidebar";
 import Header from "@/components/shell/Header";
-import FilterBar from "@/components/shell/FilterBar";
+import { FilterBar } from "@/components/shell/FilterBar";
 
 export const metadata: Metadata = {
   title: "Supervision conjointe PEV / OMS — RDC",

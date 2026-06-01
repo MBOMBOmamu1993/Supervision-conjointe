@@ -4,7 +4,9 @@ export type IconName =
   | "home" | "time" | "component" | "analyse" | "report"
   | "hands" | "people" | "person" | "clipboard" | "tower"
   | "pin" | "map" | "clinic" | "hospital" | "trophy" | "alert" | "shield"
-  | "down" | "calendar" | "doc" | "bars" | "refresh";
+  | "down" | "calendar" | "doc" | "bars" | "refresh"
+  | "map-pin" | "layers" | "building" | "database" | "download"
+  | "chevron-down" | "chevron-left" | "chevron-right" | "check";
 
 const P: Record<IconName, JSX.Element> = {
   home: (<><path d="M3 10.5 12 3l9 7.5" /><path d="M5 9.5V20h14V9.5" /></>),
@@ -29,6 +31,15 @@ const P: Record<IconName, JSX.Element> = {
   doc: (<><path d="M7 3h7l5 5v13H7z" /><path d="M14 3v5h5" /></>),
   bars: (<><path d="M4 20V9M9 20V4M14 20v-8M19 20v-5" /></>),
   refresh: (<><path d="M3 12a9 9 0 0 1 15-6.7L21 8" /><path d="M21 3v5h-5" /><path d="M21 12a9 9 0 0 1-15 6.7L3 16" /><path d="M3 21v-5h5" /></>),
+  "map-pin": (<><path d="M12 21s-7-6.3-7-11a7 7 0 0 1 14 0c0 4.7-7 11-7 11Z" /><circle cx="12" cy="10" r="2.5" /></>),
+  layers: (<><path d="m12 3 9 5-9 5-9-5 9-5Z" /><path d="m3 13 9 5 9-5" /></>),
+  building: (<><rect x="5" y="3" width="14" height="18" rx="1.5" /><path d="M9 7h2M13 7h2M9 11h2M13 11h2M9 15h2M13 15h2" /><path d="M10 21v-3h4v3" /></>),
+  database: (<><ellipse cx="12" cy="5" rx="8" ry="3" /><path d="M4 5v6c0 1.7 3.6 3 8 3s8-1.3 8-3V5" /><path d="M4 11v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6" /></>),
+  download: (<><path d="M12 3v12" /><path d="m7 10 5 5 5-5" /><path d="M5 21h14" /></>),
+  "chevron-down": (<><path d="m6 9 6 6 6-6" /></>),
+  "chevron-left": (<><path d="m15 6-6 6 6 6" /></>),
+  "chevron-right": (<><path d="m9 6 6 6-6 6" /></>),
+  check: (<><path d="m5 12 5 5L20 7" /></>),
 };
 
 export function Icon({ name, ...props }: { name: IconName } & SVGProps<SVGSVGElement>) {

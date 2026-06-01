@@ -12,6 +12,8 @@ import {
   ANSWER_MATCHERS,
   COMPOSANTES,
   TYPE_KEYWORDS,
+  TYPE_LABEL_KEYWORDS,
+  DEFAULT_TYPE_SUPERVISION,
   type AnswerValue,
   type StructureLevel,
   type SupervisionType,
@@ -65,6 +67,8 @@ export interface GeoColumns {
   fonction: string | null;
   personne: string | null;
   etablissement: string | null;
+  /** Colonne « Type de supervision » (nom technique Type_de_supervision). */
+  typeSupervision: string | null;
 }
 
 export function resolveGeoColumns(columns: string[]): GeoColumns {
@@ -79,7 +83,42 @@ export function resolveGeoColumns(columns: string[]): GeoColumns {
     fonction: findColumn(columns, ["fonction du superviseur", "fonction superviseur", "fonction_superviseur", "fonction de la personne", "equipe de supervision", "fonction"]),
     personne: findColumn(columns, ["nom du superviseur", "nom_superviseur", "nom et fonction de la personne", "personne rencontree", "personne_rencontree", "superviseur"]),
     etablissement: findColumn(columns, ["nom de l etablissement", "nom_ess", "etablissement", "centre de sante supervise", "structure supervisee"]),
+    // Champ ajouté en 2026 (le nom technique exact est « Type_de_supervision »).
+    typeSupervision: findColumn(columns, [
+      "type de supervision", "type_de_supervision", "type supervision",
+      "type_supervision", "type de la supervision",
+    ]),
   };
+}
+
+/**
+ * Libellé « Type de supervision » → mois ISO. Renvoie la valeur brute du champ,
+ * ou DEFAULT_TYPE_SUPERVISION (« Supervision conjointe ») si vide/absente
+ * (= anciennes soumissions, avant l'ajout du champ).
+ */
+export function resolveTypeLabel(value: unknown): string {
+  const s = String(value ?? "").trim();
+  if (!s || s.toLowerCase() === "nan") return DEFAULT_TYPE_SUPERVISION;
+  // select_multiple : Kobo exporte parfois plusieurs valeurs séparées par espace.
+  // On garde le libellé tel quel pour l'affichage du filtre.
+  return s;
+}
+
+/**
+ * Classe un libellé « Type de supervision » (valeur réelle du formulaire) vers
+ * un SupervisionType canonique, via TYPE_LABEL_KEYWORDS. La valeur générique
+ * « Supervision conjointe » (anciennes données) → conjointe_mca, JAMAIS
+ * conjointe_pev_oms (réservé aux valeurs nommant explicitement PEV central/OMS).
+ */
+export function classifyTypeFromLabel(label: string): SupervisionType | null {
+  const n = norm(label);
+  if (!n) return null;
+  for (const { type, keywords } of TYPE_LABEL_KEYWORDS) {
+    for (const kw of keywords) {
+      if (n.includes(norm(kw))) return type;
+    }
+  }
+  return null;
 }
 
 /** Mot-clé composante le plus long inclus dans le token → clé de composante. */

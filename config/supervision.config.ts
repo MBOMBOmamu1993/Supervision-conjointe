@@ -1,21 +1,21 @@
 /**
- * Configuration du dashboard de SUPERVISION CONJOINTE PEV-Central / OMS.
+ * Configuration du dashboard de SUPERVISION CONJOINTE PEV-Central / OMS (Tshuapa, RDC).
  *
- * Cette configuration a été calée sur la structure RÉELLE des trois
- * formulaires KoboToolbox (Tshuapa) :
- *   - Antenne PEV               (XLSForm : groupes I à VI)
- *   - Checklist ZS              (colonnes q_<token>_NN_score / _max)
- *   - Checklist Centre de santé (colonnes sc_<token>_NN / max_<token>_NN)
- *
- * Les scores sont lus directement depuis les colonnes calculées du formulaire
- * (barème : Oui = score complet, Partiellement = moitié, Non = 0, Non
- * applicable = exclu du score maximum), ce qui garantit l'exactitude.
+ * Les scores sont lus directement depuis les colonnes calculées des formulaires
+ * KoboToolbox (barème : Oui = score complet, Partiellement = moitié, Non = 0,
+ * Non applicable = exclu du score maximum).
  */
 
 export type StructureLevel = "antenne" | "zs" | "as";
 export type CotationLevel = "tres_bon" | "bon" | "moyen" | "faible";
 export type AnswerValue = "oui" | "partiel" | "non" | "na";
-export type SupervisionType = "conjointe_pev_oms" | "conjointe_mca" | "mca_seul" | "ecz_seul" | "autre";
+export type SupervisionType =
+  | "conjointe_pev_oms"
+  | "conjointe_mca"
+  | "auto_eval"
+  | "mca_seul"
+  | "ecz_seul"
+  | "autre";
 
 export interface KoboSource {
   key: StructureLevel;
@@ -26,18 +26,36 @@ export interface KoboSource {
 
 export const KOBO_BASE_URL = "https://eu.kobotoolbox.org";
 
+/** Valeur par défaut du « Type de supervision » pour les anciennes soumissions. */
+export const DEFAULT_TYPE_SUPERVISION = "Supervision conjointe";
+
 export const KOBO_SOURCES: KoboSource[] = [
   { key: "antenne", label: "Checklist supervision Antenne PEV", assetUid: "axvaHRq3XGozr8o3z4wr5u", exportUid: "esTwbAKe5dn2FTAcbbagXL8" },
   { key: "zs", label: "Checklist supervision PEV — Zone de santé", assetUid: "axsB6RwiENF3FC2eZzsH3m", exportUid: "esTZSfTTAYYvcLtRbJdr6Jh" },
-  { key: "as", label: "Checklist supervision — Centre de santé", assetUid: "ac8zZ9oE8VWoHXS3iSKRTQ", exportUid: "esNgSLpkCsawjAQXWtSgL6b" },
+  // Centre de santé : NOUVEL asset (formulaire avec « Type de supervision »).
+  { key: "as", label: "Checklist supervision — Centre de santé", assetUid: "af5W55HqW8nPgqyC5jgALc", exportUid: "esiVtGnbm8cm2VKD2AR672n" },
 ];
 
-export function koboExportUrl(src: KoboSource, base = KOBO_BASE_URL): string {
+/** Formulaires CQD (Contrôle Qualité des Données). */
+export interface CqdSource {
+  key: "zs" | "as";
+  label: string;
+  assetUid: string;
+  exportUid: string;
+}
+export const CQD_SOURCES: CqdSource[] = [
+  { key: "zs", label: "Contrôle qualité des données — Zone de santé", assetUid: "ajhW22rQEkVs39SuhBuwCC", exportUid: "es8g2L4gEfMbGCGADHyXVwR" },
+  { key: "as", label: "Contrôle qualité des données — Aire de santé", assetUid: "aaQZRLWXQ6rpTWr3uR3SEU", exportUid: "esbbnddHn8i5jMH8k9QBQmd" },
+];
+
+export function koboExportUrl(src: { assetUid: string; exportUid: string }, base = KOBO_BASE_URL): string {
   return `${base}/api/v2/assets/${src.assetUid}/export-settings/${src.exportUid}/data.xlsx`;
 }
-export function koboDataUrl(src: KoboSource, base = KOBO_BASE_URL): string {
+export function koboDataUrl(src: { assetUid: string }, base = KOBO_BASE_URL): string {
   return `${base}/api/v2/assets/${src.assetUid}/data.json`;
 }
+export const cqdExportUrl = (src: CqdSource, base = KOBO_BASE_URL) => koboExportUrl(src, base);
+export const cqdDataUrl = (src: CqdSource, base = KOBO_BASE_URL) => koboDataUrl(src, base);
 
 export const LEVEL_LABEL: Record<StructureLevel, { short: string; plural: string }> = {
   antenne: { short: "Antenne", plural: "Antennes" },
@@ -46,11 +64,6 @@ export const LEVEL_LABEL: Record<StructureLevel, { short: string; plural: string
 };
 
 /* ------------------------ Les 6 composantes ------------------------ */
-/**
- * `tokens` = fragments présents dans le NOM technique des colonnes de score
- * (ex. q_plan_01_score → token « plan » ; sc_chaine_froid_01 → « chaine_froid »).
- * La correspondance retient le mot-clé le PLUS LONG inclus dans le token.
- */
 export interface Composante {
   key: string;
   label: string;
@@ -108,15 +121,33 @@ export const ANSWER_MATCHERS: Record<AnswerValue, string[]> = {
 export const ANSWER_COLOR: Record<AnswerValue, string> = { oui: "#1f9d57", partiel: "#f59e0b", non: "#e23636", na: "#cbd5e1" };
 export const ANSWER_LABEL: Record<AnswerValue, string> = { oui: "Oui", partiel: "Partiel", non: "Non", na: "N/A" };
 
-/* --------- Détection du TYPE de supervision (Fonction du superviseur) --------- */
+/* --------- Détection du TYPE de supervision --------- */
 /**
- * Aucun champ « type de supervision » n'existe dans les formulaires : on le
- * déduit du champ « Fonction du superviseur ». Une mention « OMS / VPD »
- * indique une supervision conjointe avec le niveau central ; la présence d'un
- * « / » (ex. « AT MASHAKO / OMS ») indique une équipe conjointe.
+ * Mots-clés appliqués à la valeur RÉELLE du champ « Type_de_supervision »
+ * (select_multiple). Valeurs RÉELLES par formulaire (Tshuapa, 2026) :
+ *   Centre de santé : supervision_conjointe_mca_ecz_at, supervision_ecz_seul,
+ *                     supervision_dps_seul, supervision_antenne_seul,
+ *                     supervision_pev_central_dps
+ *   Zone de santé   : supervision_conjointe, supervision_mca_seul,
+ *                     supervision_dps, supervision_pev_central_oms
+ *   Antenne         : supervision_conjointe_pev_central_oms, supervision_par_dps,
+ *                     auto_supervision, supervision_par_mcp
+ * L'ordre compte : on teste le plus spécifique d'abord. « pev central »/
+ * « niveau central » AVANT le générique « conjointe ». La valeur générique
+ * « Supervision conjointe » (anciennes données) → conjointe_mca, JAMAIS
+ * conjointe_pev_oms (réservé aux valeurs nommant explicitement PEV central/OMS).
  */
+export const TYPE_LABEL_KEYWORDS: { type: SupervisionType; keywords: string[] }[] = [
+  { type: "conjointe_pev_oms", keywords: ["pev central oms", "pev central dps", "niveau central", "pev oms", "pev/oms", "pev central", "central pev", "oms vpd"] },
+  { type: "auto_eval", keywords: ["auto supervision", "auto_supervision", "auto evaluation", "auto-evaluation", "autoevaluation", "auto eval"] },
+  { type: "ecz_seul", keywords: ["ecz seul", "mcz seul", "ecz/mcz", "ecz mcz seul"] },
+  { type: "mca_seul", keywords: ["mca seul", "mca/at seul"] },
+  { type: "conjointe_mca", keywords: ["conjointe mca ecz at", "conjointe mca mcz at", "conjointe mca", "conjointe mcz", "supervision conjointe", "conjointe", "conjoint"] },
+];
+
+/** Mots-clés résiduels pour la classification par fonction (anciennes données). */
 export const TYPE_KEYWORDS = {
-  oms: ["oms", "vpd", "central", "pev central", "niveau central", "intermediaire", "antenne nationale"],
+  oms: ["oms", "vpd", "pev central", "niveau central"],
   mca_at: ["mca", " at", "at ", "assistant technique", "antenne", "mcz conjoint"],
   ecz: ["ecz", "mcz", "bcz", "medecin chef de zone", "equipe cadre"],
 };
@@ -124,9 +155,10 @@ export const TYPE_KEYWORDS = {
 export interface SupervisionTypeDef { key: SupervisionType; label: string; }
 export const SUPERVISION_TYPES: SupervisionTypeDef[] = [
   { key: "conjointe_pev_oms", label: "Conjointe PEV-Central / OMS-VPD" },
-  { key: "conjointe_mca", label: "Conjointe MCA / AT / MCZ" },
+  { key: "conjointe_mca", label: "Conjointe (équipe)" },
+  { key: "auto_eval", label: "Auto-évaluation" },
   { key: "mca_seul", label: "MCA seul" },
-  { key: "ecz_seul", label: "ECZ seul" },
+  { key: "ecz_seul", label: "ECZ / MCZ seul" },
   { key: "autre", label: "Autre / non précisé" },
 ];
 
@@ -145,15 +177,44 @@ export const COTATION_LABEL: Record<CotationLevel, string> = { tres_bon: "Très 
 export const COTATION_COLOR: Record<CotationLevel, string> = { tres_bon: "#1f9d57", bon: "#0093d5", moyen: "#f59e0b", faible: "#e23636" };
 export const COTATION_ORDER: CotationLevel[] = ["tres_bon", "bon", "moyen", "faible"];
 
-/* ------------------------ Cibles attendues ------------------------ */
-export interface SupervisionTargets {
-  conjointe_pev_oms: number | null;
-  conjointe_mca: number | null;
-  mca_seul: number | null;
-  ecz_seul: number | null;
-  antennes: number | null;
-  zs_conjointe: number | null;
-  zs_mca: number | null;
-  cs_conjointe: number | null;
-  cs_ecz: number | null;
+/* ----- Seuils CQD (complétude / promptitude / concordance) ----- */
+export const CQD_THRESHOLDS: { level: CotationLevel; label: string; min: number; color: string }[] = [
+  { level: "tres_bon", label: "Très bon", min: 90, color: "#1f9d57" },
+  { level: "bon", label: "Bon", min: 80, color: "#0093d5" },
+  { level: "moyen", label: "Moyen", min: 70, color: "#f59e0b" },
+  { level: "faible", label: "Faible", min: 0, color: "#e23636" },
+];
+export function cqdAppreciation(pct: number | null): CotationLevel | null {
+  if (pct === null || !Number.isFinite(pct)) return null;
+  for (const t of CQD_THRESHOLDS) if (pct >= t.min) return t.level;
+  return "faible";
 }
+
+/* ------------------------ Cibles attendues ------------------------ */
+/**
+ * Dénominateurs « attendus » par mois (échelle provinciale), utilisés pour le
+ * « % réalisé ». Ils sont multipliés par le nombre de mois de la période.
+ */
+export interface SupervisionTargets {
+  conjointe_pev_oms_per_month: number;
+  conjointe_antennes_per_month: number;
+  conjointe_zs_per_month: number;
+  conjointe_aires_per_month: number;
+  auto_eval_per_month: number;
+  mca_seul_per_month: number;
+  ecz_seul_per_month: number;
+}
+
+/**
+ * Valeurs provinciales par défaut (Tshuapa).
+ * Province ≈ 2 antennes, ≈ 23 ZS, nombreuses aires.
+ */
+export const SUPERVISION_TARGETS: SupervisionTargets = {
+  conjointe_pev_oms_per_month: 1 / 3,
+  conjointe_antennes_per_month: 2 / 3,
+  conjointe_zs_per_month: 4,
+  conjointe_aires_per_month: 6,
+  auto_eval_per_month: 2,
+  mca_seul_per_month: 8,
+  ecz_seul_per_month: 23,
+};
