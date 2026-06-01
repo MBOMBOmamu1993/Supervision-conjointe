@@ -1,16 +1,18 @@
 "use client";
 
 /* =========================================================================
-   Onglet « Télécharger Rapport » — fidèle à apercu/rapport.js
-   Aperçu des diapositives PPTX (design modèle Angola, logo OMS) + téléchargement.
-   3 rapports : Supervision conjointe · CQ ZS · CQ AS.
+   Onglet « Télécharger Rapport »
+   2 rapports enrichis (alignés sur design_reference/) générés en pptxgenjs :
+     1. Supervision PEV & CQD — Zones de santé   (23 diapos)
+     2. Supervision PEV & CQD — Centres de santé (26 diapos)
+   La carte « Supervision conjointe » séparée a disparu (fusionnée).
    ========================================================================= */
 import { useState } from "react";
 import { SectionBar } from "@/components/ui/Card";
 import { Badge, TONES, type Tone } from "@/components/proto/proto";
 import { Icon } from "@/components/ui/Icon";
 
-const ANGOLA = { navy: "#001B4D", navy2: "#002A72", body: "#DEE5EE", red: "#E23636", green: "#22B457", blue: "#2563EB", wine: "#7B2D3A", gold: "#F1C40F" };
+const PAL = { marine: "#00205c", marine2: "#013a86", cyan: "#0093d5", vert: "#1f9d57", bleu: "#0093d5", jaune: "#f59e0b", rouge: "#e23636" };
 
 type Slide = { no: string; title: string; sub?: string; body: React.ReactNode };
 
@@ -19,51 +21,41 @@ function MiniKpis({ items }: { items: { v: string; l: string; c: string }[] }) {
 }
 function MiniBars({ vals, colors }: { vals: number[]; colors: string[] }) {
   const max = Math.max(...vals, 1);
-  return <div className="rap-bars">{vals.map((v, i) => <div key={i} className="rap-bar" style={{ height: `${Math.max(8, v / max * 100)}%`, background: colors[i % colors.length] }} />)}</div>;
-}
-function MiniDonut({ c }: { c: number }) {
-  return <div className="rap-donut" style={{ background: `conic-gradient(${ANGOLA.green} 0 ${c}%, #c9d4e2 ${c}% 100%)` }}><span>{c}%</span></div>;
+  return <div className="rap-bars">{vals.map((v, i) => <div key={i} className="rap-bar" style={{ height: `${Math.max(8, (v / max) * 100)}%`, background: colors[i % colors.length] }} />)}</div>;
 }
 function Cover({ emb, meta }: { emb: string; meta: string }) {
   return <div className="rap-cover"><div className="rap-cover-emb">{emb}</div><div className="rap-cover-meta">{meta}</div></div>;
 }
+function sc(v: number) { return v >= 80 ? PAL.vert : v >= 70 ? PAL.bleu : v >= 60 ? PAL.jaune : PAL.rouge; }
+function cc(v: number) { return v >= 95 && v <= 105 ? PAL.vert : v < 95 ? PAL.jaune : PAL.rouge; }
 
-interface ReportDef { id: string; type: string; title: string; file: string; icon: "hands" | "hospital" | "clinic"; tone: Tone; desc: string; slides: Slide[]; }
+interface ReportDef { id: "zs" | "cs"; title: string; file: string; icon: "hospital" | "clinic"; tone: Tone; slidesCount: number; desc: string; slides: Slide[]; }
 
 const REPORTS: ReportDef[] = [
   {
-    id: "sup", type: "sup", title: "Rapport de supervision conjointe PEV-Central / OMS",
-    file: "Rapport_Supervision_Conjointe_PEV_OMS_Tshuapa.pptx", icon: "hands", tone: "navy",
-    desc: "Synthèse automatique : réalisation, scores globaux, 6 composantes, top questions « Non », recommandations.",
+    id: "zs", title: "Supervision PEV & CQD — Zones de santé",
+    file: "Rapport_supervision_PEV_CQD_Tshuapa_Bokungu_Jan-Mars-2026.pptx", icon: "hospital", tone: "navy", slidesCount: 23,
+    desc: "23 diapositives : couverture, résumé exécutif, scores par ZS et par composante, chaîne du froid, concordances PENTA3/RR2, erreurs de transcription, goulots, actions correctrices et conclusion.",
     slides: [
-      { no: "01", title: "RAPPORT DE SUPERVISION CONJOINTE", sub: "Programme Élargi de Vaccination · OMS — Province de la Tshuapa", body: <Cover emb="PEV · OMS — RDC" meta="Période : Janvier – Mars 2026 · Antennes Boende & Bokungu" /> },
-      { no: "02", title: "Nombre des supervisions réalisées", sub: "Par type de supervision", body: <MiniKpis items={[{ v: "36", l: "Total réalisées", c: ANGOLA.navy2 }, { v: "12", l: "Conjointes", c: ANGOLA.blue }, { v: "2", l: "Antennes", c: ANGOLA.green }, { v: "82%", l: "% réalisation", c: ANGOLA.red }]} /> },
-      { no: "03", title: "Score global de toutes les composantes", sub: "Antenne · ZS · AS", body: <div className="rap-row"><MiniDonut c={82} /><MiniDonut c={79} /><MiniDonut c={76} /></div> },
-      { no: "04", title: "Performance par composante", sub: "Radar des 6 composantes", body: <MiniBars vals={[84, 72, 80, 58, 55, 76]} colors={[ANGOLA.blue, ANGOLA.green, ANGOLA.navy2, ANGOLA.red, ANGOLA.gold, ANGOLA.wine]} /> },
-      { no: "05", title: "Top 5 des questions à réponses « Non »", sub: "Points d'amélioration prioritaires", body: <MiniBars vals={[34, 28, 26, 23, 21]} colors={[ANGOLA.red]} /> },
-      { no: "06", title: "Problèmes & actions correctrices", sub: "Recommandations", body: <div className="rap-list"><div>• Renforcer l'analyse mensuelle des données</div><div>• Documenter les réunions de monitorage</div><div>• Recherche active des enfants zéro dose</div></div> },
+      { no: "01", title: "Supervision PEV & CQD — Zones de santé", sub: "Province de la Tshuapa — Antennes Boende & Bokungu", body: <Cover emb="PEV & CQD · ZS" meta="ZS Bokungu · Jan – Mars 2026 · 12 ZS prévues" /> },
+      { no: "02", title: "Résumé exécutif", sub: "Lecture rapide PEV & qualité des données", body: <MiniKpis items={[{ v: "1/12", l: "ZS supervisées", c: PAL.bleu }, { v: "74 %", l: "Score moyen", c: PAL.jaune }, { v: "89,7 %", l: "Conc. PENTA3", c: PAL.jaune }, { v: "55,6 %", l: "Erreur transcr.", c: PAL.rouge }]} /> },
+      { no: "04", title: "Score global par Zone de Santé", sub: "Couleur par seuil de score", body: <MiniBars vals={[81, 74, 72, 66, 62, 58]} colors={[81, 74, 72, 66, 62, 58].map(sc)} /> },
+      { no: "13", title: "Concordance PENTA3 — DHIS2 / SNIS", sub: "Couleur par concordance", body: <MiniBars vals={[89.7, 97, 92, 112, 96, 88]} colors={[89.7, 97, 92, 112, 96, 88].map(cc)} /> },
+      { no: "15", title: "Erreurs de transcription", sub: "SNIS/DHIS2 vs Pointage/Registre", body: <MiniBars vals={[34, 38, 22, 40]} colors={[PAL.rouge]} /> },
+      { no: "23", title: "Conclusion", sub: "Priorités de mise en œuvre", body: <div className="rap-list"><div>✓ Corriger les écarts DHIS2/SNIS</div><div>✓ Étendre la couverture (1/12 → 12/12)</div><div>✓ Récupération active des enfants manqués</div></div> },
     ],
   },
   {
-    id: "cqzs", type: "cqzs", title: "Rapport contrôle qualité des données — Zones de santé",
-    file: "Rapport_Automatise_CQD_ZS_Tshuapa.pptx", icon: "hospital", tone: "violet",
-    desc: "Concordance DHIS2/SNIS (PENTA3, RR2), taux d'erreur de transcription, qualité de saisie DHIS2 par ZS et par mois.",
+    id: "cs", title: "Supervision PEV & CQD — Centres de santé",
+    file: "Rapport_supervision_PEV_CQD_Tshuapa_CS_Lofima-2_Jan-Mars-2026.pptx", icon: "clinic", tone: "green", slidesCount: 26,
+    desc: "26 diapositives : méthode, cadre de scoring, scores par CS et composante, chaîne du froid, prestation de services, récupération des enfants, concordance DHIS2/Registre, comparaison des sources et plan de suivi.",
     slides: [
-      { no: "01", title: "CONTRÔLE QUALITÉ DES DONNÉES", sub: "Niveau Zones de santé — Province de la Tshuapa", body: <Cover emb="CQD · ZS" meta="ZS Bokungu · Jan – Mars 2026" /> },
-      { no: "02", title: "Concordance DHIS2 / SNIS", sub: "PENTA3 & RR2", body: <MiniKpis items={[{ v: "89,7%", l: "PENTA3", c: ANGOLA.red }, { v: "85,1%", l: "RR2", c: ANGOLA.red }, { v: "Sous-rapportage", l: "Appréciation", c: ANGOLA.wine }]} /> },
-      { no: "03", title: "Taux d'erreur de transcription", sub: "SNIS → DHIS2", body: <MiniKpis items={[{ v: "55,6%", l: "Taux d'erreur", c: ANGOLA.red }, { v: "20", l: "Discordances", c: ANGOLA.navy2 }, { v: "36", l: "Comparaisons", c: ANGOLA.blue }]} /> },
-      { no: "04", title: "Score de qualité de saisie DHIS2", sub: "Par ZS et par mois", body: <div className="rap-row"><MiniDonut c={60} /><div className="rap-list"><div>ZS Bokungu : 60%</div><div>3 critères / 5 remplis</div></div></div> },
-    ],
-  },
-  {
-    id: "cqas", type: "cqas", title: "Rapport contrôle qualité des données — Centres de santé",
-    file: "Rapport_Automatise_CQD_Centres_Sante_Tshuapa.pptx", icon: "clinic", tone: "green",
-    desc: "Concordance Registre/DHIS2, remplissage des outils de gestion, enfants perdus de vue récupérés par centre de santé.",
-    slides: [
-      { no: "01", title: "CONTRÔLE QUALITÉ DES DONNÉES", sub: "Niveau Centres de santé — Province de la Tshuapa", body: <Cover emb="CQD · CS" meta="AS Lofima 2 · Jan – Mars 2026" /> },
-      { no: "02", title: "Concordance Registre / DHIS2", sub: "PENTA3 & RR2", body: <MiniKpis items={[{ v: "114%", l: "PENTA3", c: ANGOLA.red }, { v: "100%", l: "RR2", c: ANGOLA.green }, { v: "Sur-rapportage", l: "Appréciation", c: ANGOLA.wine }]} /> },
-      { no: "03", title: "Remplissage des outils de gestion", sub: "Registre · Pointage · SNIS", body: <MiniBars vals={[0, 0, 100]} colors={[ANGOLA.red, ANGOLA.red, ANGOLA.green]} /> },
-      { no: "04", title: "Enfants perdus de vue récupérés", sub: "Identifiés précédemment", body: <MiniKpis items={[{ v: "29", l: "Identifiés", c: ANGOLA.navy2 }, { v: "21", l: "Récupérés", c: ANGOLA.green }, { v: "72%", l: "% récupération", c: ANGOLA.blue }]} /> },
+      { no: "01", title: "Supervision PEV & CQD — Centres de santé", sub: "Province de la Tshuapa — Antenne Boende / Bokungu", body: <Cover emb="PEV CS & CQD" meta="AS Lofima 2 · Jan – Mars 2026 · 279 CS prévus" /> },
+      { no: "02", title: "Résumé exécutif", sub: "Lecture rapide des résultats", body: <MiniKpis items={[{ v: "1/279", l: "CS supervisés", c: PAL.rouge }, { v: "64 %", l: "Score moyen", c: PAL.jaune }, { v: "114 %", l: "Conc. PENTA3", c: PAL.rouge }, { v: "72 %", l: "Enf. récupérés", c: PAL.vert }]} /> },
+      { no: "06", title: "Score global par Centre de Santé", sub: "Classement par score", body: <MiniBars vals={[81, 73, 66, 64, 57]} colors={[81, 73, 66, 64, 57].map(sc)} /> },
+      { no: "12", title: "Récupération des enfants manqués", sub: "Funnel AS Lofima 2", body: <MiniKpis items={[{ v: "29", l: "Identifiés", c: PAL.marine }, { v: "23", l: "Retrouvés", c: PAL.jaune }, { v: "21", l: "Récupérés", c: PAL.vert }, { v: "72 %", l: "Taux final", c: PAL.bleu }]} /> },
+      { no: "18", title: "Concordance DHIS2 / Registre", sub: "Couleur par concordance", body: <MiniBars vals={[114, 96, 103, 88, 109]} colors={[114, 96, 103, 88, 109].map(cc)} /> },
+      { no: "26", title: "Conclusion", sub: "3 priorités", body: <div className="rap-list"><div>✓ Corriger Registre–Pointage–SNIS–DHIS2</div><div>✓ Suivre l'exécution des recommandations</div><div>✓ Renforcer stratégies avancées</div></div> },
     ],
   },
 ];
@@ -72,7 +64,8 @@ function SlideThumb({ s }: { s: Slide }) {
   return (
     <div className="rap-slide">
       <div className="rap-band">
-        <img src="/logo/oms.png" className="rap-oms [filter:brightness(0)_invert(1)]" alt="OMS" />
+        <img src="/logo/oms-white.png" className="rap-oms" alt="OMS" />
+        <img src="/logo/pev.png" className="rap-oms" alt="PEV" />
         <div className="rap-band-txt"><div className="rap-title">{s.title}</div>{s.sub ? <div className="rap-sub">{s.sub}</div> : null}</div>
         <div className="rap-no">{s.no}</div>
       </div>
@@ -82,7 +75,7 @@ function SlideThumb({ s }: { s: Slide }) {
 }
 
 export default function TelechargerRapportPage() {
-  const [active, setActive] = useState("sup");
+  const [active, setActive] = useState<"zs" | "cs">("zs");
   const [busy, setBusy] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const current = REPORTS.find((r) => r.id === active)!;
@@ -90,8 +83,8 @@ export default function TelechargerRapportPage() {
   async function download(r: ReportDef) {
     setBusy(r.id); setErr(null);
     try {
-      const res = await fetch(`/api/rapports/pptx?type=${r.type}`);
-      if (!res.ok) { const t = await res.text().catch(() => ""); throw new Error(`HTTP ${res.status} — ${t.slice(0, 160)}`); }
+      const res = await fetch(`/api/rapports/${r.id}`);
+      if (!res.ok) { const t = await res.text().catch(() => ""); throw new Error(`HTTP ${res.status} — ${t.slice(0, 200)}`); }
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
@@ -109,14 +102,14 @@ export default function TelechargerRapportPage() {
       <div className="card card-pad flex items-center gap-3" style={{ background: "linear-gradient(90deg,#e7ecf6,#fff)" }}>
         <Badge icon="report" tone="navy" size={36} />
         <div className="flex-1">
-          <div className="text-[14px] font-extrabold text-navy-700">Rapports générés automatiquement</div>
-          <div className="text-[11.5px] text-surface-700">Présentations PowerPoint dynamiques (design du modèle polio Angola, logo OMS) — alimentées en temps réel par les données du tableau de bord.</div>
+          <div className="text-[14px] font-extrabold text-navy-700">Rapports automatisés PEV &amp; Contrôle qualité des données</div>
+          <div className="text-[11.5px] text-surface-700">Deux présentations PowerPoint enrichies (graphiques épurés, commentaires « Lecture PEV », logos OMS &amp; PEV) — alimentées par les données du tableau de bord et du contrôle qualité KoboToolbox.</div>
         </div>
       </div>
 
       {err ? <div className="rounded-lg border border-danger-200 bg-danger-50/50 px-3 py-2 text-[12px] text-danger-700">Erreur : {err}</div> : null}
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
         {REPORTS.map((r) => {
           const t = TONES[r.tone];
           const sel = active === r.id;
@@ -126,7 +119,7 @@ export default function TelechargerRapportPage() {
               <div className="flex items-start gap-3">
                 <Badge icon={r.icon} tone={r.tone} size={40} />
                 <div className="min-w-0">
-                  <div className="text-[12.5px] font-bold leading-snug text-navy-700">{r.title}</div>
+                  <div className="text-[13px] font-bold leading-snug text-navy-700">{r.title}</div>
                   <div className="mt-1 text-[11px] leading-snug text-surface-600">{r.desc}</div>
                 </div>
               </div>
@@ -136,7 +129,7 @@ export default function TelechargerRapportPage() {
                   <Icon name={busy === r.id ? "refresh" : "download"} className={`h-3.5 w-3.5 ${busy === r.id ? "animate-spin" : ""}`} />
                   {busy === r.id ? "Génération…" : "Télécharger .pptx"}
                 </button>
-                <span className="text-[10px] font-semibold text-surface-400">{r.slides.length} diapos</span>
+                <span className="text-[10px] font-semibold text-surface-400">{r.slidesCount} diapos</span>
               </div>
             </div>
           );
@@ -144,7 +137,7 @@ export default function TelechargerRapportPage() {
       </div>
 
       <section>
-        <SectionBar icon="doc">Aperçu des diapositives</SectionBar>
+        <SectionBar icon="doc">Aperçu des diapositives — {current.title}</SectionBar>
         <div className="rap-grid">{current.slides.map((s) => <SlideThumb key={s.no} s={s} />)}</div>
       </section>
     </div>

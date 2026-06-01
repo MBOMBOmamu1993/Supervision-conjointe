@@ -1,0 +1,148 @@
+/* =========================================================================
+   report.css — Système de slides « Rapport automatisé PEV & CQD · Tshuapa »
+   Aspect institutionnel OMS, graphiques épurés, callout « Lecture PEV ».
+   ========================================================================= */
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap');
+
+:root{
+  --marine:#00205c; --marine2:#013a86; --cyan:#0093d5;
+  --vert:#1f9d57; --bleu:#0093d5; --jaune:#f59e0b; --rouge:#e23636; --bordeaux:#7b2d3a;
+  --ink:#16243d; --muted:#5b6b86; --line:#e3e9f2; --bg:#fff; --soft:#f4f7fb;
+  --font:"IBM Plex Sans",system-ui,sans-serif; --mono:"IBM Plex Mono",monospace;
+}
+*{box-sizing:border-box;}
+deck-stage:not(:defined){visibility:hidden;}
+html,body{margin:0;background:#0a1326;font-family:var(--font);color:var(--ink);}
+
+section{ background:var(--bg); overflow:hidden; }
+.slide{ position:absolute; inset:0; display:flex; flex-direction:column; }
+
+/* ---------- Bandeau de titre ---------- */
+.hd{ background:linear-gradient(100deg,var(--marine),var(--marine2)); color:#fff;
+  display:flex; align-items:center; gap:18px; padding:20px 40px 18px; position:relative; }
+.hd::after{ content:""; position:absolute; left:0; right:0; bottom:0; height:4px; background:var(--cyan); }
+.hd-logos{ display:flex; align-items:center; gap:12px; flex:none; }
+.hd-logos img{ height:38px; width:auto; display:block; }
+.hd-logos .sep{ width:1px; height:34px; background:rgba(255,255,255,.28); }
+.hd-txt{ flex:1; min-width:0; }
+.hd-title{ font-size:26px; font-weight:700; line-height:1.08; letter-spacing:.005em; text-transform:uppercase; }
+.hd-sub{ font-size:14px; color:#a9c6ec; font-weight:500; margin-top:4px; }
+.hd-meta{ flex:none; display:flex; flex-direction:column; align-items:flex-end; gap:7px; }
+.hd-tag{ font-family:var(--mono); font-size:11px; font-weight:600; letter-spacing:.08em;
+  background:rgba(255,255,255,.14); color:#cfe2f6; padding:4px 11px; border-radius:4px; }
+.hd-no{ font-size:13px; font-weight:700; color:#9fc0e9; }
+
+/* ---------- Corps + pied ---------- */
+.bd{ flex:1; padding:26px 40px 14px; display:flex; flex-direction:column; min-height:0; color:var(--ink); }
+.ft{ display:flex; justify-content:space-between; align-items:center;
+  padding:8px 40px 12px; font-size:11px; color:var(--muted); border-top:1px solid var(--line); }
+.ft b{ color:var(--marine); font-weight:600; }
+
+/* ---------- KPI ---------- */
+.kpis{ display:grid; gap:14px; }
+.kpi{ background:var(--soft); border:1px solid var(--line); border-radius:10px; padding:16px 18px;
+  display:flex; flex-direction:column; gap:3px; position:relative; overflow:hidden; }
+.kpi::before{ content:""; position:absolute; left:0; top:0; bottom:0; width:4px; background:var(--cyan); }
+.kpi-v{ font-size:34px; font-weight:700; line-height:1; color:var(--marine); letter-spacing:-.01em; }
+.kpi-l{ font-size:12.5px; font-weight:600; color:var(--ink); line-height:1.2; }
+.kpi-s{ font-size:11px; color:var(--muted); }
+.kpi[data-tone=red]::before{background:var(--rouge);} .kpi[data-tone=red] .kpi-v{color:var(--rouge);}
+.kpi[data-tone=green]::before{background:var(--vert);} .kpi[data-tone=green] .kpi-v{color:var(--vert);}
+.kpi[data-tone=amber]::before{background:var(--jaune);} .kpi[data-tone=amber] .kpi-v{color:#b06f00;}
+.kpi[data-tone=blue]::before{background:var(--bleu);} .kpi[data-tone=blue] .kpi-v{color:var(--bleu);}
+
+/* ---------- Titre de bloc ---------- */
+.block-h{ font-size:15px; font-weight:700; color:var(--marine); margin:0 0 10px;
+  display:flex; align-items:center; gap:9px; }
+.block-h::before{ content:""; width:7px; height:7px; border-radius:2px; background:var(--cyan); }
+
+/* ---------- Tableaux ---------- */
+table.tb{ width:100%; border-collapse:collapse; font-size:12.5px; }
+table.tb th{ background:var(--marine); color:#fff; font-weight:600; text-align:left; padding:8px 11px; font-size:11.5px; }
+table.tb th:first-child{ border-top-left-radius:7px; } table.tb th:last-child{ border-top-right-radius:7px; }
+table.tb td{ padding:7px 11px; border-bottom:1px solid var(--line); color:var(--ink); }
+table.tb tr:nth-child(even) td{ background:var(--soft); }
+table.tb tr.total td{ font-weight:700; background:#e7eefb; color:var(--marine); }
+.pill{ display:inline-block; padding:2px 9px; border-radius:20px; font-size:10.5px; font-weight:700; color:#fff; }
+.p-green{background:var(--vert);} .p-amber{background:var(--jaune);} .p-red{background:var(--rouge);} .p-blue{background:var(--bleu);}
+
+/* ---------- Callout « Lecture PEV » (commentaire dynamique expert) ---------- */
+.note{ background:#eef5fc; border:1px solid #cfe1f4; border-radius:9px; padding:13px 16px 13px 15px;
+  display:flex; gap:13px; align-items:flex-start; }
+.note-tag{ font-family:var(--mono); font-size:9.5px; font-weight:600; letter-spacing:.08em; color:#fff;
+  background:var(--cyan); padding:4px 8px; border-radius:5px; flex:none; margin-top:1px; white-space:nowrap; }
+.note p{ margin:0; font-size:13px; line-height:1.5; color:#243a5c; }
+.note.warn{ background:#fff5ec; border-color:#fbd9b8; } .note.warn .note-tag{ background:var(--jaune); }
+.note.alert{ background:#fdeeee; border-color:#f6c9c9; } .note.alert .note-tag{ background:var(--rouge); }
+.note b{ color:var(--marine); }
+
+/* ---------- Charts ---------- */
+.chart{ width:100%; height:auto; display:block; }
+.ch-base{ stroke:#cdd7e6; stroke-width:1; }
+.ch-val{ font-family:var(--font); font-size:14px; font-weight:700; fill:var(--ink); }
+.ch-val-sm{ font-family:var(--font); font-size:11px; font-weight:600; fill:var(--muted); }
+.ch-cat{ font-family:var(--font); font-size:12px; font-weight:600; fill:var(--ink); }
+.ch-cat2{ font-family:var(--font); font-size:10px; font-weight:500; fill:var(--muted); }
+.ch-legend{ display:flex; flex-wrap:wrap; gap:7px 18px; justify-content:center; margin-top:6px; }
+.ch-leg{ font-size:11.5px; color:var(--ink); font-weight:500; display:inline-flex; align-items:center; gap:6px; }
+.ch-leg i{ width:11px; height:11px; border-radius:3px; display:inline-block; }
+
+.hbars{ display:flex; flex-direction:column; gap:8px; }
+.hbar-row{ display:grid; grid-template-columns:1fr 50% auto; align-items:center; gap:12px; }
+.hbar-l{ font-size:12.5px; font-weight:500; color:var(--ink); text-align:right; }
+.hbar-track{ height:13px; background:#eef2f7; border-radius:7px; overflow:hidden; }
+.hbar-fill{ display:block; height:100%; border-radius:7px; }
+.hbar-v{ font-size:12.5px; font-weight:700; min-width:38px; }
+
+.gauge{ display:flex; flex-direction:column; align-items:center; gap:8px; }
+.gauge-v{ font-family:var(--font); font-size:30px; font-weight:700; }
+.gauge-l{ font-size:12.5px; font-weight:600; color:var(--ink); text-align:center; line-height:1.2; max-width:170px; }
+
+.funnel{ display:flex; align-items:stretch; gap:6px; }
+.fn-step{ flex:1; background:var(--soft); border:1px solid var(--line); border-radius:10px;
+  padding:16px 10px; text-align:center; display:flex; flex-direction:column; gap:5px; justify-content:center; }
+.fn-pct{ font-size:30px; font-weight:700; line-height:1; }
+.fn-lab{ font-size:11.5px; font-weight:600; color:var(--ink); line-height:1.2; }
+.fn-arrow{ display:flex; align-items:center; color:var(--cyan); font-size:24px; font-weight:700; }
+
+/* ---------- Grilles utilitaires ---------- */
+.row{ display:flex; gap:22px; }
+.col{ flex:1; min-width:0; }
+.fill{ flex:1; min-height:0; display:flex; flex-direction:column; justify-content:center; }
+.scale-tb td{ font-size:12px; }
+.legend-card{ background:var(--soft); border:1px solid var(--line); border-radius:9px; padding:10px 14px; }
+
+/* ---------- Couverture ---------- */
+.cover{ height:100%; background:linear-gradient(135deg,var(--marine),#022a6e 55%,var(--marine2));
+  color:#fff; display:flex; flex-direction:column; justify-content:center; padding:0 80px; position:relative; }
+.cover::after{ content:""; position:absolute; left:0; bottom:0; height:8px; width:100%; background:var(--cyan); }
+.cover-logos{ position:absolute; top:46px; left:80px; display:flex; align-items:center; gap:16px; }
+.cover-logos img{ height:52px; } .cover-logos .sep{ width:1px; height:46px; background:rgba(255,255,255,.3); }
+.cover-kicker{ font-family:var(--mono); font-size:14px; letter-spacing:.16em; color:var(--cyan); font-weight:600; margin-bottom:18px; }
+.cover h1{ font-size:46px; font-weight:700; line-height:1.07; margin:0 0 22px; max-width:980px; }
+.cover-meta{ font-size:17px; color:#bcd4f0; line-height:1.7; }
+.cover-kpis{ display:flex; gap:16px; margin-top:36px; }
+.cover-kpi{ background:rgba(255,255,255,.08); border:1px solid rgba(255,255,255,.16); border-radius:11px; padding:16px 22px; }
+.cover-kpi b{ display:block; font-size:32px; font-weight:700; color:#fff; line-height:1; }
+.cover-kpi span{ font-size:12px; color:#a9c6ec; }
+.cover-src{ position:absolute; bottom:30px; left:80px; font-size:12px; color:#88a6cf; font-family:var(--mono); }
+
+/* ---------- Matrice 2×2 ---------- */
+.matrix{ display:grid; grid-template-columns:1fr 1fr; gap:14px; flex:1; }
+.mx-cell{ border-radius:12px; padding:20px 22px; color:#fff; display:flex; flex-direction:column; gap:7px; justify-content:center; }
+.mx-cell h4{ margin:0; font-size:17px; font-weight:700; }
+.mx-cell p{ margin:0; font-size:13px; opacity:.92; line-height:1.4; }
+.mx-cell .mx-act{ font-weight:700; font-size:13.5px; margin-top:4px; }
+
+/* ---------- Process (étapes) ---------- */
+.proc{ display:flex; align-items:stretch; gap:8px; }
+.proc-step{ flex:1; background:var(--soft); border:1px solid var(--line); border-radius:10px; padding:16px 14px; }
+.proc-num{ width:26px; height:26px; border-radius:50%; background:var(--marine); color:#fff; font-weight:700;
+  display:flex; align-items:center; justify-content:center; font-size:13px; margin-bottom:9px; }
+.proc-step h5{ margin:0 0 4px; font-size:13.5px; color:var(--marine); font-weight:700; }
+.proc-step p{ margin:0; font-size:11.5px; color:var(--muted); line-height:1.4; }
+.proc-arrow{ display:flex; align-items:center; color:var(--cyan); font-size:20px; }
+
+ul.ck{ margin:0; padding:0; list-style:none; display:flex; flex-direction:column; gap:9px; }
+ul.ck li{ font-size:13px; line-height:1.45; padding-left:24px; position:relative; color:var(--ink); }
+ul.ck li::before{ content:"\\2713"; position:absolute; left:0; top:0; color:var(--vert); font-weight:700; }

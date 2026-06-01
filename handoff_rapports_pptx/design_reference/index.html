@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Rapports automatisés PEV & CQD · Tshuapa</title>
+<link rel="stylesheet" href="assets/report.css"/>
+<style>
+  body{ background:#eef2f8; min-height:100vh; display:flex; align-items:center; justify-content:center; padding:48px 24px; }
+  .hub{ width:min(960px,100%); }
+  .hub-head{ background:linear-gradient(120deg,var(--marine),var(--marine2)); color:#fff;
+    border-radius:18px 18px 0 0; padding:34px 40px; display:flex; align-items:center; gap:20px; position:relative; }
+  .hub-head::after{ content:""; position:absolute; left:0; right:0; bottom:0; height:5px; background:var(--cyan); }
+  .hub-head img{ height:46px; } .hub-head .sep{ width:1px; height:42px; background:rgba(255,255,255,.3); }
+  .hub-head h1{ font-size:24px; margin:0; font-weight:700; }
+  .hub-head p{ margin:5px 0 0; font-size:14px; color:#a9c6ec; }
+  .hub-body{ background:#fff; border-radius:0 0 18px 18px; padding:30px 40px 38px; box-shadow:0 24px 60px -28px rgba(0,32,92,.5); }
+  .hub-intro{ font-size:14px; color:var(--muted); line-height:1.6; margin:0 0 24px; }
+  .cards{ display:grid; grid-template-columns:1fr 1fr; gap:20px; }
+  .rcard{ border:1px solid var(--line); border-radius:14px; padding:24px; text-decoration:none; color:inherit;
+    display:flex; flex-direction:column; gap:12px; transition:.18s; position:relative; overflow:hidden; }
+  .rcard::before{ content:""; position:absolute; left:0; top:0; bottom:0; width:5px; }
+  .rcard.zs::before{ background:var(--cyan); } .rcard.cs::before{ background:var(--vert); }
+  .rcard:hover{ border-color:var(--marine); box-shadow:0 16px 36px -22px rgba(0,32,92,.6); transform:translateY(-2px); }
+  .rcard .tagk{ font-family:var(--mono); font-size:11px; font-weight:600; letter-spacing:.08em; color:var(--cyan); }
+  .rcard.cs .tagk{ color:var(--vert); }
+  .rcard h2{ margin:0; font-size:18px; font-weight:700; color:var(--marine); line-height:1.2; }
+  .rcard p{ margin:0; font-size:12.5px; color:var(--muted); line-height:1.5; }
+  .rcard .meta{ display:flex; align-items:center; gap:8px; margin-top:4px; font-size:11.5px; color:var(--ink); font-weight:600; }
+  .rcard .go{ margin-top:6px; font-size:13px; font-weight:700; color:var(--marine); display:flex; align-items:center; gap:6px; }
+  .note-foot{ margin-top:26px; }
+</style>
+</head>
+<body>
+<div class="hub">
+  <div class="hub-head">
+    <img src="assets/oms-white.png" alt="OMS"/><span class="sep"></span><img src="assets/pev.png" alt="PEV"/>
+    <div><h1>Rapports automatisés PEV &amp; Contrôle qualité des données</h1>
+    <p>Province de la Tshuapa · Antennes Boende &amp; Bokungu · Période Janvier – Mars 2026</p></div>
+  </div>
+  <div class="hub-body">
+    <p class="hub-intro">Deux rapports PowerPoint générés automatiquement à partir des exports ODK/Kobo des checklists de supervision PEV et du formulaire de contrôle qualité des données. Graphiques épurés (sans quadrillage), KPI et commentaires d'expert PEV actualisés à chaque période.</p>
+    <div class="cards">
+      <a class="rcard zs" href="Rapport_Supervision_CQD_ZS.html">
+        <span class="tagk">RAPPORT 1 · ZONES DE SANTÉ</span>
+        <h2>Supervision PEV &amp; CQD — Zones de santé</h2>
+        <p>Couverture, scores par ZS, 6 composantes, chaîne du froid, monitorage, concordances PENTA3/RR2, erreurs de transcription, goulots et actions correctrices.</p>
+        <div class="meta">23 diapositives · 12 ZS prévues</div>
+        <div class="go">Ouvrir le rapport &#8594;</div>
+      </a>
+      <a class="rcard cs" href="Rapport_Supervision_CQD_CS.html">
+        <span class="tagk">RAPPORT 2 · CENTRES DE SANTÉ</span>
+        <h2>Supervision PEV &amp; CQD — Centres de santé</h2>
+        <p>Scoring de la checklist, performance par composante, prestation, récupération des enfants manqués, surveillance, concordance DHIS2/Registre et score qualité.</p>
+        <div class="meta">26 diapositives · 279 CS/ESS prévus</div>
+        <div class="go">Ouvrir le rapport &#8594;</div>
+      </a>
+    </div>
+    <div class="note note-foot"><span class="note-tag">NOTE</span><p>À ce jour, le contrôle qualité ne compte qu'<b>une soumission par niveau</b> (ZS Bokungu ; AS Lofima 2) : les indicateurs réels de ces unités sont affichés tels quels, les autres ZS/CS portent des valeurs représentatives en attendant l'extension de la couverture. Les rapports se rempliront automatiquement au fil des nouveaux contrôles.</p></div>
+  </div>
+</div>
+</body>
+</html>

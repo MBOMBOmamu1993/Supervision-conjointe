@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Rapport automatisé · Supervision PEV & CQD — Zones de santé</title>
+<link rel="stylesheet" href="assets/report.css"/>
+<style>
+  deck-stage:not(:defined){visibility:hidden;}
+  html,body{height:100%;}
+</style>
+</head>
+<body>
+<template id="__bundler_thumbnail">
+  <svg viewBox="0 0 400 300" xmlns="http://www.w3.org/2000/svg">
+    <rect width="400" height="300" fill="#00205c"/>
+    <rect x="120" y="120" width="160" height="60" rx="8" fill="#0093d5"/>
+    <text x="200" y="158" text-anchor="middle" font-family="sans-serif" font-size="34" font-weight="700" fill="#fff">ZS</text>
+    <text x="200" y="220" text-anchor="middle" font-family="sans-serif" font-size="18" fill="#a9c6ec">Rapport PEV &amp; CQD</text>
+  </svg>
+</template>
+
+<deck-stage id="deck" width="1280" height="720"></deck-stage>
+
+<script src="assets/charts.js"></script>
+<script src="assets/build.js"></script>
+<script src="assets/data-zs.js"></script>
+<script>
+  renderDeck(window.SLIDES_ZS, { footerL: window.FOOTER, period: window.PERIOD, gen: window.GEN });
+</script>
+<script src="deck-stage.js"></script>
+</body>
+</html>
