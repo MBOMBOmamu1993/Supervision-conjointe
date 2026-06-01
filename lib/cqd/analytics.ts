@@ -230,18 +230,33 @@ function buildLevel(level: "zs" | "as", records: CqdRecord[]): CqdLevelBundle {
     if (!byStruct.has(name)) byStruct.set(name, []);
     byStruct.get(name)!.push(r);
   }
+  const firstBool = (recs: CqdRecord[], pick: (r: CqdRecord) => boolean | null): boolean | null => {
+    for (const r of recs) { const v = pick(r); if (v !== null) return v; }
+    return null;
+  };
   const parStructure = Array.from(byStruct.entries()).map(([name, recs]) => {
     const s = (pick: (r: CqdRecord) => number) => recs.reduce((a, r) => a + pick(r), 0);
     const ref3 = s((r) => r.registre.p3) || s((r) => r.snis.p3);
+    const refR = s((r) => r.registre.rr2) || s((r) => r.snis.rr2);
     const verif = s((r) => r.nbValeursVerifiees);
     const tauxP3 = ref3 > 0 ? r1((s((r) => r.dhis2.p3) / ref3) * 100) : null;
+    const tauxR2 = refR > 0 ? r1((s((r) => r.dhis2.rr2) / refR) * 100) : null;
     const outilsOk = recs.reduce((a, r) => a + ((r.registreCorrect ? 1 : 0) + (r.pointageCorrect ? 1 : 0) + (r.snisCorrect ? 1 : 0)), 0);
     return {
       name,
+      zone: recs[0]?.zone ?? null,
       concordanceP3: tauxP3,
       classeP3: classify(tauxP3),
+      concordanceRr2: tauxR2,
+      classeRr2: classify(tauxR2),
       erreurSnisDhis2: verif > 0 ? r1((s((r) => r.nbDiscordSnisDhis2) / verif) * 100) : null,
+      erreurPointageRegistre: verif > 0 ? r1((s((r) => r.nbDiscordPointageRegistre) / verif) * 100) : null,
+      registreOk: firstBool(recs, (r) => r.registreCorrect),
+      pointageOk: firstBool(recs, (r) => r.pointageCorrect),
+      snisOk: firstBool(recs, (r) => r.snisCorrect),
       outilsOk,
+      enfantsIdentifies: s((r) => r.enfantsIdentifies),
+      enfantsRecuperes: s((r) => r.enfantsRecuperes),
     };
   }).sort((a, b) => (a.name.localeCompare(b.name)));
 
