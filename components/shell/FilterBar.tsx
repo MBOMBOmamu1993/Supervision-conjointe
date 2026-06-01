@@ -1,9 +1,13 @@
 "use client";
 
+import { usePathname } from "next/navigation";
 import { useFilters } from "@/lib/state/filters";
 import { useSupervision } from "@/lib/client/api";
 import { Icon, type IconName } from "@/components/ui/Icon";
 import { PeriodFilter } from "./PeriodFilter";
+
+/** Routes où la barre de filtres (supervision/CQD) est pertinente. */
+const FILTERED_ROUTES = ["/", "/comparaison", "/composantes", "/qualite-donnees"];
 
 function Select({
   icon,
@@ -43,9 +47,13 @@ function Select({
 
 /** Barre de filtres : Province, Antenne, ZS, Aire, Type de supervision, Période. */
 export function FilterBar() {
+  const pathname = usePathname();
   const f = useFilters();
   const { data } = useSupervision();
   const opt = data?.filters;
+
+  // Masquer la barre sur les pages sans filtres (État de lieux, Télécharger).
+  if (!FILTERED_ROUTES.includes(pathname)) return null;
 
   return (
     <div className="border-b border-slate-200 bg-white/60 backdrop-blur">

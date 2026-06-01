@@ -7,10 +7,11 @@ import { fmtDateTime } from "@/lib/client/format";
 
 const TITLES: Record<string, string> = {
   "/": "Vue d'ensemble — Supervision conjointe",
-  "/comparaison": "Comparaison : performance par structure & temps",
-  "/composantes": "Performance par composante",
-  "/analyse": "Analyse & données détaillées",
-  "/rapports": "Rapports & exports",
+  "/comparaison": "Performance structures et temps",
+  "/composantes": "Performance par composantes",
+  "/qualite-donnees": "Qualité des données (Contrôle Qualité)",
+  "/etat-lieux": "État de lieux — Tshuapa",
+  "/telecharger-rapport": "Télécharger un rapport",
 };
 
 export default function Header() {
