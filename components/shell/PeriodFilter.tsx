@@ -79,15 +79,15 @@ export function PeriodFilter({
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
-        className="flex w-full items-center justify-between gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-left text-sm text-slate-700 hover:border-navy/40"
+        className="flex w-full items-center justify-between gap-2 rounded-xl border border-slate-200 bg-white px-2.5 py-2 text-left text-[12.5px] font-bold text-navy-700 shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition hover:border-oms-500"
       >
-        <span className="flex items-center gap-2">
-          <span className="inline-flex h-7 w-7 items-center justify-center rounded-lg bg-navy/10 text-navy">
-            <Icon name="calendar" className="h-4 w-4" />
+        <span className="flex items-center gap-2 min-w-0">
+          <span className="inline-flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-md text-white" style={{ background: "linear-gradient(145deg, #fbbf24, #f08c00)" }}>
+            <Icon name="calendar" className="h-[13px] w-[13px]" strokeWidth={2} />
           </span>
           <span className="truncate">{summary}</span>
         </span>
-        <Icon name="chevron-down" className="h-4 w-4 text-slate-400" />
+        <Icon name="chevron-down" className="h-4 w-4 shrink-0 text-slate-400" />
       </button>
 
       {open && (
