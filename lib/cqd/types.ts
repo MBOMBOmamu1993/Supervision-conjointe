@@ -66,13 +66,22 @@ export interface CqdLevelBundle {
   parAntigene: { antigene: string; concordance: number | null; erreur: number | null }[];
   /** Évolution mensuelle. */
   trend: CqdTrendPoint[];
-  /** Détail par structure (concordance + erreur). */
+  /** Détail par structure (concordance + erreur + outils + enfants). */
   parStructure: {
     name: string;
+    zone: string | null;
     concordanceP3: number | null;
     classeP3: ConcordanceClass;
+    concordanceRr2: number | null;
+    classeRr2: ConcordanceClass;
     erreurSnisDhis2: number | null;
+    erreurPointageRegistre: number | null;
+    registreOk: boolean | null;
+    pointageOk: boolean | null;
+    snisOk: boolean | null;
     outilsOk: number;
+    enfantsIdentifies: number;
+    enfantsRecuperes: number;
   }[];
 }
 

@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { Card, CardHeader, SectionBar } from "@/components/ui/Card";
 import { KpiCard } from "@/components/ui/KpiCard";
 import { DataGate } from "@/components/ui/DataGate";
@@ -55,6 +56,40 @@ function MonthlyTable({ rows, months }: { rows: MonthlyMatrixRow[]; months: stri
   );
 }
 
+/** Top N des structures les plus performantes (ZS & AS), basculable 5 / 10. */
+function TopPerformers({ zs, as }: { zs: NamedScore[]; as: NamedScore[] }) {
+  const [n, setN] = useState(5);
+  const top = (s: NamedScore[]) =>
+    [...s].filter((x) => x.score !== null).sort((a, b) => (b.score ?? 0) - (a.score ?? 0)).slice(0, n).map((x) => ({ name: x.name, value: x.score }));
+  const topZs = top(zs);
+  const topAs = top(as);
+  return (
+    <section>
+      <div className="flex items-center justify-between gap-2">
+        <SectionBar icon="trophy">Top {n} des structures performantes</SectionBar>
+        <div className="flex shrink-0 gap-1">
+          {[5, 10].map((k) => (
+            <button key={k} onClick={() => setN(k)}
+              className={`rounded-lg px-3 py-1.5 text-[12px] font-bold transition ${n === k ? "bg-navy-700 text-white" : "bg-surface-100 text-surface-600 hover:bg-surface-200"}`}>
+              Top {k}
+            </button>
+          ))}
+        </div>
+      </div>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-2.5">
+        <Card>
+          <CardHeader icon="hospital" iconTone="violet" title={`Top ${n} zones de santé performantes`} />
+          {topZs.length ? <HBar data={topZs} /> : <EmptyState />}
+        </Card>
+        <Card>
+          <CardHeader icon="clinic" iconTone="green" title={`Top ${n} aires de santé performantes`} />
+          {topAs.length ? <HBar data={topAs} /> : <EmptyState />}
+        </Card>
+      </div>
+    </section>
+  );
+}
+
 export default function ComparaisonPage() {
   return (
     <DataGate>
@@ -84,6 +119,9 @@ export default function ComparaisonPage() {
               <KpiCard icon="clinic" tone="warn" label="Nombre des Aires de Santé supervisées" value={fmtNum(d.levels.as.perStructure.length)} sub="Aires / centres de santé" />
               <KpiCard icon="calendar" tone="violet" label="Période analysée" value={`${months.length} mois`} sub={periodLabel} />
             </div>
+
+            {/* Top 5 / Top 10 des structures performantes (le TL) */}
+            <TopPerformers zs={d.levels.zs.perStructure} as={d.levels.as.perStructure} />
 
             {/* Comparaison globale de performance */}
             <section>
