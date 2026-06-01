@@ -205,6 +205,49 @@ function concordance(dhis2Sum: number, refSum: number): ConcordanceStat {
   return { taux, classe: classify(taux) };
 }
 
+/** Antigènes comparés pour le taux d'erreur de transcription SNIS → DHIS2. */
+const ANTIGEN_PICKS: { snis: (r: CqdRecord) => number; dhis2: (r: CqdRecord) => number }[] = [
+  { snis: (r) => r.snis.p1, dhis2: (r) => r.dhis2.p1 },
+  { snis: (r) => r.snis.p3, dhis2: (r) => r.dhis2.p3 },
+  { snis: (r) => r.snis.rr1, dhis2: (r) => r.dhis2.rr1 },
+  { snis: (r) => r.snis.rr2, dhis2: (r) => r.dhis2.rr2 },
+];
+
+/**
+ * Taux d'erreur de transcription SNIS → DHIS2 calculé à partir de la comparaison
+ * réelle des antigènes (part des antigènes dont les sommes SNIS et DHIS2 diffèrent).
+ * C'est exactement ce qu'affiche le tableau « Antigène / SNIS / DHIS2 / Concordance ».
+ */
+function antigenErrorRate(records: CqdRecord[]): number | null {
+  let comparable = 0;
+  let discordant = 0;
+  for (const p of ANTIGEN_PICKS) {
+    const s = records.reduce((a, r) => a + p.snis(r), 0);
+    const d = records.reduce((a, r) => a + p.dhis2(r), 0);
+    if (s > 0 || d > 0) {
+      comparable++;
+      if (s !== d) discordant++;
+    }
+  }
+  return comparable > 0 ? r1((discordant / comparable) * 100) : null;
+}
+
+/**
+ * Taux d'erreur de transcription SNIS → DHIS2.
+ *  - Niveau AS : on privilégie le décompte du formulaire (discordances /
+ *    valeurs vérifiées), plus granulaire ; repli sur la comparaison d'antigènes.
+ *  - Niveau ZS (formulaire de sommes) : les champs de décompte ne sont pas
+ *    renseignés → on calcule directement à partir des antigènes, sinon le taux
+ *    ressort à 0 % alors que des discordances existent.
+ */
+function transcriptionError(level: "zs" | "as", records: CqdRecord[]): number | null {
+  const nbVerif = records.reduce((a, r) => a + r.nbValeursVerifiees, 0);
+  const nbDisc = records.reduce((a, r) => a + r.nbDiscordSnisDhis2, 0);
+  const fieldErr = nbVerif > 0 ? r1((nbDisc / nbVerif) * 100) : null;
+  const antErr = antigenErrorRate(records);
+  return level === "as" ? fieldErr ?? antErr : antErr;
+}
+
 function buildLevel(level: "zs" | "as", records: CqdRecord[]): CqdLevelBundle {
   const sumOf = (pick: (r: CqdRecord) => number) => records.reduce((a, r) => a + pick(r), 0);
 
@@ -221,7 +264,6 @@ function buildLevel(level: "zs" | "as", records: CqdRecord[]): CqdLevelBundle {
   const refRr2 = regRr2 > 0 ? regRr2 : snisRr2;
 
   const nbVerif = sumOf((r) => r.nbValeursVerifiees);
-  const nbDiscSD = sumOf((r) => r.nbDiscordSnisDhis2);
   const nbDiscPR = sumOf((r) => r.nbDiscordPointageRegistre);
 
   const okPct = (pick: (r: CqdRecord) => boolean | null) => {
@@ -252,7 +294,7 @@ function buildLevel(level: "zs" | "as", records: CqdRecord[]): CqdLevelBundle {
         month,
         concordanceP3: ref3 > 0 ? r1((s((r) => r.dhis2.p3) / ref3) * 100) : null,
         concordanceRr2: refR > 0 ? r1((s((r) => r.dhis2.rr2) / refR) * 100) : null,
-        erreurSnisDhis2: verif > 0 ? r1((s((r) => r.nbDiscordSnisDhis2) / verif) * 100) : null,
+        erreurSnisDhis2: transcriptionError(level, recs),
         erreurPointageRegistre: verif > 0 ? r1((s((r) => r.nbDiscordPointageRegistre) / verif) * 100) : null,
       };
     });
@@ -283,7 +325,7 @@ function buildLevel(level: "zs" | "as", records: CqdRecord[]): CqdLevelBundle {
       classeP3: classify(tauxP3),
       concordanceRr2: tauxR2,
       classeRr2: classify(tauxR2),
-      erreurSnisDhis2: verif > 0 ? r1((s((r) => r.nbDiscordSnisDhis2) / verif) * 100) : null,
+      erreurSnisDhis2: transcriptionError(level, recs),
       erreurPointageRegistre: verif > 0 ? r1((s((r) => r.nbDiscordPointageRegistre) / verif) * 100) : null,
       registreOk: firstBool(recs, (r) => r.registreCorrect),
       pointageOk: firstBool(recs, (r) => r.pointageCorrect),
@@ -300,7 +342,7 @@ function buildLevel(level: "zs" | "as", records: CqdRecord[]): CqdLevelBundle {
     structuresControlees: byStruct.size,
     concordanceP3: concordance(dhis2P3, refP3),
     concordanceRr2: concordance(dhis2Rr2, refRr2),
-    erreurSnisDhis2: nbVerif > 0 ? r1((nbDiscSD / nbVerif) * 100) : null,
+    erreurSnisDhis2: transcriptionError(level, records),
     erreurPointageRegistre: nbVerif > 0 ? r1((nbDiscPR / nbVerif) * 100) : null,
     outils: {
       registre: okPct((r) => r.registreCorrect),
