@@ -64,7 +64,7 @@ export function Edl1() {
         <div className="card card-pad">
           <div className="mb-2 text-[11px] text-surface-500">{E.asPop.length} aires de santé · tableau défilable</div>
           <div className="overflow-auto" style={{ maxHeight: 330 }}>
-            <table className="grid">
+            <table className="dtable">
               <thead><tr><th className="name">Aire de santé</th><th className="name">Zone de santé</th><th>Pop. admin.</th><th>Pop. ajustée</th><th>0–11 mois (micro)</th><th>0–11 mois (ajustée)</th></tr></thead>
               <tbody>
                 {E.asPop.map((a, i) => (
@@ -79,7 +79,7 @@ export function Edl1() {
       <section>
         <SectionBar icon="alert">Sites par niveau de priorité (risque) — par zone de santé</SectionBar>
         <div className="card card-pad">
-          <table className="grid">
+          <table className="dtable">
             <thead><tr><th className="name">Zone de santé</th><th>Très haute priorité</th><th>Haute priorité</th><th>Moyenne priorité</th><th>Faible priorité</th></tr></thead>
             <tbody>
               {zss.map((z) => {
@@ -126,7 +126,7 @@ export function Edl2() {
         <div className="card card-pad">
           <div className="mb-2 text-[11px] text-surface-500">Mise en forme conditionnée : vert &lt; 50 km · orange 50–99 km · rouge ≥ 100 km. Tableau défilable.</div>
           <div className="overflow-auto" style={{ maxHeight: 300 }}>
-            <table className="grid">
+            <table className="dtable">
               <thead><tr><th className="name">Aire de santé</th><th className="name">Zone de santé</th><th>Distance AS–BCZ (km)</th><th>Dernier village (km)</th><th>Voie d'accès</th><th>Réseau</th></tr></thead>
               <tbody>
                 {E.asPop.map((a, i) => (
@@ -141,7 +141,7 @@ export function Edl2() {
       <section>
         <SectionBar icon="map">Spécificités géographiques & populations dispersées — par ZS</SectionBar>
         <div className="card card-pad">
-          <table className="grid">
+          <table className="dtable">
             <thead><tr><th className="name">Zone de santé</th><th>Îlots</th><th>Campements pêcheurs</th><th>Campements éleveurs</th><th>Camps déplacés internes</th></tr></thead>
             <tbody>
               {E.infoZS.map((z) => (
@@ -166,7 +166,7 @@ export function Edl2() {
         <div className="card card-pad">
           <CardTitle icon="people" tone="green" title="Participation communautaire — CAC & RECO" sub="Cellules d'animation communautaire par ZS" />
           <div className="overflow-auto" style={{ maxHeight: 230 }}>
-            <table className="grid">
+            <table className="dtable">
               <thead><tr><th className="name">Zone de santé</th><th>Villages</th><th>CAC prévus</th><th>CAC actifs</th></tr></thead>
               <tbody>
                 {E.infoZS.map((z) => (
@@ -182,7 +182,7 @@ export function Edl2() {
         <SectionBar icon="home">Points d'entrée communautaires & localités résistantes — par ZS</SectionBar>
         <div className="card card-pad">
           <div className="overflow-auto" style={{ maxHeight: 300 }}>
-            <table className="grid">
+            <table className="dtable">
               <thead><tr><th className="name">Zone de santé</th><th>Marchés</th><th>Églises</th><th>École maternelle</th><th>École primaire</th><th>École secondaire</th><th>Localités résistantes</th></tr></thead>
               <tbody>
                 {E.infoZS.map((z) => (
@@ -216,7 +216,7 @@ export function Edl3() {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
           <div className="card card-pad">
             <div className="overflow-auto" style={{ maxHeight: 300 }}>
-              <table className="grid">
+              <table className="dtable">
                 <thead><tr><th className="name">Zone de santé</th><th>Nbr AS</th><th>AS avec réfrigérateur fonctionnel</th><th>Couverture</th></tr></thead>
                 <tbody>
                   {cold.map((c) => { const p = Math.round(c.frigo / c.nAS * 100); return (
@@ -252,7 +252,7 @@ export function Edl3() {
         <SectionBar icon="hands">Partenaires technico-financiers — domaines d'intervention par ZS</SectionBar>
         <div className="card card-pad">
           <div className="overflow-auto" style={{ maxHeight: 360 }}>
-            <table className="grid" style={{ fontSize: 10 }}>
+            <table className="dtable" style={{ fontSize: 10 }}>
               <thead><tr>
                 <th className="name" style={{ position: "sticky", left: 0, background: "#f1f5f9", zIndex: 2 }}>Zone de santé</th>
                 {E.partnerCols.map((p) => <th key={p} style={{ minWidth: 78 }}>{p}</th>)}
