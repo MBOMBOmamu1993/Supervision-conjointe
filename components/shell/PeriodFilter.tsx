@@ -92,8 +92,8 @@ export function PeriodFilter({
 
       {open && (
         <>
-          <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
-          <div className="absolute z-20 mt-2 w-72 rounded-2xl border border-slate-200 bg-white p-3 shadow-lg">
+          <div className="fixed inset-0 z-[55]" onClick={() => setOpen(false)} />
+          <div className="absolute right-0 z-[60] mt-2 w-72 rounded-2xl border border-slate-200 bg-white p-3 shadow-[0_18px_44px_-12px_rgba(15,23,42,0.32)]">
             <div className="flex items-center justify-between">
               <button
                 type="button"

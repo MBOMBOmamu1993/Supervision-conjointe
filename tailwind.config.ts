@@ -24,6 +24,7 @@ const config: Config = {
         },
         // Bleu marine OFFICIEL OMS #00205c (capture intranet OneWHO) — entête / sidebar / bandeaux
         navy: {
+          DEFAULT: "#00205c",
           400: "#1f54b8",
           500: "#15479e",
           600: "#0a3a86",
