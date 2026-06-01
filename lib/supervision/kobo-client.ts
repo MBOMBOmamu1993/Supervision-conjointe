@@ -15,9 +15,11 @@ import * as XLSX from "xlsx";
 import { ENV, koboAuthHeader } from "@/lib/server/env";
 import {
   KOBO_SOURCES,
+  CQD_SOURCES,
   koboExportUrl,
   koboDataUrl,
   type KoboSource,
+  type CqdSource,
   type StructureLevel,
 } from "@/config/supervision.config";
 import type { RawRow } from "./types";
@@ -138,6 +140,53 @@ export async function fetchSource(src: KoboSource, opts: { force?: boolean } = {
 /** Récupère les 3 sources en parallèle. */
 export async function fetchAllSources(opts: { force?: boolean } = {}): Promise<SourceFetch[]> {
   return Promise.all(KOBO_SOURCES.map((s) => fetchSource(s, opts)));
+}
+
+/* ----------------------- Sources CQD (Qualité des données) ----------------------- */
+
+export interface CqdFetch {
+  key: "zs" | "as";
+  label: string;
+  rows: RawRow[];
+  ok: boolean;
+  error?: string;
+}
+
+export async function fetchCqdSource(src: CqdSource, opts: { force?: boolean } = {}): Promise<CqdFetch> {
+  const cacheKey = `kobo:cqd:${src.key}`;
+  if (!opts.force) {
+    const cached = cacheGet<CqdFetch>(cacheKey);
+    if (cached) return cached;
+  }
+  const exportUrl = koboExportUrl(src, ENV.KOBO_BASE_URL);
+  const dataUrl = koboDataUrl(src, ENV.KOBO_BASE_URL) + "?limit=30000";
+  try {
+    const rows = await pRetry(
+      async () => {
+        try {
+          const buf = await fetchBuffer(exportUrl, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+          return parseXlsx(buf);
+        } catch (e) {
+          if (e instanceof AbortError) throw e;
+          const buf = await fetchBuffer(dataUrl, "application/json");
+          const json = JSON.parse(new TextDecoder().decode(buf));
+          return (Array.isArray(json) ? json : json.results ?? []) as RawRow[];
+        }
+      },
+      { retries: MAX_ATTEMPTS - 1, minTimeout: 1000, maxTimeout: 4000 }
+    );
+    const result: CqdFetch = { key: src.key, label: src.label, rows, ok: true };
+    cacheSet(cacheKey, result);
+    return result;
+  } catch (err) {
+    const stale = cacheGetStale<CqdFetch>(cacheKey);
+    if (stale) return stale;
+    return { key: src.key, label: src.label, rows: [], ok: false, error: err instanceof Error ? err.message : String(err) };
+  }
+}
+
+export async function fetchAllCqdSources(opts: { force?: boolean } = {}): Promise<CqdFetch[]> {
+  return Promise.all(CQD_SOURCES.map((s) => fetchCqdSource(s, opts)));
 }
 
 export function flushKoboCache(): void {
