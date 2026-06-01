@@ -63,19 +63,25 @@ export default function ComparaisonPage() {
         const periodLabel = months.length ? `${fmtMonth(months[0])} – ${fmtMonth(months[months.length - 1])}` : "—";
         const toBars = (s: NamedScore[]) => s.map((x) => ({ name: x.name, value: x.score }));
 
-        // meilleure progression / stabilité / baisse (page highlights + matrices)
+        // Comparaison meilleure progression / stable / en baisse : UNIQUEMENT
+        // entre le dernier mois et l'avant-dernier (variation = last − penult).
+        // Si moins de deux mois sont disponibles, on n'affiche rien (« Aucune »).
         const zsMatrix = d.levels.zs.monthlyMatrix;
         const asMatrix = d.levels.as.monthlyMatrix;
-        const asDrops = asMatrix.filter((m) => m.variation !== null && m.variation < -0.5).sort((a, b) => (a.variation ?? 0) - (b.variation ?? 0));
-        const zsStable = [...zsMatrix].filter((m) => m.variation !== null).sort((a, b) => Math.abs(a.variation ?? 0) - Math.abs(b.variation ?? 0))[0];
+        const hasTwoMonths = months.length >= 2;
+        const zsVar = hasTwoMonths ? zsMatrix.filter((m) => m.variation !== null) : [];
+        const asVar = hasTwoMonths ? asMatrix.filter((m) => m.variation !== null) : [];
+        const bestProg = [...zsVar, ...asVar].sort((a, b) => (b.variation ?? 0) - (a.variation ?? 0))[0];
+        const zsStable = [...zsVar].sort((a, b) => Math.abs(a.variation ?? 0) - Math.abs(b.variation ?? 0))[0];
+        const asDrops = asVar.filter((m) => (m.variation ?? 0) < -0.5).sort((a, b) => (a.variation ?? 0) - (b.variation ?? 0));
 
         return (
           <div className="space-y-4">
             {/* KPIs en-tête */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5">
-              <KpiCard icon="tower" tone="brand" label="Antennes comparées" value={fmtNum(d.levels.antenne.perStructure.length)} sub="Antennes actives" />
-              <KpiCard icon="hospital" tone="good" label="Zones de santé comparées" value={fmtNum(d.levels.zs.perStructure.length)} sub="Zones de santé" />
-              <KpiCard icon="clinic" tone="warn" label="Centres de santé comparés" value={fmtNum(d.levels.as.perStructure.length)} sub="Centres de santé" />
+              <KpiCard icon="tower" tone="brand" label="Nombre d'antenne supervisé" value={fmtNum(d.levels.antenne.perStructure.length)} sub="Antennes supervisées" />
+              <KpiCard icon="hospital" tone="good" label="Nombre des ZS supervisées" value={fmtNum(d.levels.zs.perStructure.length)} sub="Zones de santé" />
+              <KpiCard icon="clinic" tone="warn" label="Nombre des Aires de Santé supervisées" value={fmtNum(d.levels.as.perStructure.length)} sub="Aires / centres de santé" />
               <KpiCard icon="calendar" tone="violet" label="Période analysée" value={`${months.length} mois`} sub={periodLabel} />
             </div>
 
@@ -142,41 +148,36 @@ export default function ComparaisonPage() {
               </div>
             </section>
 
-            {/* Faits marquants */}
+            {/* Faits marquants — comparaison dernier mois vs avant-dernier mois */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-2.5">
               <Card className="border-good-200 bg-good-50/30">
-                <div className="text-[10px] uppercase tracking-wider text-good-600 font-semibold">Meilleure progression — antenne</div>
-                {d.highlights.bestProgressAntenne ? (
+                <div className="text-[10px] uppercase tracking-wider text-good-600 font-semibold">Meilleure progression</div>
+                {bestProg && bestProg.variation !== null && bestProg.variation > 0.5 ? (
                   <>
-                    <div className="text-[16px] font-bold text-good-600 mt-1">{d.highlights.bestProgressAntenne.name}</div>
+                    <div className="text-[16px] font-bold text-good-600 mt-1">{bestProg.name}</div>
                     <div className="text-[11.5px] text-surface-700 mt-0.5">
-                      +{d.highlights.bestProgressAntenne.delta} pts ({fmtPct(d.highlights.bestProgressAntenne.from)} → {fmtPct(d.highlights.bestProgressAntenne.to)})
+                      +{bestProg.variation} pts (dernier vs avant-dernier mois)
                     </div>
                   </>
-                ) : <div className="text-[12px] text-surface-500 mt-1">Données insuffisantes</div>}
+                ) : <div className="text-[14px] font-bold text-surface-500 mt-1">Aucune</div>}
               </Card>
               <Card className="border-oms-200 bg-oms-50/30">
-                <div className="text-[10px] uppercase tracking-wider text-oms-700 font-semibold">ZS la plus stable</div>
-                {zsStable ? (
+                <div className="text-[10px] uppercase tracking-wider text-oms-700 font-semibold">Structure la plus stable</div>
+                {zsStable && zsStable.variation !== null ? (
                   <>
                     <div className="text-[16px] font-bold text-oms-700 mt-1">{zsStable.name}</div>
-                    <div className="text-[11.5px] text-surface-700 mt-0.5">Variation : {zsStable.variation! >= 0 ? "+" : ""}{zsStable.variation} pts</div>
+                    <div className="text-[11.5px] text-surface-700 mt-0.5">Variation : {zsStable.variation >= 0 ? "+" : ""}{zsStable.variation} pts</div>
                   </>
-                ) : <div className="text-[12px] text-surface-500 mt-1">Données insuffisantes</div>}
+                ) : <div className="text-[14px] font-bold text-surface-500 mt-1">Aucune</div>}
               </Card>
-              <Card className={asDrops.length ? "border-danger-200 bg-danger-50/30" : "border-good-200 bg-good-50/30"}>
-                <div className={`text-[10px] uppercase tracking-wider font-semibold ${asDrops.length ? "text-danger-600" : "text-good-600"}`}>Aires de santé en baisse</div>
+              <Card className={asDrops.length ? "border-danger-200 bg-danger-50/30" : ""}>
+                <div className={`text-[10px] uppercase tracking-wider font-semibold ${asDrops.length ? "text-danger-600" : "text-surface-600"}`}>En baisse</div>
                 {asDrops.length ? (
                   <>
-                    <div className="text-[16px] font-bold text-danger-600 mt-1">{asDrops.length} AS en baisse</div>
-                    <div className="text-[11.5px] text-surface-700 mt-0.5">Plus forte baisse : {asDrops[0].name} ({asDrops[0].variation} pts)</div>
+                    <div className="text-[16px] font-bold text-danger-600 mt-1">{asDrops[0].name}</div>
+                    <div className="text-[11.5px] text-surface-700 mt-0.5">{asDrops[0].variation} pts · {asDrops.length} structure(s) en baisse</div>
                   </>
-                ) : (
-                  <>
-                    <div className="text-[16px] font-bold text-good-600 mt-1">Aucune baisse détectée</div>
-                    <div className="text-[11.5px] text-surface-700 mt-0.5">Toutes les AS sont stables ou en amélioration</div>
-                  </>
-                )}
+                ) : <div className="text-[14px] font-bold text-surface-500 mt-1">Aucune</div>}
               </Card>
             </div>
           </div>

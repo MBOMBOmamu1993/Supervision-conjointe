@@ -2,64 +2,111 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useState } from "react";
 import { cn } from "@/lib/client/cn";
+import { Icon, type IconName } from "@/components/ui/Icon";
 
-type IconName = "home" | "structure" | "time" | "component" | "analyse" | "report";
-
-function NavIcon({ name }: { name: IconName }) {
-  const common = { fill: "none", stroke: "currentColor", strokeWidth: 1.6, strokeLinecap: "round" as const, strokeLinejoin: "round" as const };
-  const paths: Record<IconName, JSX.Element> = {
-    home: (<><path d="M3 10.5 12 3l9 7.5" /><path d="M5 9.5V20h14V9.5" /></>),
-    structure: (<><rect x="3" y="3" width="7" height="7" rx="1" /><rect x="14" y="3" width="7" height="7" rx="1" /><rect x="3" y="14" width="7" height="7" rx="1" /><rect x="14" y="14" width="7" height="7" rx="1" /></>),
-    time: (<><path d="M3 17l5-5 4 3 8-8" /><path d="M3 21h18" /></>),
-    component: (<><circle cx="12" cy="12" r="9" /><path d="M12 3v18M3 12h18M5.6 5.6l12.8 12.8M18.4 5.6 5.6 18.4" /></>),
-    analyse: (<><path d="M4 4v16h16" /><rect x="7" y="10" width="3" height="7" /><rect x="12" y="6" width="3" height="11" /><rect x="17" y="13" width="3" height="4" /></>),
-    report: (<><path d="M7 3h7l5 5v13H7z" /><path d="M14 3v5h5" /><path d="M9 13h6M9 17h6" /></>),
-  };
-  return <svg viewBox="0 0 24 24" className="w-[17px] h-[17px] shrink-0" {...common}>{paths[name]}</svg>;
+interface SubTab {
+  href: string;
+  label: string;
+}
+interface MainTab {
+  key: string;
+  label: string;
+  icon: IconName;
+  href?: string;
+  subs?: SubTab[];
 }
 
-const NAV: { href: string; label: string; icon: IconName }[] = [
-  { href: "/", label: "Vue d'ensemble", icon: "home" },
-  { href: "/comparaison", label: "Performance structure & temps", icon: "time" },
-  { href: "/composantes", label: "Performance par composante", icon: "component" },
-  { href: "/analyse", label: "Analyse", icon: "analyse" },
-  { href: "/rapports", label: "Rapports", icon: "report" },
+const NAV: MainTab[] = [
+  {
+    key: "supervision",
+    label: "Supervision conjointe PEV OMS RDC",
+    icon: "clipboard",
+    subs: [
+      { href: "/", label: "Vue d'ensemble" },
+      { href: "/comparaison", label: "Performance structures et temps" },
+      { href: "/composantes", label: "Performance par composantes" },
+    ],
+  },
+  { key: "qualite", label: "Qualité des données", icon: "database", href: "/qualite-donnees" },
+  { key: "etat", label: "État de lieux", icon: "layers", href: "/etat-lieux" },
+  { key: "rapport", label: "Télécharger Rapport", icon: "download", href: "/telecharger-rapport" },
 ];
 
-export default function Sidebar() {
-  const path = usePathname();
+export function Sidebar() {
+  const pathname = usePathname();
+  const activeMain =
+    NAV.find((t) => t.subs?.some((s) => s.href === pathname)) ??
+    NAV.find((t) => t.href === pathname) ??
+    NAV[0];
+  const [openKey, setOpenKey] = useState<string>(activeMain.key);
+
   return (
-    <aside className="hidden md:flex w-60 shrink-0 flex-col bg-navy-800 text-white">
-      <div className="px-5 pt-5 pb-4 border-b border-white/10">
-        <div className="text-[10px] uppercase tracking-[0.18em] text-white/55 font-semibold">Tableau de bord</div>
-        <div className="font-extrabold text-[17px] leading-tight mt-0.5">Supervision conjointe</div>
-        <div className="text-[12px] text-oms-300 font-semibold mt-0.5">PEV · OMS — RDC</div>
-        <div className="mt-2.5 inline-flex items-center gap-1.5 text-[10px] text-white/55">
-          <span className="inline-block w-1.5 h-1.5 rounded-full bg-good-500" /> République Démocratique du Congo
-        </div>
+    <aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col border-r border-slate-200 bg-navy text-white lg:flex">
+      <div className="border-b border-white/10 px-4 py-4">
+        <p className="text-lg font-extrabold leading-tight">Tshuapa</p>
+        <p className="text-xs text-white/60">République Démocratique du Congo</p>
       </div>
-      <nav className="flex-1 py-2">
-        {NAV.map((item) => {
-          const active = item.href === "/" ? path === "/" : path.startsWith(item.href);
+
+      <nav className="flex-1 overflow-y-auto p-3 thin-scroll">
+        {NAV.map((tab) => {
+          const isActive = tab.key === activeMain.key;
+          const expanded = openKey === tab.key && !!tab.subs;
+          if (tab.subs) {
+            return (
+              <div key={tab.key} className="mb-1">
+                <button
+                  type="button"
+                  onMouseEnter={() => setOpenKey(tab.key)}
+                  onClick={() => setOpenKey((k) => (k === tab.key ? "" : tab.key))}
+                  className={cn(
+                    "flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-left text-sm font-medium transition",
+                    isActive ? "bg-white/15 text-white" : "text-white/80 hover:bg-white/10"
+                  )}
+                >
+                  <Icon name={tab.icon} className="h-5 w-5 shrink-0" />
+                  <span className="flex-1 leading-tight">{tab.label}</span>
+                  <Icon name="chevron-down" className={cn("h-4 w-4 transition", expanded && "rotate-180")} />
+                </button>
+                {expanded && (
+                  <div className="ml-4 mt-1 space-y-0.5 border-l border-white/15 pl-3">
+                    {tab.subs.map((s) => (
+                      <Link
+                        key={s.href}
+                        href={s.href}
+                        className={cn(
+                          "block rounded-lg px-3 py-1.5 text-[13px] transition",
+                          pathname === s.href ? "bg-white/20 font-semibold text-white" : "text-white/70 hover:bg-white/10"
+                        )}
+                      >
+                        {s.label}
+                      </Link>
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          }
           return (
             <Link
-              key={item.href}
-              href={item.href}
+              key={tab.key}
+              href={tab.href ?? "#"}
+              onMouseEnter={() => setOpenKey(tab.key)}
               className={cn(
-                "flex items-center gap-3 px-4 py-2.5 text-[12.5px] leading-5 transition border-l-[3px] font-semibold",
-                active ? "bg-white/[0.13] text-white border-oms-500" : "text-white/70 border-transparent hover:bg-white/[0.07] hover:text-white"
+                "mb-1 flex items-center gap-2 rounded-xl px-3 py-2.5 text-sm font-medium transition",
+                pathname === tab.href ? "bg-white/15 text-white" : "text-white/80 hover:bg-white/10"
               )}
             >
-              <NavIcon name={item.icon} />
-              <span>{item.label}</span>
+              <Icon name={tab.icon} className="h-5 w-5 shrink-0" />
+              <span className="leading-tight">{tab.label}</span>
             </Link>
           );
         })}
       </nav>
-      <div className="px-5 py-3.5 text-[10px] uppercase tracking-wider text-white/55 border-t border-white/10 font-semibold">
-        <div>Données KoboToolbox</div>
-        <div className="mt-0.5 normal-case tracking-normal text-white/40">Synchronisation temps réel</div>
+
+      <div className="border-t border-white/10 px-4 py-3 text-[11px] text-white/50">
+        PEV · OMS — RDC
       </div>
     </aside>
   );

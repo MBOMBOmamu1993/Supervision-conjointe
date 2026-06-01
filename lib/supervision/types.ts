@@ -14,6 +14,8 @@ export interface SupervisionRecord {
   level: StructureLevel;
   /** Type de supervision (qui supervise). */
   type: SupervisionType;
+  /** Libellé brut du champ « Type de supervision » (défaut : « Supervision conjointe »). */
+  typeLabel: string | null;
   /** Hiérarchie géographique (selon disponibilité). */
   province: string | null;
   antenne: string | null;
@@ -126,10 +128,12 @@ export interface SupervisionBundle {
     zones: string[];
     aires: string[];
     months: string[];
+    types: string[];
   };
   kpi: {
     conjointe_pev_oms: KpiBlock;
     conjointe_mca: KpiBlock;
+    auto_eval: KpiBlock;
     mca_seul: KpiBlock;
     ecz_seul: KpiBlock;
     antennes_sup: KpiBlock;
@@ -147,6 +151,10 @@ export interface SupervisionBundle {
   highlights: {
     bestLevel: { level: StructureLevel; label: string; score: number | null };
     worstLevel: { level: StructureLevel; label: string; score: number | null };
+    /** Org-unité (antenne / ZS / aire) au meilleur score, tous niveaux confondus. */
+    bestStructure: { level: StructureLevel; levelLabel: string; name: string; score: number | null } | null;
+    /** Org-unité au score minimum, tous niveaux confondus. */
+    worstStructure: { level: StructureLevel; levelLabel: string; name: string; score: number | null } | null;
     bestComposante: ComposanteScore | null;
     worstComposante: ComposanteScore | null;
     bestProgressAntenne: { name: string; from: number | null; to: number | null; delta: number | null } | null;

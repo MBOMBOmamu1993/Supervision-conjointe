@@ -2,38 +2,31 @@
  * Centralise l'accès aux variables d'environnement serveur.
  * Ne JAMAIS importer ce fichier depuis un composant client.
  */
-import type { SupervisionTargets } from "@/config/supervision.config";
+import { SUPERVISION_TARGETS, type SupervisionTargets } from "@/config/supervision.config";
 
 function opt(name: string, fallback = ""): string {
   return (process.env[name] ?? fallback).trim();
 }
 
-function numOrNull(name: string): number | null {
-  const v = opt(name);
-  if (!v) return null;
-  const n = Number(v);
-  return Number.isFinite(n) ? n : null;
-}
-
 export const ENV = {
   KOBO_BASE_URL: opt("KOBO_BASE_URL", "https://eu.kobotoolbox.org"),
-  KOBO_TOKEN: opt("KOBO_TOKEN"),
+  KOBO_TOKEN: opt("KOBO_TOKEN") || opt("KOBO_API_TOKEN"),
   KOBO_USERNAME: opt("KOBO_USERNAME"),
   KOBO_PASSWORD: opt("KOBO_PASSWORD"),
   CACHE_TTL_SECONDS: Number(opt("CACHE_TTL_SECONDS", "300")) || 300,
+  TARGETS_JSON: opt("SUPERVISION_TARGETS_JSON"),
 };
 
-export const TARGETS: SupervisionTargets = {
-  conjointe_pev_oms: numOrNull("KOBO_TARGET_CONJOINTE_PEV_OMS"),
-  conjointe_mca: numOrNull("KOBO_TARGET_CONJOINTE_MCA"),
-  mca_seul: numOrNull("KOBO_TARGET_MCA_SEUL"),
-  ecz_seul: numOrNull("KOBO_TARGET_ECZ_SEUL"),
-  antennes: numOrNull("KOBO_TARGET_ANTENNES"),
-  zs_conjointe: numOrNull("KOBO_TARGET_ZS_CONJOINTE"),
-  zs_mca: numOrNull("KOBO_TARGET_ZS_MCA"),
-  cs_conjointe: numOrNull("KOBO_TARGET_CS_CONJOINTE"),
-  cs_ecz: numOrNull("KOBO_TARGET_CS_ECZ"),
-};
+/** Cibles attendues (mensuelles, échelle provinciale). Surchargeable via JSON. */
+export const TARGETS: SupervisionTargets = (() => {
+  const base: SupervisionTargets = { ...SUPERVISION_TARGETS };
+  try {
+    if (ENV.TARGETS_JSON) return { ...base, ...JSON.parse(ENV.TARGETS_JSON) };
+  } catch {
+    /* valeur par défaut */
+  }
+  return base;
+})();
 
 /** En-tête d'authentification Kobo (Token prioritaire, sinon Basic). */
 export function koboAuthHeader(): Record<string, string> {

@@ -1,75 +1,105 @@
 "use client";
 
-import { useSupervision } from "@/lib/client/api";
+import { usePathname } from "next/navigation";
 import { useFilters } from "@/lib/state/filters";
-import { fmtMonth } from "@/lib/client/format";
+import { useSupervision } from "@/lib/client/api";
 import { Icon, type IconName } from "@/components/ui/Icon";
-import { HEADER_TONE, type HeaderTone } from "@/components/ui/Card";
-import { cn } from "@/lib/client/cn";
+import { PeriodFilter } from "./PeriodFilter";
+
+/** Routes où la barre de filtres (supervision/CQD) est pertinente. */
+const FILTERED_ROUTES = ["/", "/comparaison", "/composantes", "/qualite-donnees"];
 
 function Select({
-  label,
-  value,
-  options,
-  onChange,
-  formatOption,
   icon,
-  tone = "navy",
+  tone,
+  value,
+  onChange,
+  options,
+  placeholder,
 }: {
-  label: string;
+  icon: IconName;
+  tone: string;
   value: string | null;
-  options: string[];
   onChange: (v: string | null) => void;
-  formatOption?: (v: string) => string;
-  icon?: IconName;
-  tone?: HeaderTone;
+  options: string[];
+  placeholder: string;
 }) {
-  const t = HEADER_TONE[tone];
   return (
-    <label className="flex flex-col gap-1 min-w-0">
-      <span className="text-[9px] uppercase tracking-wider text-surface-700 font-semibold">{label}</span>
-      <div className="relative">
-        {icon ? (
-          <span
-            className="pointer-events-none absolute left-1.5 top-1/2 -translate-y-1/2 w-[23px] h-[23px] rounded-[7px] flex items-center justify-center text-white"
-            style={{ backgroundImage: `linear-gradient(145deg, ${t.from}, ${t.to})`, boxShadow: `0 3px 8px -3px ${t.to}` }}
-          >
-            <Icon name={icon} className="w-[13px] h-[13px]" strokeWidth={2} />
-          </span>
-        ) : null}
-        <select
-          className={cn("input font-semibold", icon && "pl-9")}
-          value={value ?? ""}
-          onChange={(e) => onChange(e.target.value || null)}
-        >
-          <option value="">Toutes</option>
-          {options.map((o) => (
-            <option key={o} value={o}>{formatOption ? formatOption(o) : o}</option>
-          ))}
-        </select>
-      </div>
-    </label>
+    <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2">
+      <span className="inline-flex h-7 w-7 items-center justify-center rounded-lg" style={{ backgroundColor: `${tone}1a`, color: tone }}>
+        <Icon name={icon} className="h-4 w-4" />
+      </span>
+      <select
+        className="w-full bg-transparent text-sm text-slate-700 outline-none"
+        value={value ?? ""}
+        onChange={(e) => onChange(e.target.value || null)}
+      >
+        <option value="">{placeholder}</option>
+        {options.map((o) => (
+          <option key={o} value={o}>
+            {o}
+          </option>
+        ))}
+      </select>
+    </div>
   );
 }
 
-export default function FilterBar() {
-  const { data } = useSupervision();
+/** Barre de filtres : Province, Antenne, ZS, Aire, Type de supervision, Période. */
+export function FilterBar() {
+  const pathname = usePathname();
   const f = useFilters();
-  const opts = data?.filters ?? { provinces: [], antennes: [], zones: [], aires: [], months: [] };
-  const active = f.province || f.antenne || f.zone || f.aire || f.month;
+  const { data } = useSupervision();
+  const opt = data?.filters;
+
+  // Masquer la barre sur les pages sans filtres (État de lieux, Télécharger).
+  if (!FILTERED_ROUTES.includes(pathname)) return null;
 
   return (
-    <div className="sticky top-0 z-30 bg-white border-b border-surface-200 px-3 md:px-5 py-2.5">
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2.5 items-end">
-        <Select tone="teal" icon="pin" label="Province" value={f.province} options={opts.provinces} onChange={(v) => f.set({ province: v })} />
-        <Select tone="blue" icon="tower" label="Antenne" value={f.antenne} options={opts.antennes} onChange={(v) => f.set({ antenne: v })} />
-        <Select tone="violet" icon="hospital" label="Zone de santé" value={f.zone} options={opts.zones} onChange={(v) => f.set({ zone: v })} />
-        <Select tone="green" icon="clinic" label="Aire de santé" value={f.aire} options={opts.aires} onChange={(v) => f.set({ aire: v })} />
-        <Select tone="orange" icon="calendar" label="Mois" value={f.month} options={opts.months} onChange={(v) => f.set({ month: v })} formatOption={fmtMonth} />
-        <div className="flex items-end">
-          <button onClick={() => f.reset()} disabled={!active} className="btn w-full disabled:opacity-50" title="Réinitialiser les filtres">
-            <Icon name="refresh" className="w-3.5 h-3.5" /> Réinitialiser
-          </button>
+    <div className="border-b border-slate-200 bg-white/60 backdrop-blur">
+      <div className="mx-auto max-w-7xl px-4 py-3">
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-6">
+          <Select
+            icon="map-pin"
+            tone="#00205c"
+            placeholder="Toutes les provinces"
+            value={f.province}
+            onChange={(v) => f.set({ province: v })}
+            options={opt?.provinces ?? []}
+          />
+          <Select
+            icon="layers"
+            tone="#0093d5"
+            placeholder="Toutes les antennes"
+            value={f.antenne}
+            onChange={(v) => f.set({ antenne: v })}
+            options={opt?.antennes ?? []}
+          />
+          <Select
+            icon="building"
+            tone="#1f9d57"
+            placeholder="Toutes les ZS"
+            value={f.zone}
+            onChange={(v) => f.set({ zone: v })}
+            options={opt?.zones ?? []}
+          />
+          <Select
+            icon="home"
+            tone="#f59e0b"
+            placeholder="Toutes les aires"
+            value={f.aire}
+            onChange={(v) => f.set({ aire: v })}
+            options={opt?.aires ?? []}
+          />
+          <Select
+            icon="clipboard"
+            tone="#7c3aed"
+            placeholder="Tous les types"
+            value={f.types[0] ?? null}
+            onChange={(v) => f.set({ types: v ? [v] : [] })}
+            options={opt?.types ?? []}
+          />
+          <PeriodFilter value={f.months} available={opt?.months ?? []} onChange={(m) => f.set({ months: m })} />
         </div>
       </div>
     </div>

@@ -18,10 +18,12 @@ import {
 import {
   answerFromScore,
   classifySupervisionType,
+  classifyTypeFromLabel,
   detectScoreQuestions,
   getColumns,
   norm,
   resolveGeoColumns,
+  resolveTypeLabel,
   type ScoreQuestion,
 } from "./schema";
 import type { SourceFetch } from "./kobo-client";
@@ -46,7 +48,10 @@ export interface Filters {
   antenne?: string | null;
   zone?: string | null;
   aire?: string | null;
-  month?: string | null;
+  /** Mois sélectionnés (ISO "YYYY-MM"). Vide = tous les mois. */
+  months?: string[] | null;
+  /** Libellés « Type de supervision » sélectionnés. Vide = tous. */
+  types?: string[] | null;
 }
 
 const EMPTY_ANSWERS = (): Record<AnswerValue, number> => ({ oui: 0, partiel: 0, non: 0, na: 0 });
@@ -143,10 +148,20 @@ function buildRecords(source: SourceFetch): { records: SupervisionRecord[]; rows
       source.level === "zs" ? zone :
       (aire ?? etab);
 
+    // Type de supervision : on lit le champ réel ("Type_de_supervision") s'il
+    // existe ; sinon on retombe sur la classification par fonction (anciennes
+    // données). Le libellé brut est conservé pour le filtre.
+    const typeLabel = geo.typeSupervision ? resolveTypeLabel(row[geo.typeSupervision]) : resolveTypeLabel(null);
+    const typeFromLabel = geo.typeSupervision ? classifyTypeFromLabel(typeLabel) : null;
+    const type =
+      typeFromLabel ??
+      classifySupervisionType(source.level, geo.fonction ? row[geo.fonction] : null, geo.personne ? row[geo.personne] : null);
+
     return {
       id: `${source.level}-${i}`,
       level: source.level,
-      type: classifySupervisionType(source.level, geo.fonction ? row[geo.fonction] : null, geo.personne ? row[geo.personne] : null),
+      type,
+      typeLabel,
       province: geo.province ? cleanStr(row[geo.province]) : null,
       antenne,
       zone,
@@ -170,7 +185,12 @@ function passFilters(r: SupervisionRecord, f: Filters): boolean {
   if (f.antenne && r.antenne && norm(r.antenne) !== norm(f.antenne)) return false;
   if (f.zone && r.zone && norm(r.zone) !== norm(f.zone)) return false;
   if (f.aire && r.aire && norm(r.aire) !== norm(f.aire)) return false;
-  if (f.month && r.month && r.month !== f.month) return false;
+  if (f.months && f.months.length) {
+    if (!r.month || !f.months.includes(r.month)) return false;
+  }
+  if (f.types && f.types.length) {
+    if (!r.typeLabel || !f.types.some((t) => norm(t) === norm(r.typeLabel))) return false;
+  }
   return true;
 }
 
@@ -261,7 +281,11 @@ function monthlyMatrix(records: SupervisionRecord[], months: string[]): MonthlyM
     const present = months.map((mo) => scores[mo]).filter((n): n is number => n !== null);
     const first = present.length ? present[0] : null;
     const last = present.length ? present[present.length - 1] : null;
-    rows.push({ name, scores, first, last, variation: first !== null && last !== null ? r1(last - first) : null });
+    // Variation = DERNIER mois − AVANT-DERNIER mois (mois renseignés), et non
+    // premier→dernier. Null s'il n'y a pas au moins deux mois renseignés.
+    const penultimate = present.length >= 2 ? present[present.length - 2] : null;
+    const variation = last !== null && penultimate !== null ? r1(last - penultimate) : null;
+    rows.push({ name, scores, first, last, variation });
   }
   return rows.sort((a, b) => (b.last ?? -1) - (a.last ?? -1));
 }
@@ -321,13 +345,19 @@ function distinctStructures(records: SupervisionRecord[]): number {
   return new Set(records.filter((r) => r.structure).map((r) => norm(r.structure))).size;
 }
 function kpiBlock(count: number, target: number | null): KpiBlock {
-  return { count, target, pct: target && target > 0 ? Math.round((count / target) * 100) : null };
+  const t = target !== null && target > 0 ? Math.round(target * 10) / 10 : target;
+  return { count, target: t, pct: target && target > 0 ? Math.round((count / target) * 100) : null };
 }
 
 /* ----------------------- Bundle complet ----------------------- */
 
 export function buildBundle(sources: SourceFetch[], filters: Filters, targets: SupervisionTargets): SupervisionBundle {
   const parsed = sources.map((s) => ({ source: s, ...buildRecords(s) }));
+
+  // Enregistrements NON filtrés (pour peupler les options de filtres sans les
+  // « auto-collapser » lorsqu'un filtre est actif).
+  const allUnfiltered: SupervisionRecord[] = [];
+  for (const p of parsed) allUnfiltered.push(...p.records);
 
   const byLevel = {} as Record<StructureLevel, { records: SupervisionRecord[]; rows: RawRow[]; scoreQs: ScoreQuestion[] }>;
   const allRecords: SupervisionRecord[] = [];
@@ -340,6 +370,8 @@ export function buildBundle(sources: SourceFetch[], filters: Filters, targets: S
   }
 
   const months = Array.from(new Set(allRecords.map((r) => r.month).filter((m): m is string => !!m))).sort();
+  // Nombre de mois de la période pour la mise à l'échelle des cibles attendues.
+  const monthsCount = Math.max(1, months.length);
 
   const levels = {} as Record<StructureLevel, LevelBundle>;
   (["antenne", "zs", "as"] as StructureLevel[]).forEach((lvl) => {
@@ -354,21 +386,28 @@ export function buildBundle(sources: SourceFetch[], filters: Filters, targets: S
 
   const conjointePevOms = allRecords.filter((r) => r.type === "conjointe_pev_oms");
   const conjointeMca = allRecords.filter((r) => r.type === "conjointe_mca");
+  const autoEval = allRecords.filter((r) => r.type === "auto_eval");
   const conjointeAll = allRecords.filter((r) => r.type === "conjointe_pev_oms" || r.type === "conjointe_mca");
 
   const zsConjointe = zsRecs.filter((r) => r.type === "conjointe_pev_oms" || r.type === "conjointe_mca");
   const csConjointe = asRecs.filter((r) => r.type === "conjointe_pev_oms" || r.type === "conjointe_mca");
 
+  // Cibles « attendues » mises à l'échelle du nombre de mois de la période.
+  const T = (perMonth: number) => perMonth * monthsCount;
   const kpi = {
-    conjointe_pev_oms: kpiBlock(conjointePevOms.length, targets.conjointe_pev_oms),
-    conjointe_mca: kpiBlock(conjointeMca.length, targets.conjointe_mca),
-    mca_seul: kpiBlock(byType(allRecords, "mca_seul").length, targets.mca_seul),
-    ecz_seul: kpiBlock(byType(allRecords, "ecz_seul").length, targets.ecz_seul),
-    antennes_sup: kpiBlock(distinctStructures(antRecs), targets.antennes),
-    zs_conjointe: kpiBlock(distinctStructures(zsConjointe), targets.zs_conjointe),
-    zs_mca: kpiBlock(distinctStructures(byType(zsRecs, "mca_seul")), targets.zs_mca),
-    cs_conjointe: kpiBlock(distinctStructures(csConjointe), targets.cs_conjointe),
-    cs_ecz: kpiBlock(distinctStructures(byType(asRecs, "ecz_seul")), targets.cs_ecz),
+    // Supervision conjointe PEV central-OMS : compteur réel (0 tant que le PEV
+    // central/OMS n'a pas supervisé) vs 1/trimestre.
+    conjointe_pev_oms: kpiBlock(conjointePevOms.length, T(targets.conjointe_pev_oms_per_month)),
+    // Supervision conjointe (équipe) : 2 antennes/trim + 4 ZS/mois + 6 aires/mois.
+    conjointe_mca: kpiBlock(conjointeMca.length, T(targets.conjointe_antennes_per_month + targets.conjointe_zs_per_month + targets.conjointe_aires_per_month)),
+    auto_eval: kpiBlock(autoEval.length, T(targets.auto_eval_per_month)),
+    mca_seul: kpiBlock(byType(allRecords, "mca_seul").length, T(targets.mca_seul_per_month)),
+    ecz_seul: kpiBlock(byType(allRecords, "ecz_seul").length, T(targets.ecz_seul_per_month)),
+    antennes_sup: kpiBlock(distinctStructures(antRecs.filter((r) => r.type === "conjointe_pev_oms" || r.type === "conjointe_mca")), T(targets.conjointe_antennes_per_month)),
+    zs_conjointe: kpiBlock(distinctStructures(zsConjointe), T(targets.conjointe_zs_per_month)),
+    zs_mca: kpiBlock(distinctStructures(byType(zsRecs, "mca_seul")), T(targets.mca_seul_per_month)),
+    cs_conjointe: kpiBlock(distinctStructures(csConjointe), T(targets.conjointe_aires_per_month)),
+    cs_ecz: kpiBlock(distinctStructures(byType(asRecs, "ecz_seul")), T(targets.ecz_seul_per_month)),
     structures_conjointe: distinctStructures(conjointeAll),
     total_supervisions: allRecords.length,
   };
@@ -384,6 +423,16 @@ export function buildBundle(sources: SourceFetch[], filters: Filters, targets: S
   const ranked = [...levelScores].filter((l) => l.score !== null).sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
   const bestLevel = ranked[0] ?? levelScores[0];
   const worstLevel = ranked[ranked.length - 1] ?? levelScores[levelScores.length - 1];
+
+  // Meilleure / pire org-unité (tous niveaux confondus), par score moyen.
+  const allUnits = (["antenne", "zs", "as"] as StructureLevel[]).flatMap((lvl) =>
+    levels[lvl].perStructure
+      .filter((s) => s.score !== null)
+      .map((s) => ({ level: lvl, levelLabel: LEVEL_LABEL[lvl].short, name: s.name, score: s.score }))
+  );
+  const unitsRanked = [...allUnits].sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
+  const bestStructure = unitsRanked[0] ?? null;
+  const worstStructure = unitsRanked.length ? unitsRanked[unitsRanked.length - 1] : null;
 
   const allComp = COMPOSANTES.map((c) => ({
     key: c.key,
@@ -416,11 +465,14 @@ export function buildBundle(sources: SourceFetch[], filters: Filters, targets: S
       totalRecords: allRecords.length,
     },
     filters: {
-      provinces: uniqueSorted(allRecords.map((r) => r.province)),
-      antennes: uniqueSorted(allRecords.map((r) => r.antenne)),
-      zones: uniqueSorted(allRecords.map((r) => r.zone)),
-      aires: uniqueSorted(allRecords.map((r) => r.aire)),
-      months,
+      // Options dérivées des données NON filtrées (sinon les listes se vident
+      // dès qu'un filtre est appliqué).
+      provinces: uniqueSorted(allUnfiltered.map((r) => r.province)),
+      antennes: uniqueSorted(allUnfiltered.map((r) => r.antenne)),
+      zones: uniqueSorted(allUnfiltered.map((r) => r.zone)),
+      aires: uniqueSorted(allUnfiltered.map((r) => r.aire)),
+      months: Array.from(new Set(allUnfiltered.map((r) => r.month).filter((m): m is string => !!m))).sort(),
+      types: uniqueSorted(allUnfiltered.map((r) => r.typeLabel)),
     },
     kpi,
     levels,
@@ -429,6 +481,8 @@ export function buildBundle(sources: SourceFetch[], filters: Filters, targets: S
     highlights: {
       bestLevel,
       worstLevel,
+      bestStructure,
+      worstStructure,
       bestComposante,
       worstComposante,
       bestProgressAntenne: bestProg ? { name: bestProg.name, from: bestProg.first, to: bestProg.last, delta: bestProg.variation } : null,

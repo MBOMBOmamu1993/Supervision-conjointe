@@ -6,6 +6,17 @@ import { TARGETS, ENV } from "@/lib/server/env";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
+function multi(sp: URLSearchParams, key: string): string[] {
+  const out: string[] = [];
+  for (const v of sp.getAll(key)) {
+    for (const part of v.split(",")) {
+      const t = part.trim();
+      if (t) out.push(t);
+    }
+  }
+  return out;
+}
+
 export async function GET(req: NextRequest) {
   const sp = req.nextUrl.searchParams;
   const filters: Filters = {
@@ -13,7 +24,8 @@ export async function GET(req: NextRequest) {
     antenne: sp.get("antenne"),
     zone: sp.get("zone"),
     aire: sp.get("aire"),
-    month: sp.get("month"),
+    months: multi(sp, "months").concat(sp.get("month") ? [sp.get("month") as string] : []),
+    types: multi(sp, "types").concat(sp.get("type") ? [sp.get("type") as string] : []),
   };
   const force = sp.get("force") === "1";
 

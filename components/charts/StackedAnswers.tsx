@@ -2,6 +2,7 @@
 
 import EChart from "./EChart";
 import { ANSWER_COLOR, ANSWER_LABEL, type AnswerValue } from "@/config/supervision.config";
+import { wrapText } from "@/lib/client/format";
 
 /** Barres horizontales 100% empilées Oui / Partiel / Non / NA par composante. */
 export default function StackedAnswers({
@@ -24,7 +25,17 @@ export default function StackedAnswers({
     <EChart
       height={h}
       option={{
-        tooltip: { trigger: "axis", axisPointer: { type: "shadow" }, valueFormatter: (v: number) => `${v}%` },
+        tooltip: {
+          trigger: "axis",
+          axisPointer: { type: "shadow" },
+          confine: true,
+          formatter: (params: { name: string; seriesName: string; value: number; marker: string }[]) => {
+            if (!params.length) return "";
+            const head = wrapText(params[0].name, 40, "<br/>");
+            const body = params.map((p) => `${p.marker}${p.seriesName} : <b>${p.value}%</b>`).join("<br/>");
+            return `${head}<br/>${body}`;
+          },
+        },
         legend: { top: 0, textStyle: { fontSize: 10 }, data: order.map((a) => ANSWER_LABEL[a]) },
         grid: { left: 4, right: 12, top: 28, bottom: 4, containLabel: true },
         xAxis: { type: "value", max: 100, axisLabel: { formatter: "{value}%", fontSize: 10 } },
