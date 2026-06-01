@@ -535,14 +535,74 @@ function renderSlide(ctx: Ctx, slide: Slide, no: string) {
   }
 }
 
-async function buildDeck(deck: Deck): Promise<Buffer> {
+/* ----------------------- Données dynamiques (live) ------------------------ */
+/**
+ * Valeurs d'en-tête réelles, calculées depuis les bundles du tableau de bord
+ * (supervision + contrôle qualité) en tenant compte des filtres période/ZS/AS.
+ * Tout champ `null`/absent conserve la valeur représentative statique.
+ */
+export interface Headline {
+  period?: string | null;
+  unitsControlled?: number | null; // ZS ou CS réellement contrôlés
+  unitsPlanned?: number | null; // 12 ZS · 279 CS
+  asVerified?: number | null; // AS/ESS vérifiées (niveau ZS)
+  unitsScored80?: number | null; // unités ≥ 80 %
+  scoreMoyen?: number | null;
+  concP3?: number | null;
+  concRR2?: number | null;
+  erreur?: number | null;
+  enfRecup?: number | null;
+  enfIdent?: number | null;
+}
+
+const fpct = (v: number | null | undefined): string | null =>
+  v === null || v === undefined || !Number.isFinite(v) ? null : `${(Math.round(v * 10) / 10).toLocaleString("fr-FR")} %`;
+const fnum = (v: number | null | undefined): string | null =>
+  v === null || v === undefined || !Number.isFinite(v) ? null : String(Math.round(v));
+const ffrac = (a: number | null | undefined, b: number | null | undefined): string | null =>
+  a === null || a === undefined || b === null || b === undefined ? null : `${Math.round(a)} / ${Math.round(b)}`;
+
+/** Patch immuable d'une diapo (clone superficiel + kpis remplacés par libellé). */
+function patchKpis(slide: Slide, patches: Record<string, string | null>): Slide {
+  if (!slide.kpis) return slide;
+  const kpis = slide.kpis.map((k) => {
+    const v = patches[k.l];
+    return v ? { ...k, v } : k;
+  });
+  return { ...slide, kpis };
+}
+
+function applyHeadline(deck: Deck, h: Headline): Deck {
+  const planned = h.unitsPlanned ?? (deck.fileLabel.includes("Zones") ? 12 : 279);
+  const ctrl = ffrac(h.unitsControlled, planned);
+  const isZs = deck.fileLabel.includes("Zones");
+  const slides = deck.slides.map((s, i) => {
+    if (i === 0 && s.type === "cover") {
+      // Couverture : KPI socle.
+      return patchKpis(s, isZs
+        ? { "ZS contrôlées": ctrl, "AS/ESS vérifiées": fnum(h.asVerified), "Score supervision": fpct(h.scoreMoyen), "Concordance PENTA3": fpct(h.concP3) }
+        : { "CS supervisés": ctrl, "Score supervision": fpct(h.scoreMoyen), "Concordance PENTA3": fpct(h.concP3), "Enfants récupérés": ffrac(h.enfRecup, h.enfIdent) });
+    }
+    if (i === 1 && s.type === "exec") {
+      // Résumé exécutif.
+      return patchKpis(s, isZs
+        ? { "ZS supervisées": fnum(h.unitsControlled), "AS/ESS contrôlées": fnum(h.asVerified), "Score moyen supervision": fpct(h.scoreMoyen), "ZS ≥ 80 %": fnum(h.unitsScored80), "Concordance PENTA3": fpct(h.concP3), "Concordance RR2": fpct(h.concRR2), "Erreur transcription": fpct(h.erreur), "Enfants récupérés": ffrac(h.enfRecup, h.enfIdent) }
+        : { "CS supervisés": fnum(h.unitsControlled), "Score moyen supervision": fpct(h.scoreMoyen), "Concordance PENTA3": fpct(h.concP3), "Concordance RR2": fpct(h.concRR2), "Erreur transcription": fpct(h.erreur), "Enfants récupérés": ffrac(h.enfRecup, h.enfIdent) });
+    }
+    return s;
+  });
+  return { ...deck, slides, period: h.period || deck.period };
+}
+
+async function buildDeck(deck: Deck, headline?: Headline): Promise<Buffer> {
+  const effective = headline ? applyHeadline(deck, headline) : deck;
   const pptx = new PptxGenJS();
   pptx.defineLayout({ name: "WIDE", width: W, height: H });
   pptx.layout = "WIDE";
   pptx.theme = { headFontFace: FONT, bodyFontFace: FONT };
-  const ctx: Ctx = { pptx, deck, oms: logoDataUri("oms-white.png"), pev: logoDataUri("pev.png") };
+  const ctx: Ctx = { pptx, deck: effective, oms: logoDataUri("oms-white.png"), pev: logoDataUri("pev.png") };
   let n = 0;
-  for (const slide of deck.slides) {
+  for (const slide of effective.slides) {
     let no = "";
     if (slide.type !== "cover") {
       n += 1;
@@ -554,9 +614,9 @@ async function buildDeck(deck: Deck): Promise<Buffer> {
 }
 
 /* ------------------------------- API publique ----------------------------- */
-export async function buildZsReport(): Promise<Buffer> {
-  return buildDeck(ZS_DECK);
+export async function buildZsReport(headline?: Headline): Promise<Buffer> {
+  return buildDeck(ZS_DECK, headline);
 }
-export async function buildCsReport(): Promise<Buffer> {
-  return buildDeck(CS_DECK);
+export async function buildCsReport(headline?: Headline): Promise<Buffer> {
+  return buildDeck(CS_DECK, headline);
 }
