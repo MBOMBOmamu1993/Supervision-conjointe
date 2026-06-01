@@ -23,9 +23,23 @@ import {
   type StructureLevel,
 } from "@/config/supervision.config";
 import type { RawRow } from "./types";
+import { CS_SEED_ROWS } from "@/data/supervision-cs-seed";
 
 type CacheEntry<T> = { at: number; value: T };
 const memCache = new Map<string, CacheEntry<unknown>>();
+
+/**
+ * Fusionne les soumissions « Centre de santé » migrées localement (anciennes
+ * données conjointes, antérieures au champ « Type de supervision ») avec les
+ * lignes live de Kobo. Dédoublonnage par _uuid : si la migration côté Kobo a
+ * lieu plus tard, les doublons sont automatiquement écartés.
+ */
+function mergeCsSeed(level: StructureLevel, rows: RawRow[]): RawRow[] {
+  if (level !== "as" || CS_SEED_ROWS.length === 0) return rows;
+  const present = new Set(rows.map((r) => String(r["_uuid"] ?? "")).filter(Boolean));
+  const extra = CS_SEED_ROWS.filter((s) => !present.has(String(s["_uuid"] ?? "")));
+  return extra.length ? rows.concat(extra) : rows;
+}
 
 const PER_REQUEST_TIMEOUT_MS = 45_000;
 const MAX_ATTEMPTS = 3;
@@ -121,17 +135,19 @@ export async function fetchSource(src: KoboSource, opts: { force?: boolean } = {
       },
       { retries: MAX_ATTEMPTS - 1, minTimeout: 1000, maxTimeout: 4000 }
     );
-    const result: SourceFetch = { level: src.key, label: src.label, rows, ok: true };
+    const result: SourceFetch = { level: src.key, label: src.label, rows: mergeCsSeed(src.key, rows), ok: true };
     cacheSet(cacheKey, result);
     return result;
   } catch (err) {
     const stale = cacheGetStale<SourceFetch>(cacheKey);
     if (stale) return stale;
+    // Hors-ligne / Kobo indisponible : on expose au moins les données migrées.
+    const seeded = mergeCsSeed(src.key, []);
     return {
       level: src.key,
       label: src.label,
-      rows: [],
-      ok: false,
+      rows: seeded,
+      ok: seeded.length > 0,
       error: err instanceof Error ? err.message : String(err),
     };
   }
