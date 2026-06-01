@@ -271,6 +271,27 @@ function buildLevel(level: "zs" | "as", records: CqdRecord[]): CqdLevelBundle {
       { antigene: "RR1", registre: sumOf((r) => r.registre.rr1), pointage: sumOf((r) => r.pointage.rr1), snis: sumOf((r) => r.snis.rr1), dhis2: sumOf((r) => r.dhis2.rr1) },
       { antigene: "RR2", registre: regRr2, pointage: sumOf((r) => r.pointage.rr2), snis: snisRr2, dhis2: dhis2Rr2 },
     ],
+    parAntigene: (() => {
+      const keys: [string, (r: CqdRecord) => number, (r: CqdRecord) => number, (r: CqdRecord) => number, (r: CqdRecord) => number][] = [
+        ["PENTA1", (r) => r.dhis2.p1, (r) => r.registre.p1, (r) => r.snis.p1, (r) => r.dhis2.p1],
+        ["PENTA3", (r) => r.dhis2.p3, (r) => r.registre.p3, (r) => r.snis.p3, (r) => r.dhis2.p3],
+        ["RR1", (r) => r.dhis2.rr1, (r) => r.registre.rr1, (r) => r.snis.rr1, (r) => r.dhis2.rr1],
+        ["RR2", (r) => r.dhis2.rr2, (r) => r.registre.rr2, (r) => r.snis.rr2, (r) => r.dhis2.rr2],
+      ];
+      return keys.map(([antigene, dh, reg, sn, dh2]) => {
+        const dhSum = sumOf(dh);
+        const ref = sumOf(reg) || sumOf(sn);
+        const snSum = sumOf(sn);
+        const dh2Sum = sumOf(dh2);
+        // erreur SNIS↔DHIS2 sur l'antigène : |SNIS−DHIS2| / max(SNIS,DHIS2)
+        const denom = Math.max(snSum, dh2Sum);
+        return {
+          antigene,
+          concordance: ref > 0 ? r1((dhSum / ref) * 100) : null,
+          erreur: denom > 0 ? r1((Math.abs(snSum - dh2Sum) / denom) * 100) : null,
+        };
+      });
+    })(),
     trend,
     parStructure,
   };

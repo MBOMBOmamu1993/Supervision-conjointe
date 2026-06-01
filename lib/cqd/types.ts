@@ -62,6 +62,8 @@ export interface CqdLevelBundle {
   enfants: { aRecuperer: number; identifies: number; retrouves: number; recuperes: number; tauxRecuperes: number | null };
   /** Comparaison des antigènes (sommes) entre sources. */
   antigenes: { antigene: string; registre: number; pointage: number; snis: number; dhis2: number }[];
+  /** Concordance DHIS2/référence et erreur SNIS↔DHIS2 par antigène (%). */
+  parAntigene: { antigene: string; concordance: number | null; erreur: number | null }[];
   /** Évolution mensuelle. */
   trend: CqdTrendPoint[];
   /** Détail par structure (concordance + erreur). */
