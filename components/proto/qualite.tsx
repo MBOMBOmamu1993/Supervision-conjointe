@@ -287,6 +287,22 @@ export function CqZS() {
   const antS: AntS[] = live
     ? ["PENTA1", "PENTA3", "RR1", "RR2"].map((n) => { const a = antByName(n)!; return { lab: n.replace("PENTA", "Penta"), snis: a.snis, dhis2: a.dhis2 }; })
     : [["Penta1", staticRow.snis.p1, staticRow.dhis2.p1], ["Penta3", staticRow.snis.p3, staticRow.dhis2.p3], ["RR1", staticRow.snis.rr1, staticRow.dhis2.rr1], ["RR2", staticRow.snis.rr2, staticRow.dhis2.rr2]].map((a) => ({ lab: a[0] as string, snis: a[1] as number, dhis2: a[2] as number }));
+  // Base de calcul du taux d'erreur de transcription, explicitée pour lever
+  // toute ambiguïté avec la colonne « Concordance » (qui est un drapeau par
+  // antigène). En live (formulaire de sommes ZS) le taux porte sur les antigènes
+  // comparés ; en données de démonstration sur les valeurs vérifiées champ par
+  // champ — d'où un dénominateur différent (et un % qui n'est pas 4/4).
+  const errBase = live
+    ? {
+        n: antS.filter((a) => (a.snis > 0 || a.dhis2 > 0) && a.snis !== a.dhis2).length,
+        tot: antS.filter((a) => a.snis > 0 || a.dhis2 > 0).length,
+        unit: "antigènes comparés",
+      }
+    : { n: staticRow.nbDiscord, tot: staticRow.nbValVerif, unit: "valeurs vérifiées" };
+  // Antigènes discordants (sommes SNIS ≠ DHIS2) — c'est exactement ce que montre
+  // la colonne « Concordance ». Métrique volontairement distincte du taux d'erreur
+  // de transcription (indicateur dédié), qui porte sur un autre dénominateur.
+  const antDisc = antS.filter((a) => a.snis !== a.dhis2).length;
   const rows = live
     ? zsB!.parStructure.map((s) => ({ zs: s.name, concP3: s.concordanceP3, classP3: classLabel(s.classeP3), concRR2: s.concordanceRr2, classRR2: classLabel(s.classeRr2), errSD: s.erreurSnisDhis2 }))
     : [{ zs: staticRow.zs, concP3: staticRow.concPenta3, classP3: staticRow.classPenta3, concRR2: staticRow.concRR2, classRR2: staticRow.classRR2, errSD: staticRow.errSnisDhis2 }];
@@ -303,17 +319,18 @@ export function CqZS() {
           <KpiTile icon="hospital" tone="navy" label={<>ZS ayant bénéficié<br />du contrôle qualité</>} value={nbControles} sub={`sur ${nbAttendus} attendues (${pctControle}%)`} />
           <KpiTile icon="scale" tone="green" label={<>Concordance PENTA3<br />(DHIS2 / SNIS)</>} value={(concP3 ?? "—") + "%"} sub={classP3} />
           <KpiTile icon="scale" tone="violet" label={<>Concordance RR2<br />(DHIS2 / SNIS)</>} value={(concRR2 ?? "—") + "%"} sub={classRR2} />
-          <KpiTile icon="alert" tone="orange" label={<>Taux d'erreur transcription<br />SNIS / DHIS2</>} value={(errSD ?? "—") + "%"} sub="PENTA1·3 / RR1·2" />
+          <KpiTile icon="alert" tone="orange" label={<>Taux d'erreur transcription<br />SNIS / DHIS2</>} value={(errSD ?? "—") + "%"} sub={`${errBase.n} / ${errBase.tot} ${errBase.unit}`} />
         </div>
       </section>
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
         <div className="card card-pad">
-          <CardTitle icon="scale" tone="orange" title="Taux d'erreur transcription SNIS → DHIS2" sub="Par ZS et par mois" />
+          <CardTitle icon="scale" tone="orange" title="Concordance SNIS / DHIS2 par antigène" sub="Comparaison des sommes — SNIS vs DHIS2" />
           <TauxErrTable rows={antS} />
           <div className="mt-2 flex items-center justify-between rounded-lg px-3 py-2 text-[11.5px]" style={{ background: "#fff5e4" }}>
-            <span className="font-semibold text-surface-700">Discordances / comparaisons</span>
-            <b style={{ color: C.orange, fontSize: 15 }}>{errSD ?? "—"}%</b>
+            <span className="font-semibold text-surface-700">Antigènes discordants</span>
+            <b style={{ color: C.orange, fontSize: 15 }}>{antDisc} / {antS.length}</b>
           </div>
+          <div className="mt-1 text-[10.5px] text-surface-500">Indicateur distinct du <b>taux d'erreur de transcription</b> (en haut, {errSD ?? "—"} % sur {errBase.tot} {errBase.unit}), qui mesure un autre dénominateur.</div>
         </div>
         <div className="card card-pad">
           <CardTitle icon="component" tone="navy" title="Comparaison SNIS / DHIS2 (somme des CS)" sub="PENTA1 · PENTA3 · RR1 · RR2" />
