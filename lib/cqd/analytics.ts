@@ -301,6 +301,10 @@ function buildLevel(level: "zs" | "as", records: CqdRecord[]): CqdLevelBundle {
     const refR = s((r) => r.registre.rr2) || s((r) => r.snis.rr2);
     const tauxP3 = ref3 > 0 ? r1((s((r) => r.dhis2.p3) / ref3) * 100) : null;
     const tauxR2 = refR > 0 ? r1((s((r) => r.dhis2.rr2) / refR) * 100) : null;
+    // Concordance Registre/SNIS (niveau CS — pas de DHIS2 à ce niveau).
+    const snisP3s = s((r) => r.snis.p3); const snisR2s = s((r) => r.snis.rr2);
+    const tauxRSP3 = snisP3s > 0 ? r1((s((r) => r.registre.p3) / snisP3s) * 100) : null;
+    const tauxRSR2 = snisR2s > 0 ? r1((s((r) => r.registre.rr2) / snisR2s) * 100) : null;
     const outilsOk = recs.reduce((a, r) => a + ((r.registreCorrect ? 1 : 0) + (r.pointageCorrect ? 1 : 0) + (r.snisCorrect ? 1 : 0)), 0);
     return {
       name,
@@ -309,6 +313,10 @@ function buildLevel(level: "zs" | "as", records: CqdRecord[]): CqdLevelBundle {
       classeP3: classify(tauxP3),
       concordanceRr2: tauxR2,
       classeRr2: classify(tauxR2),
+      concordanceRsP3: tauxRSP3,
+      classeRsP3: classify(tauxRSP3),
+      concordanceRsRr2: tauxRSR2,
+      classeRsRr2: classify(tauxRSR2),
       erreurSnisDhis2: errSnisDhis2(recs),
       erreurPointageRegistre: errPointageRegistre(recs),
       erreurRegistreSnis: errRegistreSnis(recs),

@@ -32,6 +32,7 @@ const Appr = ({ v }: { v: number | null }) => (v === null ? <span>—</span> : <
 interface AntCmp { lab: string; a: number; b: number }
 interface RowView {
   name: string; zone: string | null;
+  concP3: number | null; concRR2: number | null;
   errPR: number | null; errRS: number | null;
   registreOk: "Oui" | "Non"; pointageOk: "Oui" | "Non"; snisOk: "Oui" | "Non";
   enfIdent: number; enfRecup: number;
@@ -75,6 +76,7 @@ function csView(data: CqdBundle | undefined): CsView {
       trend: as.trend.map((t) => ({ month: monthLabel(t.month), errPR: t.erreurPointageRegistre, errRS: t.erreurRegistreSnis })),
       rows: as.parStructure.map((s) => ({
         name: s.name, zone: s.zone,
+        concP3: s.concordanceRsP3, concRR2: s.concordanceRsRr2,
         errPR: s.erreurPointageRegistre, errRS: s.erreurRegistreSnis,
         registreOk: s.registreOk === null ? "Non" : s.registreOk ? "Oui" : "Non",
         pointageOk: s.pointageOk === null ? "Non" : s.pointageOk ? "Oui" : "Non",
@@ -96,6 +98,8 @@ function csView(data: CqdBundle | undefined): CsView {
     trend: [],
     rows: cs.rows.map((r) => ({
       name: r.as, zone: r.zs,
+      concP3: r.snis.p3 > 0 ? Math.round((r.registre.p3 / r.snis.p3) * 1000) / 10 : null,
+      concRR2: r.snis.rr2 > 0 ? Math.round((r.registre.rr2 / r.snis.rr2) * 1000) / 10 : null,
       errPR: discAnt(r.pointage, r.registre), errRS: discAnt(r.registre, r.snis),
       registreOk: r.registreOk, pointageOk: r.pointageOk, snisOk: r.snisOk,
       enfIdent: r.enfIdentifies, enfRecup: r.enfRecuperes,
@@ -259,8 +263,10 @@ export function CqDetailCS() {
   return (
     <div className="space-y-4">
       <Banner icon="clinic" tone="violet" title="Qualité des données de vaccination — par centre de santé"
-        sub={`Taux d'erreur de transcription par CS — il n'y a pas de saisie DHIS2 au niveau CS · ${v.nbControles} CS`} />
+        sub={`Appréciation de la concordance & taux d'erreur de transcription, par mois et par CS · ${v.nbControles} CS`} />
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+        <EvoTable title="Appréciation concordance PENTA3 (Registre/SNIS)" icon="scale" tone="green" col={(r) => <Appr v={r.concP3} />} />
+        <EvoTable title="Appréciation concordance RR2 (Registre/SNIS)" icon="scale" tone="violet" col={(r) => <Appr v={r.concRR2} />} />
         <EvoTable title="Taux d'erreur transcription feuille de pointage / registre" icon="alert" tone="orange" col={(r) => <Pct v={r.errPR} color={C.orange} />} />
         <EvoTable title="Taux d'erreur transcription registre / SNIS" icon="alert" tone="red" col={(r) => <Pct v={r.errRS} color={C.red} />} />
       </div>
