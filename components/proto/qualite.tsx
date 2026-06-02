@@ -330,7 +330,7 @@ export function CqZS() {
             <span className="font-semibold text-surface-700">Antigènes discordants</span>
             <b style={{ color: C.orange, fontSize: 15 }}>{antDisc} / {antS.length}</b>
           </div>
-          <div className="mt-1 text-[10.5px] text-surface-500">Indicateur distinct du <b>taux d'erreur de transcription</b> (en haut, {errSD ?? "—"} % sur {errBase.tot} {errBase.unit}), qui mesure un autre dénominateur.</div>
+          <div className="mt-1 text-[10.5px] leading-snug text-surface-500">Un « <b>Non</b> » signale que le total SNIS ≠ total DHIS2 pour l'antigène, <b>même pour un écart d'une seule dose</b> : c'est un repère oui/non, pas l'ampleur de l'écart. Pour le volume réel, voir la <b>concordance</b> (DHIS2 ÷ SNIS) ci-dessous.</div>
         </div>
         <div className="card card-pad">
           <CardTitle icon="component" tone="navy" title="Comparaison SNIS / DHIS2 (somme des CS)" sub="PENTA1 · PENTA3 · RR1 · RR2" />
@@ -358,6 +358,12 @@ export function CqZS() {
               ))}
             </tbody>
           </table>
+          <div className="mt-2 rounded-lg px-3 py-2 text-[11px] leading-relaxed text-surface-600" style={{ background: "#f1f5f9" }}>
+            <b>Deux indicateurs différents — ils ne s'additionnent pas :</b><br />
+            • <b>Concordance</b> (PENTA3, RR2) = DHIS2 ÷ SNIS → mesure l'<b>ampleur</b> de l'écart de volume. Ex. 89,7 % = il manque ~10 % des doses dans DHIS2.<br />
+            • <b>Taux d'erreur SNIS/DHIS2</b> = part des antigènes dont les totaux <b>diffèrent, ne serait-ce que d'une dose</b> (ici 4 sur 4 = 100 %). C'est un comptage oui/non, pas un volume.<br />
+            Une concordance élevée (~89 %) peut donc coexister avec 100 % d'antigènes discordants : tous les antigènes diffèrent un peu, mais l'écart global reste modéré.
+          </div>
           <div className="mt-2 text-[11px] text-surface-500">Appréciation concordance : 95–105 % = pas de discordance · &lt; 95 % = sous-rapportage · &gt; 105 % = sur-rapportage.</div>
         </div>
       </section>
