@@ -95,7 +95,8 @@ async function computeHeadline(type: "zs" | "cs", sp: URLSearchParams): Promise<
       scoreMoyen: asSup.score.moyen,
       concP3: asCqd.concordanceP3.taux,
       concRR2: asCqd.concordanceRr2.taux,
-      erreur: asCqd.erreurSnisDhis2,
+      // Niveau CS : pas de saisie DHIS2 → on rapporte l'erreur registre / SNIS.
+      erreur: asCqd.erreurRegistreSnis ?? asCqd.erreurPointageRegistre,
       enfRecup: asCqd.enfants.recuperes || null,
       enfIdent: asCqd.enfants.identifies || null,
     };

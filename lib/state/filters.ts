@@ -16,7 +16,8 @@ export interface TypeGroupDef {
 }
 
 export const TYPE_GROUPS: TypeGroupDef[] = [
-  { key: "conjointe", label: "Supervision conjointe", types: ["conjointe_pev_oms", "conjointe_mca"] },
+  { key: "conjointe_pev_oms", label: "Supervision conjointe PEV central-OMS", types: ["conjointe_pev_oms"] },
+  { key: "conjointe_mca", label: "Supervision conjointe MCA/AT/ECZS", types: ["conjointe_mca"] },
   { key: "moh_seul", label: "Supervision par MoH (seul)", types: ["auto_eval", "mca_seul", "ecz_seul"] },
 ];
 

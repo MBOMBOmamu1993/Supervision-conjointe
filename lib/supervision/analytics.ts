@@ -221,6 +221,10 @@ function buildRecords(source: SourceFetch): { records: SupervisionRecord[]; rows
  * lib/state/filters.ts (TYPE_GROUPS).
  */
 const TYPE_GROUP_TYPES: Record<string, string[]> = {
+  // « Supervision conjointe » est désormais scindée en deux groupes distincts.
+  conjointe_pev_oms: ["conjointe_pev_oms"],
+  conjointe_mca: ["conjointe_mca"],
+  // Compat. ascendante : ancienne clé unique « conjointe ».
   conjointe: ["conjointe_pev_oms", "conjointe_mca"],
   moh_seul: ["auto_eval", "mca_seul", "ecz_seul"],
 };
@@ -361,7 +365,7 @@ function topNon(rows: RawRow[], scoreQs: ScoreQuestion[]): TopNonItem[] {
     }
     if (total >= 1 && non > 0) items.push({ question: q.label, nonCount: non, total, pct: Math.round((non / total) * 100) });
   }
-  return items.sort((a, b) => b.pct - a.pct || b.nonCount - a.nonCount).slice(0, 5);
+  return items.sort((a, b) => b.pct - a.pct || b.nonCount - a.nonCount).slice(0, 10);
 }
 
 function radar(records: SupervisionRecord[]): { entities: { name: string; values: number[] }[]; indicators: string[] } {
@@ -453,7 +457,25 @@ export function buildBundle(sources: SourceFetch[], filters: Filters, targets: S
 
   // Cibles « attendues » mises à l'échelle du nombre de mois de la période.
   const T = (perMonth: number) => perMonth * monthsCount;
+
+  // Cibles « totales » par niveau, calculées selon le filtre « Type de
+  // supervision » actif. Sans filtre, on cumule conjointe + MoH seul ; avec
+  // filtre, on ne retient que la (les) catégorie(s) sélectionnée(s). Le compteur
+  // (numérateur) suit déjà le filtre car antRecs/zsRecs/asRecs sont filtrés.
+  const tf = filters.types ?? [];
+  const none = tf.length === 0;
+  const hasConjointe = none || tf.includes("conjointe_pev_oms") || tf.includes("conjointe_mca") || tf.includes("conjointe");
+  const hasSeul = none || tf.includes("moh_seul");
+  const antTargetTotal = (hasConjointe ? targets.conjointe_antennes_per_month : 0) + (hasSeul ? targets.auto_eval_per_month : 0);
+  const zsTargetTotal = (hasConjointe ? targets.conjointe_zs_per_month : 0) + (hasSeul ? targets.mca_seul_per_month : 0);
+  const asTargetTotal = (hasConjointe ? targets.conjointe_aires_per_month : 0) + (hasSeul ? targets.ecz_seul_per_month : 0);
+
   const kpi = {
+    // Compteurs « toutes catégories » (suivent le filtre Type de supervision) :
+    // nombre de structures distinctes supervisées par niveau, avec % réalisation.
+    antennes_total: kpiBlock(distinctStructures(antRecs), T(antTargetTotal)),
+    zs_total: kpiBlock(distinctStructures(zsRecs), T(zsTargetTotal)),
+    as_total: kpiBlock(distinctStructures(asRecs), T(asTargetTotal)),
     // Supervision conjointe PEV central-OMS : compteur réel (0 tant que le PEV
     // central/OMS n'a pas supervisé) vs 1/trimestre.
     conjointe_pev_oms: kpiBlock(conjointePevOms.length, T(targets.conjointe_pev_oms_per_month)),

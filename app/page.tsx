@@ -6,7 +6,6 @@ import { DataGate } from "@/components/ui/DataGate";
 import { Icon, type IconName } from "@/components/ui/Icon";
 import Donut from "@/components/charts/Donut";
 import { fmtNum, fmtPct } from "@/lib/client/format";
-import { LEVEL_LABEL } from "@/config/supervision.config";
 import type { LevelBundle, ScoreStat, CotationDist } from "@/lib/supervision/types";
 
 function scoreColor(v: number | null): string {
@@ -80,28 +79,12 @@ function CotationCard({ title, dist, icon, tone }: { title: string; dist: Cotati
   );
 }
 
-function SummaryCard({ label, value, sub, tone, icon }: { label: string; value: string; sub?: string; tone: string; icon: IconName }) {
-  return (
-    <Card className="!p-3.5 flex items-center gap-3">
-      <div className="w-[42px] h-[42px] rounded-full flex items-center justify-center shrink-0 text-white" style={{ background: tone }}>
-        <Icon name={icon} className="w-5 h-5" />
-      </div>
-      <div className="min-w-0">
-        <div className="text-[9.5px] uppercase tracking-wider text-surface-700 font-bold">{label}</div>
-        <div className="text-[17px] font-extrabold leading-tight mt-0.5" style={{ color: tone }}>{value}</div>
-        {sub ? <div className="text-[11px] text-surface-700 mt-0.5">{sub}</div> : null}
-      </div>
-    </Card>
-  );
-}
-
 export default function VueEnsemblePage() {
   return (
     <DataGate>
       {(d) => {
         const k = d.kpi;
         const levels = d.levels;
-        const hl = d.highlights;
         const lvl = (b: LevelBundle) => b;
         return (
           <div className="space-y-4">
@@ -109,15 +92,9 @@ export default function VueEnsemblePage() {
             <section>
               <SectionBar icon="bars">Nombre des supervisions réalisées</SectionBar>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5">
-                <KpiCard icon="hands" tone="navy" label={<>Sup. conjointe<br />PEV-Central / OMS</>} value={fmtNum(k.conjointe_pev_oms.count)} pct={k.conjointe_pev_oms.pct} />
-                <KpiCard icon="people" tone="good" label={<>Sup. conjointe<br />antennes</>} value={fmtNum(k.antennes_sup.count)} pct={k.antennes_sup.pct} />
-                <KpiCard icon="pin" tone="violet" label={<>Sup. conjointe<br />zones de santé</>} value={fmtNum(k.zs_conjointe.count)} pct={k.zs_conjointe.pct} />
-                <KpiCard icon="clinic" tone="warn" label={<>Sup. conjointe<br />aires de santé</>} value={fmtNum(k.cs_conjointe.count)} pct={k.cs_conjointe.pct} />
-              </div>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5 mt-2.5">
-                <KpiCard icon="tower" tone="teal" label={<>Auto-évaluation<br />antenne</>} value={fmtNum(k.auto_eval.count)} pct={k.auto_eval.pct} />
-                <KpiCard icon="map" tone="brand" label={<>Supervision ZS<br />par MCA seul</>} value={fmtNum(k.zs_mca.count)} pct={k.zs_mca.pct} />
-                <KpiCard icon="clinic" tone="good" label={<>Supervision AS<br />par ECZ / MCZ seul</>} value={fmtNum(k.cs_ecz.count)} pct={k.cs_ecz.pct} />
+                <KpiCard icon="tower" tone="navy" label={<>Nombre d'antennes<br />supervisées</>} value={fmtNum(k.antennes_total.count)} pct={k.antennes_total.pct} />
+                <KpiCard icon="hospital" tone="violet" label={<>Nombre de ZS<br />supervisées</>} value={fmtNum(k.zs_total.count)} pct={k.zs_total.pct} />
+                <KpiCard icon="clinic" tone="good" label={<>Nombre d'aires de santé<br />supervisées</>} value={fmtNum(k.as_total.count)} pct={k.as_total.pct} />
                 <KpiCard icon="clipboard" tone="bad" label={<>Total supervisions<br />réalisées</>} value={fmtNum(k.total_supervisions)} sub="Toutes catégories" />
               </div>
             </section>
@@ -145,33 +122,20 @@ export default function VueEnsemblePage() {
             {/* ---- Résumé global ---- */}
             <section>
               <SectionBar icon="doc">Résumé global</SectionBar>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5">
-                <SummaryCard
-                  icon="trophy"
-                  label="Niveau au meilleur score"
-                  value={hl.bestStructure ? hl.bestStructure.name : hl.bestLevel.label}
-                  sub={hl.bestStructure
-                    ? `${hl.bestStructure.levelLabel} · ${fmtPct(hl.bestStructure.score)}`
-                    : `Score moyen : ${fmtPct(hl.bestLevel.score)}`}
-                  tone="#178a44"
-                />
-                <SummaryCard
-                  icon="down"
-                  label="Niveau au score minimum"
-                  value={hl.worstStructure ? hl.worstStructure.name : hl.worstLevel.label}
-                  sub={hl.worstStructure
-                    ? `${hl.worstStructure.levelLabel} · ${fmtPct(hl.worstStructure.score)}`
-                    : `Score min. : ${fmtPct(hl.worstLevel.score)}`}
-                  tone="#c81e1e"
-                />
-                <SummaryCard
-                  icon="clinic"
-                  label="Structures supervisées (conjointe)"
-                  value={fmtNum(k.structures_conjointe)}
-                  sub={`CS : ${k.cs_conjointe.count} · ZS : ${k.zs_conjointe.count} · Antennes : ${k.antennes_sup.count}`}
-                  tone="#0078ae"
-                />
-                <SummaryCard icon="doc" label="Total supervisions réalisées" value={fmtNum(k.total_supervisions)} sub="Toutes catégories confondues" tone="#00205c" />
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-2.5">
+                {([
+                  { lvl: levels.antenne, best: "Antenne avec meilleur score", worst: "Antenne avec faible score", icon: "tower" as IconName },
+                  { lvl: levels.zs, best: "ZS avec meilleur score", worst: "Zone de santé avec faible score", icon: "hospital" as IconName },
+                  { lvl: levels.as, best: "Aire de santé avec meilleur score", worst: "Aire de santé avec faible score", icon: "clinic" as IconName },
+                ]).flatMap(({ lvl, best, worst, icon }) => {
+                  const scored = lvl.perStructure.filter((s) => s.score !== null);
+                  const top = scored[0] ?? null;
+                  const low = scored.length ? scored[scored.length - 1] : null;
+                  return [
+                    <KpiCard key={best} icon={icon} tone="good" label={best} value={top ? top.name : "—"} sub={top ? `Score : ${fmtPct(top.score)}` : "Aucune donnée"} />,
+                    <KpiCard key={worst} icon={icon} tone="bad" label={worst} value={low ? low.name : "—"} sub={low ? `Score : ${fmtPct(low.score)}` : "Aucune donnée"} />,
+                  ];
+                })}
               </div>
             </section>
           </div>
