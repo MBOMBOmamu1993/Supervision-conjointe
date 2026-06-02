@@ -44,6 +44,8 @@ export interface CqdTrendPoint {
   concordanceRr2: number | null;
   erreurSnisDhis2: number | null;
   erreurPointageRegistre: number | null;
+  /** Taux d'erreur de transcription registre → SNIS (niveau CS, sans DHIS2). */
+  erreurRegistreSnis: number | null;
 }
 
 export interface CqdLevelBundle {
@@ -56,6 +58,8 @@ export interface CqdLevelBundle {
   /** Taux global d'erreur de transcription (%). */
   erreurSnisDhis2: number | null;
   erreurPointageRegistre: number | null;
+  /** Taux d'erreur de transcription registre → SNIS (niveau CS, sans DHIS2). */
+  erreurRegistreSnis: number | null;
   /** Complétude des outils de gestion (%). */
   outils: { registre: number | null; pointage: number | null; snis: number | null };
   /** Enfants perdus de vue : identifiés / retrouvés / récupérés (%). */
@@ -76,6 +80,7 @@ export interface CqdLevelBundle {
     classeRr2: ConcordanceClass;
     erreurSnisDhis2: number | null;
     erreurPointageRegistre: number | null;
+    erreurRegistreSnis: number | null;
     registreOk: boolean | null;
     pointageOk: boolean | null;
     snisOk: boolean | null;

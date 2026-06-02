@@ -205,48 +205,36 @@ function concordance(dhis2Sum: number, refSum: number): ConcordanceStat {
   return { taux, classe: classify(taux) };
 }
 
-/** Antigènes comparés pour le taux d'erreur de transcription SNIS → DHIS2. */
-const ANTIGEN_PICKS: { snis: (r: CqdRecord) => number; dhis2: (r: CqdRecord) => number }[] = [
-  { snis: (r) => r.snis.p1, dhis2: (r) => r.dhis2.p1 },
-  { snis: (r) => r.snis.p3, dhis2: (r) => r.dhis2.p3 },
-  { snis: (r) => r.snis.rr1, dhis2: (r) => r.dhis2.rr1 },
-  { snis: (r) => r.snis.rr2, dhis2: (r) => r.dhis2.rr2 },
-];
+type Antigen4 = { p1: number; p3: number; rr1: number; rr2: number };
+const ANTIGEN_KEYS: (keyof Antigen4)[] = ["p1", "p3", "rr1", "rr2"];
 
 /**
- * Taux d'erreur de transcription SNIS → DHIS2 calculé à partir de la comparaison
- * réelle des antigènes (part des antigènes dont les sommes SNIS et DHIS2 diffèrent).
- * C'est exactement ce qu'affiche le tableau « Antigène / SNIS / DHIS2 / Concordance ».
+ * Taux d'erreur de transcription = nombre de non-concordances / nombre
+ * d'antigènes comparés (× 100). Un antigène est « comparé » dès que l'une des
+ * deux sources est renseignée ; il est « non concordant » si les sommes
+ * diffèrent. Lorsque tous les antigènes comparés sont non concordants, le taux
+ * vaut donc 100 %.
  */
-function antigenErrorRate(records: CqdRecord[]): number | null {
+function discordRate(records: CqdRecord[], srcA: (r: CqdRecord) => Antigen4, srcB: (r: CqdRecord) => Antigen4): number | null {
   let comparable = 0;
   let discordant = 0;
-  for (const p of ANTIGEN_PICKS) {
-    const s = records.reduce((a, r) => a + p.snis(r), 0);
-    const d = records.reduce((a, r) => a + p.dhis2(r), 0);
-    if (s > 0 || d > 0) {
+  for (const k of ANTIGEN_KEYS) {
+    const a = records.reduce((s, r) => s + srcA(r)[k], 0);
+    const b = records.reduce((s, r) => s + srcB(r)[k], 0);
+    if (a > 0 || b > 0) {
       comparable++;
-      if (s !== d) discordant++;
+      if (a !== b) discordant++;
     }
   }
   return comparable > 0 ? r1((discordant / comparable) * 100) : null;
 }
 
-/**
- * Taux d'erreur de transcription SNIS → DHIS2.
- *  - Niveau AS : on privilégie le décompte du formulaire (discordances /
- *    valeurs vérifiées), plus granulaire ; repli sur la comparaison d'antigènes.
- *  - Niveau ZS (formulaire de sommes) : les champs de décompte ne sont pas
- *    renseignés → on calcule directement à partir des antigènes, sinon le taux
- *    ressort à 0 % alors que des discordances existent.
- */
-function transcriptionError(level: "zs" | "as", records: CqdRecord[]): number | null {
-  const nbVerif = records.reduce((a, r) => a + r.nbValeursVerifiees, 0);
-  const nbDisc = records.reduce((a, r) => a + r.nbDiscordSnisDhis2, 0);
-  const fieldErr = nbVerif > 0 ? r1((nbDisc / nbVerif) * 100) : null;
-  const antErr = antigenErrorRate(records);
-  return level === "as" ? fieldErr ?? antErr : antErr;
-}
+/** Taux d'erreur de transcription SNIS → DHIS2 (niveau ZS : DHIS2 saisi à la ZS). */
+const errSnisDhis2 = (records: CqdRecord[]) => discordRate(records, (r) => r.snis, (r) => r.dhis2);
+/** Taux d'erreur de transcription feuille de pointage → registre. */
+const errPointageRegistre = (records: CqdRecord[]) => discordRate(records, (r) => r.pointage, (r) => r.registre);
+/** Taux d'erreur de transcription registre → SNIS. */
+const errRegistreSnis = (records: CqdRecord[]) => discordRate(records, (r) => r.registre, (r) => r.snis);
 
 function buildLevel(level: "zs" | "as", records: CqdRecord[]): CqdLevelBundle {
   const sumOf = (pick: (r: CqdRecord) => number) => records.reduce((a, r) => a + pick(r), 0);
@@ -262,9 +250,6 @@ function buildLevel(level: "zs" | "as", records: CqdRecord[]): CqdLevelBundle {
   const snisRr2 = sumOf((r) => r.snis.rr2);
   const refP3 = regP3 > 0 ? regP3 : snisP3;
   const refRr2 = regRr2 > 0 ? regRr2 : snisRr2;
-
-  const nbVerif = sumOf((r) => r.nbValeursVerifiees);
-  const nbDiscPR = sumOf((r) => r.nbDiscordPointageRegistre);
 
   const okPct = (pick: (r: CqdRecord) => boolean | null) => {
     const vals = records.map(pick).filter((v): v is boolean => v !== null);
@@ -289,13 +274,13 @@ function buildLevel(level: "zs" | "as", records: CqdRecord[]): CqdLevelBundle {
       const s = (pick: (r: CqdRecord) => number) => recs.reduce((a, r) => a + pick(r), 0);
       const ref3 = s((r) => r.registre.p3) || s((r) => r.snis.p3);
       const refR = s((r) => r.registre.rr2) || s((r) => r.snis.rr2);
-      const verif = s((r) => r.nbValeursVerifiees);
       return {
         month,
         concordanceP3: ref3 > 0 ? r1((s((r) => r.dhis2.p3) / ref3) * 100) : null,
         concordanceRr2: refR > 0 ? r1((s((r) => r.dhis2.rr2) / refR) * 100) : null,
-        erreurSnisDhis2: transcriptionError(level, recs),
-        erreurPointageRegistre: verif > 0 ? r1((s((r) => r.nbDiscordPointageRegistre) / verif) * 100) : null,
+        erreurSnisDhis2: errSnisDhis2(recs),
+        erreurPointageRegistre: errPointageRegistre(recs),
+        erreurRegistreSnis: errRegistreSnis(recs),
       };
     });
 
@@ -314,7 +299,6 @@ function buildLevel(level: "zs" | "as", records: CqdRecord[]): CqdLevelBundle {
     const s = (pick: (r: CqdRecord) => number) => recs.reduce((a, r) => a + pick(r), 0);
     const ref3 = s((r) => r.registre.p3) || s((r) => r.snis.p3);
     const refR = s((r) => r.registre.rr2) || s((r) => r.snis.rr2);
-    const verif = s((r) => r.nbValeursVerifiees);
     const tauxP3 = ref3 > 0 ? r1((s((r) => r.dhis2.p3) / ref3) * 100) : null;
     const tauxR2 = refR > 0 ? r1((s((r) => r.dhis2.rr2) / refR) * 100) : null;
     const outilsOk = recs.reduce((a, r) => a + ((r.registreCorrect ? 1 : 0) + (r.pointageCorrect ? 1 : 0) + (r.snisCorrect ? 1 : 0)), 0);
@@ -325,8 +309,9 @@ function buildLevel(level: "zs" | "as", records: CqdRecord[]): CqdLevelBundle {
       classeP3: classify(tauxP3),
       concordanceRr2: tauxR2,
       classeRr2: classify(tauxR2),
-      erreurSnisDhis2: transcriptionError(level, recs),
-      erreurPointageRegistre: verif > 0 ? r1((s((r) => r.nbDiscordPointageRegistre) / verif) * 100) : null,
+      erreurSnisDhis2: errSnisDhis2(recs),
+      erreurPointageRegistre: errPointageRegistre(recs),
+      erreurRegistreSnis: errRegistreSnis(recs),
       registreOk: firstBool(recs, (r) => r.registreCorrect),
       pointageOk: firstBool(recs, (r) => r.pointageCorrect),
       snisOk: firstBool(recs, (r) => r.snisCorrect),
@@ -342,8 +327,9 @@ function buildLevel(level: "zs" | "as", records: CqdRecord[]): CqdLevelBundle {
     structuresControlees: byStruct.size,
     concordanceP3: concordance(dhis2P3, refP3),
     concordanceRr2: concordance(dhis2Rr2, refRr2),
-    erreurSnisDhis2: transcriptionError(level, records),
-    erreurPointageRegistre: nbVerif > 0 ? r1((nbDiscPR / nbVerif) * 100) : null,
+    erreurSnisDhis2: errSnisDhis2(records),
+    erreurPointageRegistre: errPointageRegistre(records),
+    erreurRegistreSnis: errRegistreSnis(records),
     outils: {
       registre: okPct((r) => r.registreCorrect),
       pointage: okPct((r) => r.pointageCorrect),

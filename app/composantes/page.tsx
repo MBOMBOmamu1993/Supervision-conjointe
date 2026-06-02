@@ -7,10 +7,9 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import Radar from "@/components/charts/Radar";
 import StackedAnswers from "@/components/charts/StackedAnswers";
 import HBar from "@/components/charts/HBar";
-import LineTrend from "@/components/charts/LineTrend";
 import { fmtPct, fmtMonth } from "@/lib/client/format";
 import { cotationFor, COTATION_COLOR } from "@/config/supervision.config";
-import type { LevelBundle, TopNonItem, TrendPoint } from "@/lib/supervision/types";
+import type { LevelBundle, TopNonItem } from "@/lib/supervision/types";
 
 /** Tableau d'évolution mois × composante (lignes = composantes, colonnes = mois). */
 function ComposanteMonthTable({ bundle, months }: { bundle: LevelBundle; months: string[] }) {
@@ -44,11 +43,6 @@ function ComposanteMonthTable({ bundle, months }: { bundle: LevelBundle; months:
       </table>
     </div>
   );
-}
-
-function trendSeries(trend: TrendPoint[], months: string[]) {
-  const map = new Map(trend.map((t) => [t.month, t.score]));
-  return months.map((m) => map.get(m) ?? null);
 }
 
 function ComposanteTable({ bundle }: { bundle: LevelBundle }) {
@@ -132,25 +126,6 @@ export default function ComposantesPage() {
             </div>
           </section>
 
-          {/* Évolution mensuelle (le TL) */}
-          <section>
-            <SectionBar icon="time">Évolution du score de performance par mois</SectionBar>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-2.5">
-              <Card>
-                <CardHeader icon="tower" iconTone="blue" title="Antennes" />
-                <LineTrend months={months} series={[{ name: "Antennes", data: trendSeries(d.levels.antenne.trend, months), color: "#0d9488" }]} />
-              </Card>
-              <Card>
-                <CardHeader icon="hospital" iconTone="violet" title="Zones de santé" />
-                <LineTrend months={months} series={[{ name: "ZS", data: trendSeries(d.levels.zs.trend, months), color: "#7c3aed" }]} />
-              </Card>
-              <Card>
-                <CardHeader icon="clinic" iconTone="green" title="Aires de santé" />
-                <LineTrend months={months} series={[{ name: "AS", data: trendSeries(d.levels.as.trend, months), color: "#22b457" }]} />
-              </Card>
-            </div>
-          </section>
-
           {/* Évolution des 6 composantes par mois (tableau mois × composante) */}
           <section>
             <SectionBar icon="bars">Évolution des composantes par mois</SectionBar>
@@ -171,9 +146,9 @@ export default function ComposantesPage() {
             </div>
           </section>
 
-          {/* Top 5 réponses NON */}
+          {/* Top 10 réponses NON */}
           <section>
-            <SectionBar icon="down">Top 5 des questions ayant plusieurs réponses « Non »</SectionBar>
+            <SectionBar icon="down">Top 10 des questions ayant plusieurs réponses « Non »</SectionBar>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-2.5">
               <Card><CardHeader icon="tower" iconTone="blue" title="Antennes" subtitle="Survolez une barre pour lire la question complète" /><TopNon items={d.levels.antenne.topNon} /></Card>
               <Card><CardHeader icon="hospital" iconTone="violet" title="Zones de santé" subtitle="Survolez une barre pour lire la question complète" /><TopNon items={d.levels.zs.topNon} /></Card>

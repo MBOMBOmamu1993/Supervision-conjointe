@@ -3,7 +3,7 @@
 import { usePathname } from "next/navigation";
 import { useFilters, TYPE_GROUPS } from "@/lib/state/filters";
 import { useSupervision } from "@/lib/client/api";
-import { Icon, type IconName } from "@/components/ui/Icon";
+import { Icon } from "@/components/ui/Icon";
 import { cascadeOptions, type GeoTuple } from "@/lib/geo";
 import { edlGeoTuples } from "@/lib/etat-lieux/edl-filter";
 import { PeriodFilter } from "./PeriodFilter";
@@ -45,9 +45,6 @@ function FieldLabel({ children, onReset, active }: { children: React.ReactNode; 
 
 function Select({
   label,
-  icon,
-  from,
-  to,
   value,
   onChange,
   onReset,
@@ -55,9 +52,6 @@ function Select({
   placeholder,
 }: {
   label: string;
-  icon: IconName;
-  from: string;
-  to: string;
   value: string | null;
   onChange: (v: string | null) => void;
   onReset?: () => void;
@@ -67,10 +61,7 @@ function Select({
   return (
     <div className="flex min-w-0 flex-col gap-[3px]">
       <FieldLabel onReset={onReset} active={!!value}>{label}</FieldLabel>
-      <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-2.5 py-2 shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition hover:border-oms-500">
-        <span className="inline-flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-md text-white" style={{ background: `linear-gradient(145deg, ${from}, ${to})` }}>
-          <Icon name={icon} className="h-[13px] w-[13px]" strokeWidth={2} />
-        </span>
+      <div className="flex items-center rounded-xl border border-slate-200 bg-white px-2.5 py-2 shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition hover:border-oms-500">
         <select
           className="w-full cursor-pointer bg-transparent text-[12.5px] font-bold text-navy-700 outline-none"
           value={value ?? ""}
@@ -127,9 +118,6 @@ export function FilterBar() {
         <div className="grid grid-cols-1 items-end gap-2 sm:grid-cols-2 lg:grid-cols-6">
           <Select
             label="Province"
-            icon="map-pin"
-            from="#19c2b1"
-            to="#0d9488"
             placeholder="Toutes"
             value={f.province}
             onChange={(v) => f.set({ province: v, antenne: null, zone: null, aire: null })}
@@ -138,9 +126,6 @@ export function FilterBar() {
           />
           <Select
             label="Antenne"
-            icon="tower"
-            from="#36b3ec"
-            to="#0093d5"
             placeholder="Toutes"
             value={f.antenne}
             onChange={(v) => f.set({ antenne: v, zone: null, aire: null })}
@@ -149,9 +134,6 @@ export function FilterBar() {
           />
           <Select
             label="Zone de santé"
-            icon="building"
-            from="#9d5cf5"
-            to="#7c3aed"
             placeholder="Toutes"
             value={f.zone}
             onChange={(v) => f.set({ zone: v, aire: null })}
@@ -160,9 +142,6 @@ export function FilterBar() {
           />
           <Select
             label="Aire de santé"
-            icon="clinic"
-            from="#2bbd6b"
-            to="#1f9d57"
             placeholder="Toutes"
             value={f.aire}
             onChange={(v) => f.set({ aire: v })}
@@ -171,9 +150,6 @@ export function FilterBar() {
           />
           <Select
             label="Type de supervision"
-            icon="hands"
-            from="#5b8def"
-            to="#2a5fd0"
             placeholder="Tous les types"
             value={selectedGroup?.label ?? null}
             onChange={(v) => {

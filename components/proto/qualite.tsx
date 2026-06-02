@@ -29,50 +29,53 @@ const Pct = ({ v, color }: { v: number | null; color?: string }) =>
   <b style={{ color: color ?? "inherit" }}>{v === null ? "—" : `${v}%`}</b>;
 const Appr = ({ v }: { v: number | null }) => (v === null ? <span>—</span> : <ApprBadge p={v} />);
 
-interface AntS { lab: string; snis: number; dhis2: number }
+interface AntCmp { lab: string; a: number; b: number }
 interface RowView {
   name: string; zone: string | null;
-  concP3: number | null; classP3: string;
-  concRR2: number | null; classRR2: string;
-  errSD: number | null; errPR: number | null;
+  errPR: number | null; errRS: number | null;
   registreOk: "Oui" | "Non"; pointageOk: "Oui" | "Non"; snisOk: "Oui" | "Non";
   enfIdent: number; enfRecup: number;
 }
 interface CsView {
   live: boolean; ess: string; months: string[];
   nbControles: number; nbAttendus: number;
-  concP3: number | null; classP3: string; concRR2: number | null; classRR2: string; errSD: number | null;
-  antS: AntS[];
-  sources: { antigene: string; registre: number; pointage: number; snis: number; dhis2: number }[];
+  /** Taux d'erreur de transcription — il n'y a pas de saisie DHIS2 au niveau CS. */
+  errPR: number | null; errRS: number | null;
+  /** Sommes par antigène et par source (registre / feuille de pointage / SNIS). */
+  sources: { antigene: string; registre: number; pointage: number; snis: number }[];
   outils: { registre: number | null; pointage: number | null; snis: number | null };
   enf: { identifies: number; retrouves: number; recuperes: number; aRecuperer: number };
-  trend: { month: string; concP3: number | null; concRR2: number | null; errSD: number | null; errPR: number | null }[];
+  trend: { month: string; errPR: number | null; errRS: number | null }[];
   rows: RowView[];
+}
+
+type AntVals = { p1: number; p3: number; rr1: number; rr2: number };
+const ANT_KEYS: (keyof AntVals)[] = ["p1", "p3", "rr1", "rr2"];
+/** Taux d'erreur = non-concordances / antigènes comparés (100 % si tous discordent). */
+function discAnt(a: AntVals, b: AntVals): number | null {
+  let comp = 0, disc = 0;
+  for (const k of ANT_KEYS) { const x = a[k], y = b[k]; if (x > 0 || y > 0) { comp++; if (x !== y) disc++; } }
+  return comp > 0 ? Math.round(disc / comp * 100) : null;
 }
 
 function csView(data: CqdBundle | undefined): CsView {
   const as = data?.levels.as;
   if (as && as.records > 0) {
-    const antByName = (n: string) => as.antigenes.find((a) => a.antigene.toUpperCase().startsWith(n)) ?? { registre: 0, pointage: 0, snis: 0, dhis2: 0, antigene: n };
     return {
       live: true,
       ess: `${as.structuresControlees} CS contrôlé${as.structuresControlees > 1 ? "s" : ""}`,
       months: (data!.meta.months.length ? data!.meta.months : CQ.cs.rows[0].mois).map((m) => (m.includes("-") ? monthLabel(m) : m)),
       nbControles: as.structuresControlees,
       nbAttendus: CQ.cs.nbAttendus,
-      concP3: as.concordanceP3.taux, classP3: classLabel(as.concordanceP3.classe),
-      concRR2: as.concordanceRr2.taux, classRR2: classLabel(as.concordanceRr2.classe),
-      errSD: as.erreurSnisDhis2,
-      antS: ["PENTA1", "PENTA3", "RR1", "RR2"].map((n) => { const a = antByName(n); return { lab: n.replace("PENTA", "Penta"), snis: a.snis, dhis2: a.dhis2 }; }),
-      sources: as.antigenes,
+      errPR: as.erreurPointageRegistre,
+      errRS: as.erreurRegistreSnis,
+      sources: as.antigenes.map((a) => ({ antigene: a.antigene, registre: a.registre, pointage: a.pointage, snis: a.snis })),
       outils: as.outils,
       enf: { identifies: as.enfants.identifies, retrouves: as.enfants.retrouves, recuperes: as.enfants.recuperes, aRecuperer: as.enfants.aRecuperer },
-      trend: as.trend.map((t) => ({ month: monthLabel(t.month), concP3: t.concordanceP3, concRR2: t.concordanceRr2, errSD: t.erreurSnisDhis2, errPR: t.erreurPointageRegistre })),
+      trend: as.trend.map((t) => ({ month: monthLabel(t.month), errPR: t.erreurPointageRegistre, errRS: t.erreurRegistreSnis })),
       rows: as.parStructure.map((s) => ({
         name: s.name, zone: s.zone,
-        concP3: s.concordanceP3, classP3: classLabel(s.classeP3),
-        concRR2: s.concordanceRr2, classRR2: classLabel(s.classeRr2),
-        errSD: s.erreurSnisDhis2, errPR: s.erreurPointageRegistre,
+        errPR: s.erreurPointageRegistre, errRS: s.erreurRegistreSnis,
         registreOk: s.registreOk === null ? "Non" : s.registreOk ? "Oui" : "Non",
         pointageOk: s.pointageOk === null ? "Non" : s.pointageOk ? "Oui" : "Non",
         snisOk: s.snisOk === null ? "Non" : s.snisOk ? "Oui" : "Non",
@@ -85,29 +88,30 @@ function csView(data: CqdBundle | undefined): CsView {
   return {
     live: false, ess: r0.ess, months: CQ.moisDisponibles,
     nbControles: cs.nbControles, nbAttendus: cs.nbAttendus,
-    concP3: r0.concPenta3, classP3: r0.classPenta3, concRR2: r0.concRR2, classRR2: r0.classRR2, errSD: r0.errSnisDhis2,
-    antS: [["Penta1", r0.snis.p1, r0.dhis2.p1], ["Penta3", r0.snis.p3, r0.dhis2.p3], ["RR1", r0.snis.rr1, r0.dhis2.rr1], ["RR2", r0.snis.rr2, r0.dhis2.rr2]].map((a) => ({ lab: a[0] as string, snis: a[1] as number, dhis2: a[2] as number })),
-    sources: ["p1", "p3", "rr1", "rr2"].map((k, i) => ({ antigene: ["PENTA1", "PENTA3", "RR1", "RR2"][i], registre: (r0.registre as any)[k], pointage: (r0.pointage as any)[k], snis: (r0.snis as any)[k], dhis2: (r0.dhis2 as any)[k] })),
+    errPR: discAnt(r0.pointage, r0.registre),
+    errRS: discAnt(r0.registre, r0.snis),
+    sources: ["p1", "p3", "rr1", "rr2"].map((k, i) => ({ antigene: ["PENTA1", "PENTA3", "RR1", "RR2"][i], registre: (r0.registre as any)[k], pointage: (r0.pointage as any)[k], snis: (r0.snis as any)[k] })),
     outils: { registre: r0.registreOk === "Oui" ? 100 : 0, pointage: r0.pointageOk === "Oui" ? 100 : 0, snis: r0.snisOk === "Oui" ? 100 : 0 },
     enf: { identifies: r0.enfIdentifies, retrouves: r0.enfRetrouves, recuperes: r0.enfRecuperes, aRecuperer: r0.enfRecup },
     trend: [],
     rows: cs.rows.map((r) => ({
-      name: r.as, zone: r.zs, concP3: r.concPenta3, classP3: r.classPenta3, concRR2: r.concRR2, classRR2: r.classRR2,
-      errSD: r.errSnisDhis2, errPR: r.errPointageRegistre, registreOk: r.registreOk, pointageOk: r.pointageOk, snisOk: r.snisOk,
+      name: r.as, zone: r.zs,
+      errPR: discAnt(r.pointage, r.registre), errRS: discAnt(r.registre, r.snis),
+      registreOk: r.registreOk, pointageOk: r.pointageOk, snisOk: r.snisOk,
       enfIdent: r.enfIdentifies, enfRecup: r.enfRecuperes,
     })),
   };
 }
 
-function TauxErrTable({ rows }: { rows: AntS[] }) {
+function CompareTable({ rows, colA, colB }: { rows: AntCmp[]; colA: string; colB: string }) {
   return (
     <table className="dtable">
-      <thead><tr><th className="name">Antigène</th><th>SNIS</th><th>DHIS2</th><th>Concordance</th></tr></thead>
+      <thead><tr><th className="name">Antigène</th><th>{colA}</th><th>{colB}</th><th>Concordance</th></tr></thead>
       <tbody>
         {rows.map((r) => (
           <tr key={r.lab}>
-            <td className="name">{r.lab}</td><td>{r.snis}</td><td>{r.dhis2}</td>
-            <td style={{ fontWeight: 800, color: r.snis === r.dhis2 ? C.green : C.red }}>{r.snis === r.dhis2 ? "Oui" : "Non"}</td>
+            <td className="name">{r.lab}</td><td>{r.a}</td><td>{r.b}</td>
+            <td style={{ fontWeight: 800, color: r.a === r.b ? C.green : C.red }}>{r.a === r.b ? "Oui" : "Non"}</td>
           </tr>
         ))}
       </tbody>
@@ -129,6 +133,9 @@ export function CqGlobalCS() {
     ["Retrouvés par les relais", v.enf.retrouves, "people"], ["Effectivement récupérés", v.enf.recuperes, "check"],
   ];
   const pctRecup = v.enf.identifies > 0 ? Math.round(v.enf.recuperes / v.enf.identifies * 100) : 0;
+  const lab = (n: string) => n.replace("PENTA", "Penta");
+  const antPR: AntCmp[] = v.sources.map((s) => ({ lab: lab(s.antigene), a: s.pointage, b: s.registre }));
+  const antRS: AntCmp[] = v.sources.map((s) => ({ lab: lab(s.antigene), a: s.registre, b: s.snis }));
 
   return (
     <div className="space-y-4">
@@ -139,66 +146,69 @@ export function CqGlobalCS() {
         <SectionBar icon="bars">Indicateurs globaux de qualité</SectionBar>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           <KpiTile icon="clinic" tone="navy" label={<>CS ayant bénéficié<br />du contrôle qualité</>} value={v.nbControles} sub={`sur ${v.nbAttendus} attendus`} />
-          <KpiTile icon="scale" tone="green" label={<>Concordance globale<br />PENTA3 (DHIS2/Registre)</>} value={(v.concP3 ?? "—") + "%"} sub={v.classP3} />
-          <KpiTile icon="scale" tone="violet" label={<>Concordance globale<br />RR2 (DHIS2/Registre)</>} value={(v.concRR2 ?? "—") + "%"} sub={v.classRR2} />
-          <KpiTile icon="alert" tone="orange" label={<>Taux d'erreur transcription<br />SNIS / DHIS2</>} value={(v.errSD ?? "—") + "%"} sub="PENTA1·3 / RR1·2" />
+          <KpiTile icon="alert" tone="orange" label={<>Taux d'erreur transcription<br />feuille de pointage / registre</>} value={(v.errPR ?? "—") + "%"} sub="PENTA1·3 / RR1·2" />
+          <KpiTile icon="alert" tone="red" label={<>Taux d'erreur transcription<br />registre / SNIS</>} value={(v.errRS ?? "—") + "%"} sub="PENTA1·3 / RR1·2" />
+          <KpiTile icon="check" tone="green" label={<>Enfants identifiés<br />précédemment récupérés</>} value={pctRecup + "%"} sub={`${v.enf.recuperes} / ${v.enf.identifies}`} />
         </div>
       </section>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
         <div className="card card-pad">
-          <CardTitle icon="scale" tone="orange" title="Taux d'erreur de transcription SNIS → DHIS2" sub="Discordances sur les 4 antigènes" />
-          <TauxErrTable rows={v.antS} />
+          <CardTitle icon="scale" tone="orange" title="Taux d'erreur de transcription feuille de pointage → registre" sub="Non-concordances / antigènes comparés" />
+          <CompareTable rows={antPR} colA="Pointage" colB="Registre" />
           <div className="mt-2 flex items-center justify-between rounded-lg px-3 py-2 text-[11.5px]" style={{ background: "#fff5e4" }}>
-            <span className="font-semibold text-surface-700">Taux d'erreur = discordances / comparaisons</span>
-            <b style={{ color: C.orange, fontSize: 15 }}>{v.errSD ?? "—"}%</b>
+            <span className="font-semibold text-surface-700">Taux d'erreur = non-concordances / antigènes comparés</span>
+            <b style={{ color: C.orange, fontSize: 15 }}>{v.errPR ?? "—"}%</b>
           </div>
         </div>
         <div className="card card-pad">
-          <CardTitle icon="clip" tone="violet" title="Remplissage des outils de gestion" sub="% des CS avec outil correctement rempli" />
-          <div className="mt-1 space-y-2">
-            {tools.map((t) => {
-              const ok = t[1] === "Oui";
-              return (
-                <div key={t[0]} className="flex items-center gap-2.5">
-                  <span className="inline-flex h-6 w-6 items-center justify-center rounded-[7px]" style={{ background: ok ? TONES.green.bg : TONES.red.bg, color: ok ? C.green : C.red }}>
-                    <Icon name={ok ? "check" : "alert"} className="h-3.5 w-3.5" strokeWidth={2.4} />
-                  </span>
-                  <span className="flex-1 text-[12.5px] font-semibold text-surface-800">{t[0]}</span>
-                  <span className="badge-appr" style={{ background: ok ? TONES.green.bg : TONES.red.bg, color: ok ? C.green : C.red }}>{t[2] === null ? (ok ? "Correctement rempli" : "Mal rempli") : `${t[2]}% conformes`}</span>
-                </div>
-              );
-            })}
+          <CardTitle icon="scale" tone="red" title="Taux d'erreur de transcription registre → SNIS" sub="Non-concordances / antigènes comparés" />
+          <CompareTable rows={antRS} colA="Registre" colB="SNIS" />
+          <div className="mt-2 flex items-center justify-between rounded-lg px-3 py-2 text-[11.5px]" style={{ background: "#fdecec" }}>
+            <span className="font-semibold text-surface-700">Taux d'erreur = non-concordances / antigènes comparés</span>
+            <b style={{ color: C.red, fontSize: 15 }}>{v.errRS ?? "—"}%</b>
           </div>
-          <div className="mt-3 flex items-center gap-1.5 text-[11px] text-surface-500">
-            Concordance PENTA3 : <Appr v={v.concP3} /> · RR2 : <Appr v={v.concRR2} />
-          </div>
+        </div>
+      </div>
+
+      <div className="card card-pad">
+        <CardTitle icon="clip" tone="violet" title="Remplissage des outils de gestion" sub="% des CS avec outil correctement rempli" />
+        <div className="mt-1 grid grid-cols-1 md:grid-cols-3 gap-2">
+          {tools.map((t) => {
+            const ok = t[1] === "Oui";
+            return (
+              <div key={t[0]} className="flex items-center gap-2.5">
+                <span className="inline-flex h-6 w-6 items-center justify-center rounded-[7px]" style={{ background: ok ? TONES.green.bg : TONES.red.bg, color: ok ? C.green : C.red }}>
+                  <Icon name={ok ? "check" : "alert"} className="h-3.5 w-3.5" strokeWidth={2.4} />
+                </span>
+                <span className="flex-1 text-[12.5px] font-semibold text-surface-800">{t[0]}</span>
+                <span className="badge-appr" style={{ background: ok ? TONES.green.bg : TONES.red.bg, color: ok ? C.green : C.red }}>{t[2] === null ? (ok ? "Correctement rempli" : "Mal rempli") : `${t[2]}% conformes`}</span>
+              </div>
+            );
+          })}
         </div>
       </div>
 
       <section>
         <SectionBar icon="component">Comparaison des sources de données (somme des CS)</SectionBar>
         <div className="card card-pad">
-          <ProtoGroupedBar height={230} cats={["PENTA1", "PENTA3", "RR1", "RR2"]} series={[
+          <ProtoGroupedBar height={230} colors={[C.violet, C.orange, C.green]} cats={["PENTA1", "PENTA3", "RR1", "RR2"]} series={[
             { name: "Registre", data: v.sources.map((s) => s.registre) },
             { name: "Feuille de pointage", data: v.sources.map((s) => s.pointage) },
             { name: "SNIS", data: v.sources.map((s) => s.snis) },
-            { name: "DHIS2", data: v.sources.map((s) => s.dhis2) },
           ]} />
         </div>
       </section>
 
       {v.trend.length > 1 && (
         <section>
-          <SectionBar icon="time">Progression de la concordance et du taux d'erreur dans le temps</SectionBar>
+          <SectionBar icon="time">Progression du taux d'erreur de transcription dans le temps</SectionBar>
           <div className="card card-pad">
             <table className="dtable">
               <thead><tr><th className="name">Indicateur</th>{v.trend.map((t) => <th key={t.month}>{t.month}</th>)}</tr></thead>
               <tbody>
-                <tr><td className="name">Concordance PENTA3</td>{v.trend.map((t) => <td key={t.month}><Appr v={t.concP3} /></td>)}</tr>
-                <tr><td className="name">Concordance RR2</td>{v.trend.map((t) => <td key={t.month}><Appr v={t.concRR2} /></td>)}</tr>
-                <tr><td className="name">Taux d'erreur SNIS / DHIS2</td>{v.trend.map((t) => <td key={t.month}><Pct v={t.errSD} color={C.orange} /></td>)}</tr>
-                <tr><td className="name">Taux d'erreur pointage / registre</td>{v.trend.map((t) => <td key={t.month}><Pct v={t.errPR} color={C.red} /></td>)}</tr>
+                <tr><td className="name">Taux d'erreur pointage / registre</td>{v.trend.map((t) => <td key={t.month}><Pct v={t.errPR} color={C.orange} /></td>)}</tr>
+                <tr><td className="name">Taux d'erreur registre / SNIS</td>{v.trend.map((t) => <td key={t.month}><Pct v={t.errRS} color={C.red} /></td>)}</tr>
               </tbody>
             </table>
           </div>
@@ -229,7 +239,7 @@ export function CqDetailCS() {
   const v = csView(data);
   const EvoTable = ({ title, icon, tone, col }: { title: string; icon: "scale" | "alert"; tone: "green" | "violet" | "orange" | "red"; col: (r: RowView) => React.ReactNode }) => (
     <div className="card card-pad">
-      <CardTitle icon={icon} tone={tone} title={title} sub="Évolution par mois" />
+      <CardTitle icon={icon} tone={tone} title={title} sub="Par centre de santé" />
       <table className="dtable">
         <thead><tr><th className="name">Centre de santé</th>{v.months.map((m) => <th key={m}>{m}</th>)}</tr></thead>
         <tbody>
@@ -249,12 +259,10 @@ export function CqDetailCS() {
   return (
     <div className="space-y-4">
       <Banner icon="clinic" tone="violet" title="Qualité des données de vaccination — par centre de santé"
-        sub={`Tableaux d'évolution de l'appréciation & des taux d'erreur, par mois et par CS · ${v.nbControles} CS`} />
+        sub={`Taux d'erreur de transcription par CS — il n'y a pas de saisie DHIS2 au niveau CS · ${v.nbControles} CS`} />
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-        <EvoTable title="Appréciation concordance PENTA3 (DHIS2/Registre)" icon="scale" tone="green" col={(r) => <Appr v={r.concP3} />} />
-        <EvoTable title="Appréciation concordance RR2 (DHIS2/Registre)" icon="scale" tone="violet" col={(r) => <Appr v={r.concRR2} />} />
-        <EvoTable title="Taux d'erreur transcription SNIS / DHIS2" icon="alert" tone="orange" col={(r) => <Pct v={r.errSD} color={C.orange} />} />
-        <EvoTable title="Taux d'erreur transcription feuille pointage / registre" icon="alert" tone="red" col={(r) => <Pct v={r.errPR} color={C.red} />} />
+        <EvoTable title="Taux d'erreur transcription feuille de pointage / registre" icon="alert" tone="orange" col={(r) => <Pct v={r.errPR} color={C.orange} />} />
+        <EvoTable title="Taux d'erreur transcription registre / SNIS" icon="alert" tone="red" col={(r) => <Pct v={r.errRS} color={C.red} />} />
       </div>
       <section>
         <SectionBar icon="bars">Outils de gestion correctement remplis — par CS</SectionBar>
@@ -284,9 +292,9 @@ export function CqZS() {
   const classRR2 = live ? classLabel(zsB!.concordanceRr2.classe) : staticRow.classRR2;
   const errSD = live ? zsB!.erreurSnisDhis2 : staticRow.errSnisDhis2;
   const antByName = (n: string) => live ? (zsB!.antigenes.find((a) => a.antigene.toUpperCase().startsWith(n)) ?? { snis: 0, dhis2: 0 }) : null;
-  const antS: AntS[] = live
-    ? ["PENTA1", "PENTA3", "RR1", "RR2"].map((n) => { const a = antByName(n)!; return { lab: n.replace("PENTA", "Penta"), snis: a.snis, dhis2: a.dhis2 }; })
-    : [["Penta1", staticRow.snis.p1, staticRow.dhis2.p1], ["Penta3", staticRow.snis.p3, staticRow.dhis2.p3], ["RR1", staticRow.snis.rr1, staticRow.dhis2.rr1], ["RR2", staticRow.snis.rr2, staticRow.dhis2.rr2]].map((a) => ({ lab: a[0] as string, snis: a[1] as number, dhis2: a[2] as number }));
+  const antS: AntCmp[] = live
+    ? ["PENTA1", "PENTA3", "RR1", "RR2"].map((n) => { const a = antByName(n)!; return { lab: n.replace("PENTA", "Penta"), a: a.snis, b: a.dhis2 }; })
+    : [["Penta1", staticRow.snis.p1, staticRow.dhis2.p1], ["Penta3", staticRow.snis.p3, staticRow.dhis2.p3], ["RR1", staticRow.snis.rr1, staticRow.dhis2.rr1], ["RR2", staticRow.snis.rr2, staticRow.dhis2.rr2]].map((x) => ({ lab: x[0] as string, a: x[1] as number, b: x[2] as number }));
   // Base de calcul du taux d'erreur de transcription, explicitée pour lever
   // toute ambiguïté avec la colonne « Concordance » (qui est un drapeau par
   // antigène). En live (formulaire de sommes ZS) le taux porte sur les antigènes
@@ -294,15 +302,15 @@ export function CqZS() {
   // champ — d'où un dénominateur différent (et un % qui n'est pas 4/4).
   const errBase = live
     ? {
-        n: antS.filter((a) => (a.snis > 0 || a.dhis2 > 0) && a.snis !== a.dhis2).length,
-        tot: antS.filter((a) => a.snis > 0 || a.dhis2 > 0).length,
+        n: antS.filter((x) => (x.a > 0 || x.b > 0) && x.a !== x.b).length,
+        tot: antS.filter((x) => x.a > 0 || x.b > 0).length,
         unit: "antigènes comparés",
       }
     : { n: staticRow.nbDiscord, tot: staticRow.nbValVerif, unit: "valeurs vérifiées" };
   // Antigènes discordants (sommes SNIS ≠ DHIS2) — c'est exactement ce que montre
   // la colonne « Concordance ». Métrique volontairement distincte du taux d'erreur
   // de transcription (indicateur dédié), qui porte sur un autre dénominateur.
-  const antDisc = antS.filter((a) => a.snis !== a.dhis2).length;
+  const antDisc = antS.filter((x) => x.a !== x.b).length;
   const rows = live
     ? zsB!.parStructure.map((s) => ({ zs: s.name, concP3: s.concordanceP3, classP3: classLabel(s.classeP3), concRR2: s.concordanceRr2, classRR2: classLabel(s.classeRr2), errSD: s.erreurSnisDhis2 }))
     : [{ zs: staticRow.zs, concP3: staticRow.concPenta3, classP3: staticRow.classPenta3, concRR2: staticRow.concRR2, classRR2: staticRow.classRR2, errSD: staticRow.errSnisDhis2 }];
@@ -325,7 +333,7 @@ export function CqZS() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
         <div className="card card-pad">
           <CardTitle icon="scale" tone="orange" title="Concordance SNIS / DHIS2 par antigène" sub="Comparaison des sommes — SNIS vs DHIS2" />
-          <TauxErrTable rows={antS} />
+          <CompareTable rows={antS} colA="SNIS" colB="DHIS2" />
           <div className="mt-2 flex items-center justify-between rounded-lg px-3 py-2 text-[11.5px]" style={{ background: "#fff5e4" }}>
             <span className="font-semibold text-surface-700">Antigènes discordants</span>
             <b style={{ color: C.orange, fontSize: 15 }}>{antDisc} / {antS.length}</b>
@@ -335,8 +343,8 @@ export function CqZS() {
         <div className="card card-pad">
           <CardTitle icon="component" tone="navy" title="Comparaison SNIS / DHIS2 (somme des CS)" sub="PENTA1 · PENTA3 · RR1 · RR2" />
           <ProtoGroupedBar height={185} colors={[C.orange, C.blue]} cats={["PENTA1", "PENTA3", "RR1", "RR2"]} series={[
-            { name: "SNIS", data: antS.map((a) => a.snis) },
-            { name: "DHIS2", data: antS.map((a) => a.dhis2) },
+            { name: "SNIS", data: antS.map((x) => x.a) },
+            { name: "DHIS2", data: antS.map((x) => x.b) },
           ]} />
         </div>
       </div>

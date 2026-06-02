@@ -143,6 +143,9 @@ export interface SupervisionBundle {
     geo: { province: string | null; antenne: string | null; zone: string | null; aire: string | null }[];
   };
   kpi: {
+    antennes_total: KpiBlock;
+    zs_total: KpiBlock;
+    as_total: KpiBlock;
     conjointe_pev_oms: KpiBlock;
     conjointe_mca: KpiBlock;
     auto_eval: KpiBlock;
