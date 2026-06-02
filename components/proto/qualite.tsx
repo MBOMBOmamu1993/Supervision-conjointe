@@ -287,6 +287,18 @@ export function CqZS() {
   const antS: AntS[] = live
     ? ["PENTA1", "PENTA3", "RR1", "RR2"].map((n) => { const a = antByName(n)!; return { lab: n.replace("PENTA", "Penta"), snis: a.snis, dhis2: a.dhis2 }; })
     : [["Penta1", staticRow.snis.p1, staticRow.dhis2.p1], ["Penta3", staticRow.snis.p3, staticRow.dhis2.p3], ["RR1", staticRow.snis.rr1, staticRow.dhis2.rr1], ["RR2", staticRow.snis.rr2, staticRow.dhis2.rr2]].map((a) => ({ lab: a[0] as string, snis: a[1] as number, dhis2: a[2] as number }));
+  // Base de calcul du taux d'erreur de transcription, explicitée pour lever
+  // toute ambiguïté avec la colonne « Concordance » (qui est un drapeau par
+  // antigène). En live (formulaire de sommes ZS) le taux porte sur les antigènes
+  // comparés ; en données de démonstration sur les valeurs vérifiées champ par
+  // champ — d'où un dénominateur différent (et un % qui n'est pas 4/4).
+  const errBase = live
+    ? {
+        n: antS.filter((a) => (a.snis > 0 || a.dhis2 > 0) && a.snis !== a.dhis2).length,
+        tot: antS.filter((a) => a.snis > 0 || a.dhis2 > 0).length,
+        unit: "antigènes comparés",
+      }
+    : { n: staticRow.nbDiscord, tot: staticRow.nbValVerif, unit: "valeurs vérifiées" };
   const rows = live
     ? zsB!.parStructure.map((s) => ({ zs: s.name, concP3: s.concordanceP3, classP3: classLabel(s.classeP3), concRR2: s.concordanceRr2, classRR2: classLabel(s.classeRr2), errSD: s.erreurSnisDhis2 }))
     : [{ zs: staticRow.zs, concP3: staticRow.concPenta3, classP3: staticRow.classPenta3, concRR2: staticRow.concRR2, classRR2: staticRow.classRR2, errSD: staticRow.errSnisDhis2 }];
@@ -311,9 +323,10 @@ export function CqZS() {
           <CardTitle icon="scale" tone="orange" title="Taux d'erreur transcription SNIS → DHIS2" sub="Par ZS et par mois" />
           <TauxErrTable rows={antS} />
           <div className="mt-2 flex items-center justify-between rounded-lg px-3 py-2 text-[11.5px]" style={{ background: "#fff5e4" }}>
-            <span className="font-semibold text-surface-700">Discordances / comparaisons</span>
+            <span className="font-semibold text-surface-700">Taux d'erreur de transcription · {errBase.n} / {errBase.tot} {errBase.unit}</span>
             <b style={{ color: C.orange, fontSize: 15 }}>{errSD ?? "—"}%</b>
           </div>
+          <div className="mt-1 text-[10.5px] text-surface-500">La colonne « Concordance » est un repère par antigène (Oui/Non). Le taux d'erreur porte sur l'ensemble des {errBase.unit} : il ne correspond donc pas au nombre d'antigènes discordants.</div>
         </div>
         <div className="card card-pad">
           <CardTitle icon="component" tone="navy" title="Comparaison SNIS / DHIS2 (somme des CS)" sub="PENTA1 · PENTA3 · RR1 · RR2" />
