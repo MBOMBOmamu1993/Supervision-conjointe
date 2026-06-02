@@ -78,6 +78,11 @@ export interface CqdLevelBundle {
     classeP3: ConcordanceClass;
     concordanceRr2: number | null;
     classeRr2: ConcordanceClass;
+    /** Concordance Registre/SNIS — niveau CS (pas de DHIS2 à ce niveau). */
+    concordanceRsP3: number | null;
+    classeRsP3: ConcordanceClass;
+    concordanceRsRr2: number | null;
+    classeRsRr2: ConcordanceClass;
     erreurSnisDhis2: number | null;
     erreurPointageRegistre: number | null;
     erreurRegistreSnis: number | null;
