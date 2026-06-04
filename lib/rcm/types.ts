@@ -36,7 +36,11 @@ export interface RcmBundle {
     source: { label: string; rows: number; enfants: number; ok: boolean; error?: string };
     hasData: boolean;
   };
-  filters: { provinces: string[]; antennes: string[]; zones: string[]; aires: string[]; months: string[]; types: string[] };
+  filters: {
+    provinces: string[]; antennes: string[]; zones: string[]; aires: string[]; months: string[]; types: string[];
+    /** Tuples géographiques pour les filtres en cascade (dérivés des données RCM). */
+    geo: { province: string | null; antenne: string | null; zone: string | null; aire: string | null }[];
+  };
   kpi: {
     asBeneficiaires: number;
     asTotal: number;

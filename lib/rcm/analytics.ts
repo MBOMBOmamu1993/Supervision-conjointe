@@ -9,6 +9,7 @@
  * complètes : les visuels s'alimentent automatiquement dès les premières données.
  */
 import type { RawRow } from "@/lib/supervision/types";
+import { canonAntenne, norm } from "@/lib/geo";
 import {
   RCM_ANTIGENES, RCM_ANTIGENE_LABEL, AGE_GROUP_LABEL,
   type RcmBundle, type RcmAntigene, type AgeGroup, type DistanceBand, type ReasonCount,
@@ -150,14 +151,25 @@ export function buildRcmBundle(
     aires: uniq(all.map((c) => c.aire)),
     months: uniq(all.map((c) => c.month)),
     types: [] as string[],
+    // Tuples géographiques (antennes canonicalisées) → filtres en cascade,
+    // dérivés des données de CET onglet.
+    geo: all.map((c) => ({
+      province: c.province,
+      antenne: canonAntenne(c.antenne),
+      zone: c.zone,
+      aire: c.aire,
+    })),
   };
 
   const months = filters.months ?? [];
+  // Comparaison normalisée (casse/accents/espaces) + canonicalisation des
+  // antennes, pour que les filtres correspondent aux valeurs du formulaire RCM.
+  const eq = (a: string | null, b: string | null) => norm(a ?? "") === norm(b ?? "");
   const children = all.filter((c) =>
-    (!filters.province || c.province === filters.province) &&
-    (!filters.antenne || c.antenne === filters.antenne) &&
-    (!filters.zone || c.zone === filters.zone) &&
-    (!filters.aire || c.aire === filters.aire) &&
+    (!filters.province || eq(c.province, filters.province)) &&
+    (!filters.antenne || eq(canonAntenne(c.antenne), canonAntenne(filters.antenne))) &&
+    (!filters.zone || eq(c.zone, filters.zone)) &&
+    (!filters.aire || eq(c.aire, filters.aire)) &&
     (months.length === 0 || (c.month != null && months.includes(c.month)))
   );
 
