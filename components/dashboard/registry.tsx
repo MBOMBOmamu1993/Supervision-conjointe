@@ -1,6 +1,5 @@
 "use client";
 
-import SupervisionVueEnsemble from "./pages/SupervisionVueEnsemble";
 import { SupervisionLevelPage, SupervisionSynthese } from "./pages/Supervision";
 import {
   CqdCsComparaison, CqdCsConcordance, CqdCsErreurs, CqdCsOutils, CqdCsEnfants,
@@ -13,7 +12,6 @@ import TelechargerRapport from "@/app/telecharger-rapport/page";
 /** id de page → composant de rendu (toutes les pages sont alimentées en LIVE). */
 export const PAGE_REGISTRY: Record<string, () => JSX.Element> = {
   // Supervision conjointe
-  sc_vue: SupervisionVueEnsemble,
   sc_antennes: () => <SupervisionLevelPage level="antenne" />,
   sc_zones: () => <SupervisionLevelPage level="zs" />,
   sc_aires: () => <SupervisionLevelPage level="as" />,

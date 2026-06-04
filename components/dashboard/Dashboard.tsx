@@ -108,7 +108,7 @@ function Welcome({ onStart }: { onStart: () => void }) {
           </span>
           <div>
             <h1 className="text-[30px] font-extrabold leading-none">Tableau de bord Tshuapa</h1>
-            <p className="mt-1 text-[16px] font-medium text-[#bcd6f5]">Supervision conjointe, Qualité des données & Monitorage rapide de convenance — PEV / OMS</p>
+            <p className="mt-1 text-[16px] font-medium text-[#bcd6f5]">Supervision conjointe, Contrôle qualité des données & Monitorage rapide de convenance — PEV / OMS</p>
           </div>
         </div>
         <div className="px-8 pb-8 pt-6">
@@ -120,7 +120,7 @@ function Welcome({ onStart }: { onStart: () => void }) {
               <h3 className="mb-2.5 flex items-center gap-2 text-[15px] font-extrabold text-navy-700"><DIcon name="quality" style={{ width: 18, height: 18 }} /> Sources de Données</h3>
               <div className="rounded-xl border border-surface-200 bg-[#f6f8fb] px-4 py-3.5 text-[13.5px] leading-snug text-surface-700 space-y-2.5">
                 <div><b>Supervision conjointe :</b> formulaires KoboToolbox Antenne, ZS et Aire de santé</div>
-                <div><b>Qualité des données :</b> contrôle qualité CS & ZS (Pointage · Registre · SNIS · DHIS2)</div>
+                <div><b>Contrôle qualité des données :</b> contrôle qualité CS & ZS (Pointage · Registre · SNIS · DHIS2)</div>
                 <div><b>Monitorage rapide de convenance :</b> formulaire RCM KoboToolbox</div>
               </div>
             </div>

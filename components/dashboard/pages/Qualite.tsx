@@ -18,11 +18,16 @@ const avg = (xs: (number | null)[]): number | null => {
 };
 const pctTxt = (v: number | null) => (v == null ? "—" : `${v}%`);
 const concClass = (c: ConcordanceClass) => (c === "sous" ? "Sous-rapportage" : c === "sur" ? "Sur-rapportage" : c === "normal" ? "Pas de discordance" : "—");
+/** Écart moyen rapporté au registre de vaccination (source de référence).
+ *  = moyenne des écarts absolus de chaque source comparée (pointage, SNIS, DHIS2)
+ *    par rapport au registre, divisée par la valeur du registre, en %. */
 const ecart = (a: { registre: number; pointage: number; snis: number; dhis2: number }) => {
-  const xs = [a.registre, a.pointage, a.snis, a.dhis2].filter((x) => x > 0);
-  if (xs.length < 2) return null;
-  const mx = Math.max(...xs), mn = Math.min(...xs);
-  return mx > 0 ? round(((mx - mn) / mx) * 100) : null;
+  const ref = a.registre;
+  if (!ref || ref <= 0) return null;
+  const sources = [a.pointage, a.snis, a.dhis2].filter((x) => x > 0);
+  if (!sources.length) return null;
+  const sumAbs = sources.reduce((acc, x) => acc + Math.abs(x - ref), 0);
+  return round((sumAbs / sources.length / ref) * 100);
 };
 function errAppr(v: number | null): { label: string; color: string } {
   if (v == null) return { label: "—", color: C.axis };
@@ -57,9 +62,9 @@ export function CqdCsComparaison() {
   const { b, live } = useLevel("as");
   return (
     <div className="space-y-4">
-      <Banner icon="chart" tone="blue" title="Centres de santé — Comparaison des sources de données" sub="Pointage · Registre · SNIS · DHIS2 — par antigène" />
+      <Banner icon="chart" tone="blue" title="Centres de santé — Comparaison des sources de données" sub="Source de référence : registre de vaccination — comparé au pointage, SNIS et DHIS2, par antigène" />
       <section>
-        <SectionBar icon="bars">Écart moyen entre sources par antigène</SectionBar>
+        <SectionBar icon="bars">Écart moyen par rapport au registre de vaccination, par antigène</SectionBar>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           {ANT4.map((lab, i) => { const a = b ? antByLabel(b, lab) : null; const e = a ? ecart(a) : null;
             return <KpiTile key={lab} icon={i < 2 ? "syringe" : "syringe"} tone={["green", "orange", "red", "blue"][i] as never} label={`Écart moyen ${lab}`} value={pctTxt(e)} />; })}
@@ -78,7 +83,11 @@ export function CqdCsComparaison() {
         ) : <Empty />}
       </div>
       <div className="card card-pad" style={{ background: "#eaf4fd" }}>
-        <div className="text-[12.5px] font-semibold text-surface-700">Messages clés : les valeurs restent globalement proches entre les sources ; les écarts les plus visibles guident les vérifications de transcription par antigène.</div>
+        <div className="text-[12.5px] font-semibold text-surface-700">
+          <b>Méthodologie de calcul des écarts :</b> la source de référence est le <b>registre de vaccination</b>.
+          L'écart moyen correspond à la somme des écarts absolus de chaque source comparée (pointage, SNIS, DHIS2) par rapport au registre,
+          divisée par le nombre de sources comparées, puis rapportée à la valeur du registre et exprimée en pourcentage.
+        </div>
       </div>
     </div>
   );
@@ -95,36 +104,36 @@ export function CqdCsConcordance() {
   const concAntigene = (l: string) => { const a = b ? antByLabel(b, l) : null; return a && a.snis > 0 ? round((a.registre / a.snis) * 100) : null; };
   return (
     <div className="space-y-4">
-      <Banner icon="concord" tone="green" title="Centres de santé — Concordance des données" sub="Registre / SNIS · Registre / Pointage — seuils 95–105" />
+      <Banner icon="concord" tone="green" title="Centres de santé — Concordance des données" sub="Concordance Registre – SNIS · Concordance Pointage – Registre — seuils 95–105" />
       <section>
         <SectionBar icon="bars">Indicateurs de concordance</SectionBar>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          <KpiTile icon="concord" tone="green" label="Concordance PENTA3 (Reg/SNIS)" value={pctTxt(concRsP3)} sub={concRsP3 == null ? "" : concClass(concRsP3 >= 95 && concRsP3 <= 105 ? "normal" : concRsP3 < 95 ? "sous" : "sur")} />
-          <KpiTile icon="concord" tone="violet" label="Concordance RR2 (Reg/SNIS)" value={pctTxt(concRsRr2)} />
+          <KpiTile icon="concord" tone="green" label="Concordance Registre – SNIS (PENTA3)" value={pctTxt(concRsP3)} sub={concRsP3 == null ? "" : concClass(concRsP3 >= 95 && concRsP3 <= 105 ? "normal" : concRsP3 < 95 ? "sous" : "sur")} />
+          <KpiTile icon="concord" tone="violet" label="Concordance Registre – SNIS (RR2)" value={pctTxt(concRsRr2)} />
           <KpiTile icon="down" tone="orange" label="AS en sous-rapportage" value={sous} />
           <KpiTile icon="up" tone="red" label="AS en sur-rapportage" value={sur} />
         </div>
       </section>
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-3">
         <div className="card card-pad lg:col-span-5">
-          <CardTitle icon="bars" tone="blue" title="Concordance globale par antigène" sub="Registre / SNIS (seuils 95–105)" />
+          <CardTitle icon="bars" tone="blue" title="Concordance Registre – SNIS par antigène" sub="Seuils 95–105" />
           {live ? <ProtoHBar height={180} byCot={false} color={C.blue} maxName={70} rows={ANT4.map((l) => [l, concAntigene(l) ?? 0]) as [string, number][]} /> : <Empty />}
         </div>
-        <div className="card card-pad lg:col-span-7">
-          <CardTitle icon="table" tone="navy" title="Concordance Registre / SNIS par aire de santé" sub="PENTA3 · RR2" />
-          {rows.length ? (
-            <div className="overflow-x-auto"><table className="dtable">
-              <thead><tr><th className="name">Aire de santé</th><th>Conc. PENTA3</th><th>Appréciation</th><th>Conc. RR2</th><th>Appréciation</th></tr></thead>
-              <tbody>{rows.map((r) => (
-                <tr key={r.name}><td className="name">{r.name}</td>
-                  <td>{pctTxt(r.concordanceRsP3)}</td><td>{r.concordanceRsP3 == null ? "—" : <ApprBadge p={r.concordanceRsP3} />}</td>
-                  <td>{pctTxt(r.concordanceRsRr2)}</td><td>{r.concordanceRsRr2 == null ? "—" : <ApprBadge p={r.concordanceRsRr2} />}</td></tr>
-              ))}</tbody>
-            </table></div>
-          ) : <Empty />}
-        </div>
+        <div className="lg:col-span-7"><Interpretation /></div>
       </div>
-      <Interpretation />
+      <div className="card card-pad">
+        <CardTitle icon="table" tone="navy" title="Détail de la concordance Registre – SNIS par aire de santé" sub="PENTA3 · RR2" />
+        {rows.length ? (
+          <div className="overflow-x-auto"><table className="dtable">
+            <thead><tr><th className="name">Aire de santé</th><th>Conc. PENTA3</th><th>Appréciation</th><th>Conc. RR2</th><th>Appréciation</th></tr></thead>
+            <tbody>{rows.map((r) => (
+              <tr key={r.name}><td className="name">{r.name}</td>
+                <td>{pctTxt(r.concordanceRsP3)}</td><td>{r.concordanceRsP3 == null ? "—" : <ApprBadge p={r.concordanceRsP3} />}</td>
+                <td>{pctTxt(r.concordanceRsRr2)}</td><td>{r.concordanceRsRr2 == null ? "—" : <ApprBadge p={r.concordanceRsRr2} />}</td></tr>
+            ))}</tbody>
+          </table></div>
+        ) : <Empty />}
+      </div>
     </div>
   );
 }
@@ -135,7 +144,8 @@ export function CqdCsErreurs() {
   const rows = b?.parStructure ?? [];
   const moyen = b?.erreurRegistreSnis ?? null;
   const systematiques = rows.filter((r) => (r.erreurRegistreSnis ?? 0) >= 50).length;
-  const comparaisons = rows.length * 4;
+  // 12 comparaisons par aire de santé : 4 antigènes (PENTA1·3 · RR1·2) × 3 mois.
+  const comparaisons = rows.length * 12;
   const top5 = [...rows].sort((a, b2) => (b2.erreurRegistreSnis ?? 0) - (a.erreurRegistreSnis ?? 0)).slice(0, 5);
   return (
     <div className="space-y-4">
@@ -143,10 +153,10 @@ export function CqdCsErreurs() {
       <section>
         <SectionBar icon="bars">Indicateurs d'erreur</SectionBar>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          <KpiTile icon="erreurs" tone="red" label="Taux d'erreur moyen" value={pctTxt(moyen)} sub="Registre / SNIS" />
-          <KpiTile icon="alert" tone="orange" label="AS erreurs systématiques" value={systematiques} sub="≥ 50 %" />
-          <KpiTile icon="scale" tone="navy" label="Taux pointage / registre" value={pctTxt(b?.erreurPointageRegistre ?? null)} />
-          <KpiTile icon="concord" tone="blue" label="Comparaisons réalisées" value={comparaisons} sub={`${rows.length} CS × 4 antigènes`} />
+          <KpiTile icon="erreurs" tone="red" label="Taux d'erreur (Registre – SNIS)" value={pctTxt(moyen)} sub="Toutes les aires de santé" />
+          <KpiTile icon="alert" tone="orange" label="AS avec erreur systématique" value={systematiques} sub="≥ 50 %" />
+          <KpiTile icon="scale" tone="navy" label="Taux d'erreur (Pointage – Registre)" value={pctTxt(b?.erreurPointageRegistre ?? null)} sub="Toutes les aires de santé" />
+          <KpiTile icon="concord" tone="blue" label="Comparaisons réalisées" value={comparaisons} sub={`${rows.length} AS × 12 (4 antigènes × 3 mois)`} />
         </div>
       </section>
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-3">
@@ -154,7 +164,7 @@ export function CqdCsErreurs() {
           <CardTitle icon="chart" tone="red" title="Taux d'erreur global par mois" sub="Seuil 50 % = erreurs systématiques" />
           {live && b && b.trend.length ? (
             <ProtoGroupedBar height={200} unit="%" max={100} colors={[C.red, C.orange]} cats={b.trend.map((t) => t.month.slice(0, 7))}
-              series={[{ name: "Registre / SNIS", data: b.trend.map((t) => t.erreurRegistreSnis ?? 0) }, { name: "Pointage / registre", data: b.trend.map((t) => t.erreurPointageRegistre ?? 0) }]} />
+              series={[{ name: "Registre – SNIS", data: b.trend.map((t) => t.erreurRegistreSnis ?? 0) }, { name: "Pointage – Registre", data: b.trend.map((t) => t.erreurPointageRegistre ?? 0) }]} />
           ) : <Empty msg="Pas d'évolution mensuelle disponible." />}
         </div>
         <div className="card card-pad lg:col-span-5">
@@ -166,13 +176,13 @@ export function CqdCsErreurs() {
         <CardTitle icon="table" tone="navy" title="Taux d'erreur par aire de santé" sub="Registre/SNIS · Pointage/registre · appréciation" />
         {rows.length ? (
           <div className="overflow-x-auto"><table className="dtable">
-            <thead><tr><th className="name">Aire de santé</th><th>Registre / SNIS</th><th>Pointage / registre</th><th>Appréciation</th></tr></thead>
+            <thead><tr><th className="name">Aire de santé</th><th>Registre – SNIS</th><th>Pointage – Registre</th><th>Appréciation</th></tr></thead>
             <tbody>{rows.map((r) => { const a = errAppr(r.erreurRegistreSnis); return (
               <tr key={r.name}><td className="name">{r.name}</td><td style={{ color: C.red, fontWeight: 700 }}>{pctTxt(r.erreurRegistreSnis)}</td><td>{pctTxt(r.erreurPointageRegistre)}</td><td style={{ color: a.color, fontWeight: 800 }}>{a.label}</td></tr>
             ); })}</tbody>
           </table></div>
         ) : <Empty />}
-        <div className="mt-2 text-[11px] text-surface-500">Taux d'erreur = données discordantes / total des comparaisons × 100 ; ≥ 50 % = erreurs systématiques.</div>
+        <div className="mt-2 text-[11px] text-surface-500">Taux d'erreur = données discordantes / total des comparaisons × 100 ; le total comparé est de 12 par aire de santé (4 antigènes × 3 mois) ; ≥ 50 % = erreurs systématiques.</div>
       </div>
     </div>
   );
@@ -227,14 +237,14 @@ export function CqdCsEnfants() {
   const byAs = rows.map((r) => [r.name, r.enfantsIdentifies] as [string, number]).filter((x) => x[1] > 0).sort((a, c) => c[1] - a[1]).slice(0, 10);
   return (
     <div className="space-y-4">
-      <Banner icon="enfants" tone="teal" title="Centres de santé — Enfants manqués / perdus de vue" sub="Identification via le registre · récupération" />
+      <Banner icon="enfants" tone="teal" title="Centres de santé — Enfants manqués / à récupérer" sub="Identification via le registre · retrouvés par les relais · effectivement récupérés" />
       <section>
-        <SectionBar icon="child">Enfants perdus de vue</SectionBar>
+        <SectionBar icon="child">Enfants manqués / à récupérer</SectionBar>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          <KpiTile icon="enfants" tone="navy" label="À récupérer (identifiés)" value={e.aRecuperer} />
-          <KpiTile icon="clip" tone="violet" label="Identifiés précédemment" value={e.identifies} />
-          <KpiTile icon="people" tone="orange" label="Retrouvés par les relais" value={e.retrouves} />
-          <KpiTile icon="check" tone="green" label="Effectivement récupérés" value={e.recuperes} sub={`Taux : ${pctTxt(e.tauxRecuperes)}`} />
+          <KpiTile icon="enfants" tone="navy" label="Enfants identifiés récemment (supervision en cours)" value={e.aRecuperer} />
+          <KpiTile icon="clip" tone="violet" label="Enfants identifiés précédemment" value={e.identifies} />
+          <KpiTile icon="people" tone="orange" label="Enfants identifiés précédemment et retrouvés par les relais" value={e.retrouves} />
+          <KpiTile icon="check" tone="green" label="Enfants identifiés précédemment et effectivement récupérés" value={e.recuperes} sub={`Taux : ${pctTxt(e.tauxRecuperes)}`} />
         </div>
       </section>
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-3">
