@@ -14,6 +14,7 @@
  */
 import { norm, findColumn, getColumns } from "@/lib/supervision/schema";
 import { resolveTypeLabel } from "@/lib/supervision/schema";
+import { canonAntenne } from "@/lib/geo";
 import type { CqdFetch } from "@/lib/supervision/kobo-client";
 import type { RawRow } from "@/lib/supervision/types";
 import type {
@@ -190,7 +191,7 @@ function buildRecords(src: CqdFetch): CqdRecord[] {
 
 function pass(r: CqdRecord, f: CqdFilters): boolean {
   if (f.province && r.province && norm(r.province) !== norm(f.province)) return false;
-  if (f.antenne && r.antenne && norm(r.antenne) !== norm(f.antenne)) return false;
+  if (f.antenne && r.antenne && norm(canonAntenne(r.antenne) ?? "") !== norm(canonAntenne(f.antenne) ?? "")) return false;
   if (f.zone && r.zone && norm(r.zone) !== norm(f.zone)) return false;
   if (f.aire && r.aire && norm(r.aire) !== norm(f.aire)) return false;
   if (f.months && f.months.length && (!r.month || !f.months.includes(r.month))) return false;
@@ -475,6 +476,14 @@ export function buildCqdBundle(sources: CqdFetch[], filters: CqdFilters): CqdBun
       aires: uniq(allUnfiltered.map((r) => r.aire)),
       months: uniq(allUnfiltered.map((r) => r.month)),
       types: uniq(allUnfiltered.map((r) => r.typeLabel)),
+      // Tuples géographiques (antennes canonicalisées) → filtres en cascade
+      // Province → Antenne → ZS → Aire, dérivés des données de CET onglet.
+      geo: allUnfiltered.map((r) => ({
+        province: r.province,
+        antenne: canonAntenne(r.antenne),
+        zone: r.zone,
+        aire: r.aire,
+      })),
     },
     levels: {
       zs: buildLevel("zs", byLevel.zs),

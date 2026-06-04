@@ -4,10 +4,16 @@
  * Barre de filtres du nouveau shell — affichage dynamique selon le niveau de la
  * page (cf. specs/05). Écrit dans le store global `useFilters` : tous les KPI,
  * graphiques et tableaux des pages live réagissent à chaque changement.
- * Apparence simple (sans pastille colorée) ; seule « Période » garde une icône.
+ *
+ * IMPORTANT : les options des listes déroulantes (Province → Antenne → ZS → Aire,
+ * Période) proviennent de la source de données de l'ONGLET ACTIF (Supervision,
+ * Qualité/CQD, RCM ou État de lieux). Ainsi un filtre ne propose jamais une
+ * valeur absente du formulaire de l'onglet — ce qui évitait que tout se vide.
  */
 import { useFilters, TYPE_GROUPS } from "@/lib/state/filters";
 import { useSupervision } from "@/lib/client/api";
+import { useCqd } from "@/lib/client/cqd-api";
+import { useRcm } from "@/lib/client/rcm-api";
 import { cascadeOptions, type GeoTuple } from "@/lib/geo";
 import { edlGeoTuples } from "@/lib/etat-lieux/edl-filter";
 import { PeriodFilter } from "@/components/shell/PeriodFilter";
@@ -39,13 +45,10 @@ function Select({ value, onChange, options, placeholder }: {
   );
 }
 
-export function FilterBarShell({ allow }: { allow: string[] }) {
+/** Présentation pure : reçoit les tuples géo + mois de l'onglet actif. */
+function FilterBarView({ allow, geoTuples, months }: { allow: string[]; geoTuples: GeoTuple[]; months: string[] }) {
   const f = useFilters();
-  const { data } = useSupervision();
-  const opt = data?.filters;
-
-  const tuples: GeoTuple[] = [...edlGeoTuples(), ...((opt?.geo as GeoTuple[]) ?? [])];
-  const geo = cascadeOptions(tuples, { province: f.province, antenne: f.antenne, zone: f.zone, aire: f.aire });
+  const geo = cascadeOptions(geoTuples, { province: f.province, antenne: f.antenne, zone: f.zone, aire: f.aire });
   const selectedGroup = TYPE_GROUPS.find((g) => g.key === f.types[0]);
   const show = (k: string) => allow.includes(k);
 
@@ -88,7 +91,7 @@ export function FilterBarShell({ allow }: { allow: string[] }) {
         )}
         {show("periode") && (
           <Field label="Période">
-            <PeriodFilter value={f.months} available={opt?.months ?? []} onChange={(m) => f.set({ months: m })} />
+            <PeriodFilter value={f.months} available={months} onChange={(m) => f.set({ months: m })} />
           </Field>
         )}
         <button
@@ -102,4 +105,37 @@ export function FilterBarShell({ allow }: { allow: string[] }) {
       </div>
     </div>
   );
+}
+
+/* --- Adaptateurs par source : chacun n'appelle qu'un seul hook de données. --- */
+
+function SupervisionFilters({ allow }: { allow: string[] }) {
+  const { data } = useSupervision();
+  const opt = data?.filters;
+  return <FilterBarView allow={allow} geoTuples={(opt?.geo as GeoTuple[]) ?? []} months={opt?.months ?? []} />;
+}
+
+function CqdFilters({ allow }: { allow: string[] }) {
+  const { data } = useCqd();
+  const opt = data?.filters;
+  return <FilterBarView allow={allow} geoTuples={(opt?.geo as GeoTuple[]) ?? []} months={opt?.months ?? []} />;
+}
+
+function RcmFilters({ allow }: { allow: string[] }) {
+  const { data } = useRcm();
+  const opt = data?.filters;
+  return <FilterBarView allow={allow} geoTuples={(opt?.geo as GeoTuple[]) ?? []} months={opt?.months ?? []} />;
+}
+
+function EdlFilters({ allow }: { allow: string[] }) {
+  // L'État de lieux couvre la hiérarchie complète de la province (données statiques).
+  return <FilterBarView allow={allow} geoTuples={edlGeoTuples()} months={[]} />;
+}
+
+/** Sélectionne la source d'options selon l'onglet actif (clé de module). */
+export function FilterBarShell({ allow, source }: { allow: string[]; source: string }) {
+  if (source === "qualite") return <CqdFilters allow={allow} />;
+  if (source === "rcm") return <RcmFilters allow={allow} />;
+  if (source === "etat") return <EdlFilters allow={allow} />;
+  return <SupervisionFilters allow={allow} />;
 }

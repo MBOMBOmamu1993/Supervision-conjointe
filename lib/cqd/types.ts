@@ -138,6 +138,10 @@ export interface CqdBundle {
     months: string[];
     sources: { key: "zs" | "as"; label: string; rows: number; ok: boolean; error?: string }[];
   };
-  filters: { provinces: string[]; antennes: string[]; zones: string[]; aires: string[]; months: string[]; types: string[] };
+  filters: {
+    provinces: string[]; antennes: string[]; zones: string[]; aires: string[]; months: string[]; types: string[];
+    /** Tuples géographiques pour les filtres en cascade (dérivés des données CQD). */
+    geo: { province: string | null; antenne: string | null; zone: string | null; aire: string | null }[];
+  };
   levels: { zs: CqdLevelBundle; as: CqdLevelBundle };
 }
