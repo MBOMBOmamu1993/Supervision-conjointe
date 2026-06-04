@@ -186,7 +186,10 @@ function Home({ onOpen }: { onOpen: (key: string) => void }) {
 
 /* ----------------------------- Phase 4 — Vue module ----------------------------- */
 function ModuleView({ mod, page, onSelectPage, onHome }: { mod: ModuleDef; page: PageDef; onSelectPage: (id: string) => void; onHome: () => void }) {
-  const allow = LVL_FILTERS[page.lvl];
+  // Le filtre « Type de supervision » n'a de sens que pour l'onglet Supervision :
+  // les formulaires Qualité (CQD), Monitorage (RCM) et État de lieux n'ont pas ce
+  // champ — on le retire pour éviter un filtre qui ne filtre rien.
+  const allow = (mod.key === "supervision" ? LVL_FILTERS[page.lvl] : LVL_FILTERS[page.lvl].filter((k) => k !== "type"));
   const Comp = PAGE_REGISTRY[page.id];
   const [a, b] = DTONES[mod.tone] ?? DTONES.navy;
 

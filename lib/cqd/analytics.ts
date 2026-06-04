@@ -161,13 +161,22 @@ function buildRecords(src: CqdFetch): CqdRecord[] {
     const an = antenne ? str(row[antenne]) : null;
     const rawStruct = src.key === "zs" ? z : (a ?? e);
     const structure = cleanStructureName(rawStruct, z, an);
+    // Libellés géographiques nettoyés (retrait des suffixes parents encodés
+    // « aire_zs_antenne », mise en forme) → filtres sans doublon ni nom collé
+    // au parent par underscore/tiret. Les filtres et le prédicat pass()
+    // s'appuient sur ces mêmes valeurs : la concordance reste garantie.
+    const provRaw = province ? str(row[province]) : null;
+    const provClean = provRaw ? prettifyName(provRaw) : null;
+    const anClean = an ? prettifyName(canonAntenne(an) ?? an) : null;
+    const zoneClean = cleanStructureName(z, null, an);
+    const aireClean = cleanStructureName(a, z, an);
     return {
       id: `cqd-${src.key}-${i}`,
       level: src.key,
-      province: province ? str(row[province]) : null,
-      antenne: an,
-      zone: z,
-      aire: a,
+      province: provClean,
+      antenne: anClean,
+      zone: zoneClean,
+      aire: aireClean,
       structure: structure ?? `${src.key.toUpperCase()} ${i + 1}`,
       month: normalizeCqdMonth(dateCol ? toMonth(row[dateCol]) : null),
       typeLabel: typeCol ? resolveTypeLabel(row[typeCol]) : resolveTypeLabel(null),
