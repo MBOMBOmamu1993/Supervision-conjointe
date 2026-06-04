@@ -21,7 +21,8 @@ export const TYPE_GROUPS: TypeGroupDef[] = [
   { key: "moh_seul", label: "Supervision par MoH (seul)", types: ["auto_eval", "mca_seul", "ecz_seul"] },
 ];
 
-export interface FiltersState {
+/** Valeurs de filtre d'un onglet. */
+export interface FilterValues {
   province: string | null;
   antenne: string | null;
   zone: string | null;
@@ -30,48 +31,69 @@ export interface FiltersState {
   months: string[];
   /** Groupes de types de supervision sélectionnés (clés de TYPE_GROUPS). */
   types: string[];
-  set: (patch: Partial<Omit<FiltersState, "set" | "reset" | "resetField">>) => void;
-  /** Réinitialise tous les filtres. */
-  reset: () => void;
-  /** Réinitialise un champ précis (et ses dépendants pour la cascade géo). */
-  resetField: (field: "province" | "antenne" | "zone" | "aire" | "months" | "types") => void;
 }
 
-export const useFilters = create<FiltersState>((set) => ({
-  province: null,
-  antenne: null,
-  zone: null,
-  aire: null,
-  months: [],
-  types: [],
-  set: (patch) => set(patch),
-  reset: () => set({ province: null, antenne: null, zone: null, aire: null, months: [], types: [] }),
-  resetField: (field) =>
+export type FilterField = "province" | "antenne" | "zone" | "aire" | "months" | "types";
+
+export const EMPTY_FILTERS: FilterValues = {
+  province: null, antenne: null, zone: null, aire: null, months: [], types: [],
+};
+
+/**
+ * Store de filtres CLOISONNÉ PAR ONGLET : chaque onglet (supervision, qualite,
+ * rcm, etat…) possède son propre jeu de filtres. Les visuels d'un onglet ne
+ * dépendent donc que des filtres de cet onglet, jamais de ceux d'un autre.
+ */
+interface FiltersStore {
+  tabs: Record<string, FilterValues>;
+  set: (tab: string, patch: Partial<FilterValues>) => void;
+  reset: (tab: string) => void;
+  resetField: (tab: string, field: FilterField) => void;
+}
+
+export const useFiltersStore = create<FiltersStore>((set) => ({
+  tabs: {},
+  set: (tab, patch) =>
+    set((s) => ({ tabs: { ...s.tabs, [tab]: { ...(s.tabs[tab] ?? EMPTY_FILTERS), ...patch } } })),
+  reset: (tab) => set((s) => ({ tabs: { ...s.tabs, [tab]: EMPTY_FILTERS } })),
+  resetField: (tab, field) =>
     set((s) => {
-      switch (field) {
-        // Réinitialiser un niveau géographique réinitialise aussi ses enfants
-        // (cohérence de la cascade Province → Antenne → ZS → Aire).
-        case "province":
-          return { province: null, antenne: null, zone: null, aire: null };
-        case "antenne":
-          return { antenne: null, zone: null, aire: null };
-        case "zone":
-          return { zone: null, aire: null };
-        case "aire":
-          return { aire: null };
-        case "months":
-          return { months: [] };
-        case "types":
-          return { types: [] };
-        default:
-          return s;
-      }
+      const cur = s.tabs[tab] ?? EMPTY_FILTERS;
+      // Réinitialiser un niveau géographique réinitialise aussi ses enfants
+      // (cohérence de la cascade Province → Antenne → ZS → Aire).
+      const patch: Partial<FilterValues> =
+        field === "province" ? { province: null, antenne: null, zone: null, aire: null }
+        : field === "antenne" ? { antenne: null, zone: null, aire: null }
+        : field === "zone" ? { zone: null, aire: null }
+        : field === "aire" ? { aire: null }
+        : field === "months" ? { months: [] }
+        : { types: [] };
+      return { tabs: { ...s.tabs, [tab]: { ...cur, ...patch } } };
     }),
 }));
 
-export type QueryFilters = Pick<FiltersState, "province" | "antenne" | "zone" | "aire" | "months" | "types">;
+/**
+ * Accès aux filtres d'un onglet précis (valeurs + setters liés à cet onglet).
+ * À utiliser par la barre de filtres et par les hooks de données de l'onglet.
+ */
+export function useTabFilters(tab: string): FilterValues & {
+  set: (patch: Partial<FilterValues>) => void;
+  reset: () => void;
+  resetField: (field: FilterField) => void;
+} {
+  const values = useFiltersStore((s) => s.tabs[tab] ?? EMPTY_FILTERS);
+  const set = useFiltersStore((s) => s.set);
+  const reset = useFiltersStore((s) => s.reset);
+  const resetField = useFiltersStore((s) => s.resetField);
+  return {
+    ...values,
+    set: (patch) => set(tab, patch),
+    reset: () => reset(tab),
+    resetField: (field) => resetField(tab, field),
+  };
+}
 
-export function filtersToQuery(f: QueryFilters): string {
+export function filtersToQuery(f: FilterValues): string {
   const p = new URLSearchParams();
   if (f.province) p.set("province", f.province);
   if (f.antenne) p.set("antenne", f.antenne);

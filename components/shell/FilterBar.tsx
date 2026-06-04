@@ -1,7 +1,7 @@
 "use client";
 
 import { usePathname } from "next/navigation";
-import { useFilters, TYPE_GROUPS } from "@/lib/state/filters";
+import { useTabFilters, TYPE_GROUPS } from "@/lib/state/filters";
 import { useSupervision } from "@/lib/client/api";
 import { Icon } from "@/components/ui/Icon";
 import { cascadeOptions, type GeoTuple } from "@/lib/geo";
@@ -82,7 +82,9 @@ function Select({
 /** Barre de filtres : Province, Antenne, ZS, Aire, Type de supervision, Période. */
 export function FilterBar() {
   const pathname = usePathname();
-  const f = useFilters();
+  // Onglet déduit du chemin (routes legacy) → filtres cloisonnés par onglet.
+  const tab = pathname.startsWith("/qualite") ? "qualite" : pathname.startsWith("/etat") ? "etat" : "supervision";
+  const f = useTabFilters(tab);
   const { data } = useSupervision();
   const opt = data?.filters;
   const pill = PILL[pathname] ?? "Tableau de bord";

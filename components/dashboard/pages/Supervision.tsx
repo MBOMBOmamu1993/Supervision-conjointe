@@ -189,6 +189,23 @@ export function SupervisionSynthese() {
                 <HlCard icon="flag" tone="orange" label="Alerte principale" big={d.highlights.alert ?? "Aucune alerte majeure"} />
               </div>
             </section>
+
+            <section>
+              <SectionBar icon="trophy">Résumé Score Global</SectionBar>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {(["antenne", "zs", "as"] as StructureLevel[]).flatMap((k) => {
+                  const lab = { antenne: "Antenne", zs: "Zone de santé", as: "Aire de santé" }[k];
+                  const valid = lv[k].perStructure.filter((s) => s.score !== null);
+                  const sorted = [...valid].sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
+                  const best = sorted[0] ?? null;
+                  const worst = sorted.length ? sorted[sorted.length - 1] : null;
+                  return [
+                    <HlCard key={`${k}-best`} icon="trophy" tone="green" label={`${lab} avec le score le plus performant`} big={best?.name ?? "—"} sub={`Score moyen : ${fmtPct(best?.score ?? null)}`} />,
+                    <HlCard key={`${k}-worst`} icon="alert" tone="red" label={`${lab} avec le score le plus faible`} big={worst?.name ?? "—"} sub={`Score moyen : ${fmtPct(worst?.score ?? null)}`} />,
+                  ];
+                })}
+              </div>
+            </section>
           </div>
         );
       }}
