@@ -18,6 +18,7 @@ import type { CqdFetch } from "@/lib/supervision/kobo-client";
 import type { RawRow } from "@/lib/supervision/types";
 import type {
   CqdBundle,
+  CqdConcordanceAS,
   CqdLevelBundle,
   CqdRecord,
   CqdTrendPoint,
@@ -329,6 +330,69 @@ function buildLevel(level: "zs" | "as", records: CqdRecord[]): CqdLevelBundle {
     };
   }).sort((a, b) => (a.name.localeCompare(b.name)));
 
+  // ---- Concordance niveau CS : Fiche de pointage → Registre → SNIS. ----
+  // Taux de concordance = valeur transcrite / référence × 100 :
+  //  · SNIS/Registre   = SNIS transcrit du registre (réf. = registre)
+  //  · Registre/Pointage = registre compilé depuis la feuille de pointage (réf. = pointage)
+  const csMonths = Array.from(new Set(records.map((r) => r.month).filter((m): m is string => !!m))).sort();
+  const ratio = (numv: number, denv: number) => (denv > 0 ? r1((numv / denv) * 100) : null);
+  const antDefs: [string, keyof Antigen4][] = [["PENTA1", "p1"], ["PENTA3", "p3"], ["RR1", "rr1"], ["RR2", "rr2"]];
+  const sumKeys = (recs: CqdRecord[], src: (r: CqdRecord) => Antigen4) =>
+    recs.reduce((a, r) => a + ANTIGEN_KEYS.reduce((s, k) => s + src(r)[k], 0), 0);
+
+  const buildConcTable = (numSrc: (r: CqdRecord) => Antigen4, denSrc: (r: CqdRecord) => Antigen4): CqdConcordanceAS[] =>
+    Array.from(byStruct.entries())
+      .map(([name, recs]) => ({
+        name,
+        zone: recs[0]?.zone ?? null,
+        antigenes: antDefs.map(([antigene, k]) => ({
+          antigene,
+          byMonth: csMonths.map((m) => {
+            const mr = recs.filter((r) => r.month === m);
+            return ratio(mr.reduce((a, r) => a + numSrc(r)[k], 0), mr.reduce((a, r) => a + denSrc(r)[k], 0));
+          }),
+        })),
+      }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+
+  // Cards globales (tous antigènes, toutes AS).
+  const totSnis = sumKeys(records, (r) => r.snis);
+  const totReg = sumKeys(records, (r) => r.registre);
+  const totPoi = sumKeys(records, (r) => r.pointage);
+
+  const totDhis2 = sumKeys(records, (r) => r.dhis2);
+
+  // Décompte des structures en sous-/sur-rapportage (tous antigènes confondus) :
+  //  · AS → base SNIS/Registre ; · ZS → base DHIS2/SNIS.
+  let asSous = 0, asSur = 0, zsSous = 0, zsSur = 0;
+  for (const recs of byStruct.values()) {
+    const tAs = ratio(sumKeys(recs, (r) => r.snis), sumKeys(recs, (r) => r.registre));
+    if (tAs !== null) { if (tAs < 95) asSous++; else if (tAs > 105) asSur++; }
+    const tZs = ratio(sumKeys(recs, (r) => r.dhis2), sumKeys(recs, (r) => r.snis));
+    if (tZs !== null) { if (tZs < 95) zsSous++; else if (tZs > 105) zsSur++; }
+  }
+
+  const csConcordance = {
+    months: csMonths,
+    globalSnisRegistre: ratio(totSnis, totReg),
+    globalRegistrePointage: ratio(totReg, totPoi),
+    globalDhis2Snis: ratio(totDhis2, totSnis),
+    asSousRapportage: asSous,
+    asSurRapportage: asSur,
+    zsSousRapportage: zsSous,
+    zsSurRapportage: zsSur,
+    parAntigene: antDefs.map(([antigene, k]) => {
+      const sn = records.reduce((a, r) => a + r.snis[k], 0);
+      const rg = records.reduce((a, r) => a + r.registre[k], 0);
+      const po = records.reduce((a, r) => a + r.pointage[k], 0);
+      const dh = records.reduce((a, r) => a + r.dhis2[k], 0);
+      return { antigene, snisRegistre: ratio(sn, rg), registrePointage: ratio(rg, po), dhis2Snis: ratio(dh, sn) };
+    }),
+    snisRegistre: buildConcTable((r) => r.snis, (r) => r.registre),
+    registrePointage: buildConcTable((r) => r.registre, (r) => r.pointage),
+    dhis2Snis: buildConcTable((r) => r.dhis2, (r) => r.snis),
+  };
+
   return {
     level,
     records: records.length,
@@ -377,6 +441,7 @@ function buildLevel(level: "zs" | "as", records: CqdRecord[]): CqdLevelBundle {
         };
       });
     })(),
+    csConcordance,
     trend,
     parStructure,
   };

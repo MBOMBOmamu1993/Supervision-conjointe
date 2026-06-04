@@ -38,6 +38,17 @@ export interface ConcordanceStat {
   classe: ConcordanceClass;
 }
 
+/**
+ * Concordance niveau CS par aire de santé : pour chaque antigène, le taux
+ * mensuel (aligné sur le tableau `months` du bloc parent). Utilisé pour les
+ * tableaux « Concordance par aire de santé » (SNIS/Registre et Registre/Pointage).
+ */
+export interface CqdConcordanceAS {
+  name: string;
+  zone: string | null;
+  antigenes: { antigene: string; byMonth: (number | null)[] }[];
+}
+
 export interface CqdTrendPoint {
   month: string;
   concordanceP3: number | null;
@@ -70,6 +81,32 @@ export interface CqdLevelBundle {
   parAntigene: { antigene: string; concordance: number | null; erreur: number | null }[];
   /** Évolution mensuelle. */
   trend: CqdTrendPoint[];
+  /**
+   * Concordance niveau CS (chaîne Fiche de pointage → Registre → SNIS).
+   * Deux comparaisons : SNIS/Registre (SNIS transcrit du registre) et
+   * Registre/Pointage (registre compilé depuis la feuille de pointage).
+   * Cards globales (tous antigènes), graphique par antigène, tableaux mensuels.
+   */
+  csConcordance: {
+    months: string[];
+    /** Concordance globale tous antigènes confondus, toutes structures. */
+    globalSnisRegistre: number | null;
+    globalRegistrePointage: number | null;
+    /** Concordance globale DHIS2/SNIS (niveau ZS). */
+    globalDhis2Snis: number | null;
+    /** Nombre d'AS en sous-/sur-rapportage (base SNIS/Registre). */
+    asSousRapportage: number;
+    asSurRapportage: number;
+    /** Nombre de ZS en sous-/sur-rapportage (base DHIS2/SNIS). */
+    zsSousRapportage: number;
+    zsSurRapportage: number;
+    /** Concordance globale par antigène (les trois comparaisons). */
+    parAntigene: { antigene: string; snisRegistre: number | null; registrePointage: number | null; dhis2Snis: number | null }[];
+    /** Tableaux mensuels par structure (aire de santé pour CS, zone pour ZS). */
+    snisRegistre: CqdConcordanceAS[];
+    registrePointage: CqdConcordanceAS[];
+    dhis2Snis: CqdConcordanceAS[];
+  };
   /** Détail par structure (concordance + erreur + outils + enfants). */
   parStructure: {
     name: string;
