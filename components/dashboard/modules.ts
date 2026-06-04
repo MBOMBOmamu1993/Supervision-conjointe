@@ -33,17 +33,16 @@ export const MODULES: ModuleDef[] = [
   },
   {
     key: "supervision", name: "Supervision conjointe", icon: "link", tone: "navy", live: true,
-    desc: "Réalisation, scores et cotations des supervisions Antenne · ZS · Aire de santé.",
+    desc: "Réalisation et résultats factuels des supervisions Antenne · ZS · Aire de santé.",
     pages: [
-      { id: "sc_vue", label: "Vue d'ensemble", icon: "overview", lvl: "all" },
+      { id: "sc_synthese", label: "Synthèse transversale", icon: "synthese", lvl: "all" },
       { id: "sc_antennes", label: "Antennes", icon: "antenne", lvl: "antenne" },
       { id: "sc_zones", label: "Zones de santé", icon: "zs", lvl: "zs" },
       { id: "sc_aires", label: "Aires de santé", icon: "as", lvl: "as" },
-      { id: "sc_synthese", label: "Synthèse transversale", icon: "synthese", lvl: "all" },
     ],
   },
   {
-    key: "qualite", name: "Qualité des données", icon: "quality", tone: "good", live: true,
+    key: "qualite", name: "Contrôle qualité des données", icon: "quality", tone: "good", live: true,
     desc: "Concordance Pointage · Registre · SNIS · DHIS2, taux d'erreur et qualité des outils.",
     groups: [
       {
@@ -75,7 +74,7 @@ export const MODULES: ModuleDef[] = [
     ],
   },
   { key: "sav", name: "SAV", icon: "route", tone: "warn", live: false, desc: "Stratégies avancées de vaccination — à intégrer prochainement." },
-  { key: "rapport", name: "Rapport hebdomadaire des consultants", icon: "report", tone: "teal", live: false, desc: "Suivi hebdomadaire des activités des consultants — à venir." },
+  { key: "rapport", name: "Rapport mensuel des consultants", icon: "report", tone: "teal", live: false, desc: "Suivi mensuel des activités des consultants — à venir." },
   { key: "evaluation", name: "Évaluation des consultants", icon: "eval", tone: "danger", live: false, desc: "Évaluation de la performance des consultants — à venir." },
   {
     key: "telecharger", name: "Télécharger rapport", icon: "download", tone: "good", live: true,

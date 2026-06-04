@@ -21,6 +21,8 @@ function totals(b: LevelBundle) {
   const all = evaluated + t.na;
   return { ...t, evaluated, all, ouiPct: evaluated ? Math.round((t.oui / evaluated) * 100) : null };
 }
+/** Proportion d'une réponse rapportée au total des questions administrées (Oui+Non+Partiel+NA). */
+const propTxt = (count: number, all: number) => (all ? `${Math.round((count / all) * 100)} %` : "—");
 
 function MonthTable({ b, months }: { b: LevelBundle; months: string[] }) {
   if (!months.length || !b.composantesMonthly.length) return <div className="py-8 text-center text-[12px] text-surface-500">Pas de données mensuelles.</div>;
@@ -68,17 +70,19 @@ export function SupervisionLevelPage({ level }: { level: StructureLevel }) {
 
             <section>
               <SectionBar icon="bars">Indicateurs clés</SectionBar>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                 <KpiTile icon={meta.icon} tone={meta.tone} label={`${meta.plural} supervisées`} value={block.count} pct={block.pct ?? undefined} />
-                <KpiTile icon="check" tone="green" label="Score global moyen" value={fmtPct(b.score.moyen)} sub={`Min ${fmtPct(b.score.min)} · Max ${fmtPct(b.score.max)}`} />
-                <KpiTile icon="clip" tone="navy" label="Questions évaluées" value={t.evaluated} sub={`${t.all} réponses au total`} />
-                <KpiTile icon="component" tone="orange" label="Moyenne réponses OUI" value={t.ouiPct === null ? "—" : `${t.ouiPct}%`} sub="Sur questions évaluées" />
+                <KpiTile icon="clip" tone="navy" label="Questions administrées" value={t.all} sub="Total des réponses" />
+                <KpiTile icon="check" tone="green" label="Réponses « Oui »" value={t.oui} sub={`Proportion : <b>${propTxt(t.oui, t.all)}</b>`} />
+                <KpiTile icon="component" tone="orange" label="Réponses « Partiellement »" value={t.partiel} sub={`Proportion : <b>${propTxt(t.partiel, t.all)}</b>`} />
+                <KpiTile icon="down" tone="red" label="Réponses « Non »" value={t.non} sub={`Proportion : <b>${propTxt(t.non, t.all)}</b>`} />
+                <KpiTile icon="legend" tone="blue" label="Réponses « Non applicable »" value={t.na} sub={`Proportion : <b>${propTxt(t.na, t.all)}</b>`} />
               </div>
             </section>
 
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-3">
               <div className="card card-pad lg:col-span-7">
-                <CardTitle icon="component" tone={meta.tone} title="Répartition Oui / Non / Partiel / NA par composante" sub="6 composantes ACD" />
+                <CardTitle icon="component" tone={meta.tone} title="Proportion des réponses Oui, Non, Partiellement et Non applicable par composante" sub="6 composantes ACD" />
                 {b.composanteAnswers.length ? <StackedAnswers rows={b.composanteAnswers.map((c) => ({ name: c.short, answers: c.answers }))} /> : <div className="py-8 text-center text-[12px] text-surface-500">Aucune donnée.</div>}
               </div>
               <div className="card card-pad lg:col-span-5">
@@ -95,7 +99,7 @@ export function SupervisionLevelPage({ level }: { level: StructureLevel }) {
             <section>
               <SectionBar icon="bars">Score global par {meta.plural.toLowerCase()}</SectionBar>
               <div className="card card-pad">
-                {b.perStructure.length ? <HBar data={b.perStructure.map((s) => ({ name: s.name, value: s.score }))} /> : <div className="py-8 text-center text-[12px] text-surface-500">Aucune structure évaluée.</div>}
+                {b.perStructure.length ? <HBar data={b.perStructure.map((s) => ({ name: s.name, value: s.score }))} /> : <div className="py-8 text-center text-[12px] text-surface-500">Aucune structure supervisée.</div>}
               </div>
             </section>
           </div>
@@ -111,18 +115,35 @@ export function SupervisionSynthese() {
       {(d: SupervisionBundle) => {
         const lv = d.levels;
         const ouiOf = (b: LevelBundle) => totals(b).ouiPct ?? 0;
+        // Totaux des réponses consolidés sur les trois niveaux de structure.
+        const g = (["antenne", "zs", "as"] as StructureLevel[]).reduce(
+          (acc, k) => { const t = totals(lv[k]); acc.oui += t.oui; acc.partiel += t.partiel; acc.non += t.non; acc.na += t.na; acc.all += t.all; return acc; },
+          { oui: 0, partiel: 0, non: 0, na: 0, all: 0 },
+        );
+        const prop = (count: number) => (g.all ? `${Math.round((count / g.all) * 100)} %` : "—");
         return (
           <div className="space-y-4">
             <Banner icon="synthese" tone="navy" title="Synthèse transversale de la supervision conjointe"
               sub={<>Vue consolidée Antenne · Zone de santé · Aire de santé</>} />
 
             <section>
-              <SectionBar icon="bars">Indicateurs globaux</SectionBar>
+              <SectionBar icon="bars">Réalisation des supervisions</SectionBar>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                <KpiTile icon="link" tone="blue" label="Total supervisions" value={d.kpi.total_supervisions} sub="Toutes catégories" />
-                <KpiTile icon="tower" tone="navy" label="Antennes / ZS / AS" value={`${lv.antenne.perStructure.length}/${lv.zs.perStructure.length}/${lv.as.perStructure.length}`} sub="Structures évaluées" />
-                <KpiTile icon="check" tone="green" label="Qualité moyenne (OUI)" value={`${Math.round((ouiOf(lv.antenne) + ouiOf(lv.zs) + ouiOf(lv.as)) / 3)}%`} sub="Moyenne des niveaux" />
-                <KpiTile icon="alert" tone="orange" label="Composante la plus faible" value={d.highlights.worstComposante?.short ?? "—"} sub={fmtPct(d.highlights.worstComposante?.score ?? null)} />
+                <KpiTile icon="tower" tone="navy" label="Antennes supervisées" value={lv.antenne.perStructure.length} />
+                <KpiTile icon="hospital" tone="violet" label="Zones de santé supervisées" value={lv.zs.perStructure.length} />
+                <KpiTile icon="clinic" tone="green" label="Aires de santé supervisées" value={lv.as.perStructure.length} />
+                <KpiTile icon="link" tone="blue" label="Total supervisions réalisées" value={d.kpi.total_supervisions} sub="Toutes catégories" />
+              </div>
+            </section>
+
+            <section>
+              <SectionBar icon="component">Réponses administrées</SectionBar>
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
+                <KpiTile icon="clip" tone="navy" label="Questions administrées" value={g.all} sub="Total des réponses" />
+                <KpiTile icon="check" tone="green" label="Réponses « Oui »" value={g.oui} sub={`Proportion : <b>${prop(g.oui)}</b>`} />
+                <KpiTile icon="component" tone="orange" label="Réponses « Partiellement »" value={g.partiel} sub={`Proportion : <b>${prop(g.partiel)}</b>`} />
+                <KpiTile icon="down" tone="red" label="Réponses « Non »" value={g.non} sub={`Proportion : <b>${prop(g.non)}</b>`} />
+                <KpiTile icon="legend" tone="blue" label="Réponses « Non applicable »" value={g.na} sub={`Proportion : <b>${prop(g.na)}</b>`} />
               </div>
             </section>
 
