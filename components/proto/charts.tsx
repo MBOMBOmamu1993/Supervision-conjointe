@@ -56,6 +56,44 @@ export function ProtoHBar({ rows, height = 160, color, byCot = true, maxName = 1
   );
 }
 
+/** Couleur de barre selon la classe de concordance (95–105 vert, <95 orange, >105 rouge). */
+const concColor = (v: number) => (v >= 95 && v <= 105 ? C.green : v < 95 ? C.orange : C.red);
+
+/**
+ * Barres horizontales de concordance : chaque barre est colorée selon sa classe
+ * (pas de discordance / sous- / sur-rapportage) et deux lignes de référence
+ * pointillées marquent les seuils 95 % et 105 %.
+ */
+export function ProtoConcHBar({ rows, height = 220, maxName = 150 }: {
+  rows: [string, number][]; height?: number; maxName?: number;
+}) {
+  const names = rows.map((r) => r[0]), vals = rows.map((r) => r[1]);
+  return (
+    <EChart height={height} option={{
+      grid: { left: maxName, right: 46, top: 6, bottom: 24 },
+      tooltip: {
+        trigger: "axis", axisPointer: { type: "shadow" }, confine: true,
+        formatter: (p: { name: string; value: number }[]) => { const o = p[0]; return wrapText(o.name, 30).join("<br>") + "<br><b>" + o.value + "%</b>"; },
+      },
+      xAxis: { type: "value", min: 90, max: 110, axisLabel: { formatter: "{value}%", fontSize: 9, color: C.axis }, splitLine: { lineStyle: { color: C.grid } } },
+      yAxis: { type: "category", data: names.slice().reverse(), axisLabel: { fontSize: 10.5, color: "#1e293b", fontWeight: 600, formatter: (v: string) => ellipsize(v, 26) }, axisTick: { show: false }, axisLine: { show: false } },
+      series: [{
+        type: "bar", barWidth: "58%",
+        data: vals.slice().reverse().map((v) => ({ value: v, itemStyle: { color: concColor(v), borderRadius: [0, 4, 4, 0] } })),
+        label: { show: true, position: "right", formatter: "{c}%", fontSize: 10.5, fontWeight: 700, color: "#334155" },
+        markLine: {
+          silent: true, symbol: "none",
+          data: [
+            { xAxis: 95, lineStyle: { color: C.orange, type: "dashed", width: 1 } },
+            { xAxis: 105, lineStyle: { color: C.red, type: "dashed", width: 1 } },
+          ],
+          label: { show: false },
+        },
+      }],
+    }} />
+  );
+}
+
 export function ProtoLine({ series, color, height = 175, months = MONTHS }: { series: number[]; color: string; height?: number; months?: string[] }) {
   return (
     <EChart height={height} option={{
