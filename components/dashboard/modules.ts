@@ -77,7 +77,7 @@ export const MODULES: ModuleDef[] = [
   { key: "rapport", name: "Rapport mensuel des consultants", icon: "report", tone: "teal", live: false, desc: "Suivi mensuel des activités des consultants — à venir." },
   { key: "evaluation", name: "Évaluation des consultants", icon: "eval", tone: "danger", live: false, desc: "Évaluation de la performance des consultants — à venir." },
   {
-    key: "telecharger", name: "Télécharger rapport", icon: "download", tone: "good", live: true,
+    key: "telecharger", name: "Télécharger Bulletin mensuel de l'appui de l'OMS à Tshuapa PEV de routine", icon: "download", tone: "good", live: true,
     desc: "Génération automatique des rapports PEV & Contrôle qualité des données (PowerPoint).",
     pages: [
       { id: "tr_rapport", label: "Rapports automatisés", icon: "report", lvl: "none" },

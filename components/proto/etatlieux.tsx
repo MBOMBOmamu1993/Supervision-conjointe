@@ -6,7 +6,7 @@
    Données réelles : Excel « Final base état de lieu Tshuapa » (data/edl-data.ts),
    filtrées par la sélection Province / Antenne / ZS / Aire (lib/etat-lieux/edl-filter).
    ========================================================================= */
-import { useFilters } from "@/lib/state/filters";
+import { useTabFilters } from "@/lib/state/filters";
 import { filterEdl } from "@/lib/etat-lieux/edl-filter";
 import type { EdlZsPop, EdlData } from "@/data/edl-data";
 import { SectionBar } from "@/components/ui/Card";
@@ -32,7 +32,7 @@ function NoData() {
 }
 
 function useEdl(): EdlData {
-  const f = useFilters();
+  const f = useTabFilters("etat");
   return filterEdl({ province: f.province, antenne: f.antenne, zone: f.zone, aire: f.aire });
 }
 

@@ -2,7 +2,7 @@
 
 import useSWR from "swr";
 import type { RcmBundle } from "@/lib/rcm/types";
-import { useFilters, filtersToQuery } from "@/lib/state/filters";
+import { useTabFilters, filtersToQuery } from "@/lib/state/filters";
 
 const fetcher = async (url: string): Promise<RcmBundle> => {
   const res = await fetch(url, { headers: { Accept: "application/json" } });
@@ -14,7 +14,7 @@ const fetcher = async (url: string): Promise<RcmBundle> => {
 };
 
 export function useRcm() {
-  const filters = useFilters();
+  const filters = useTabFilters("rcm");
   const url = `/api/rcm${filtersToQuery(filters)}`;
   const { data, error, isLoading } = useSWR<RcmBundle>(url, fetcher, {
     revalidateOnFocus: false,

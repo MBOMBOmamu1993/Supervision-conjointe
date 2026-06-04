@@ -2,7 +2,7 @@
 
 import useSWR from "swr";
 import type { CqdBundle } from "@/lib/cqd/types";
-import { useFilters, filtersToQuery } from "@/lib/state/filters";
+import { useTabFilters, filtersToQuery } from "@/lib/state/filters";
 
 const fetcher = async (url: string): Promise<CqdBundle> => {
   const res = await fetch(url, { headers: { Accept: "application/json" } });
@@ -14,7 +14,7 @@ const fetcher = async (url: string): Promise<CqdBundle> => {
 };
 
 export function useCqd() {
-  const filters = useFilters();
+  const filters = useTabFilters("qualite");
   const url = `/api/cqd${filtersToQuery(filters)}`;
   const { data, error, isLoading } = useSWR<CqdBundle>(url, fetcher, {
     revalidateOnFocus: false,

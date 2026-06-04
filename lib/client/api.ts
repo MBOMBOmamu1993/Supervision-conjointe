@@ -2,7 +2,7 @@
 
 import useSWR from "swr";
 import type { SupervisionBundle } from "@/lib/supervision/types";
-import { useFilters, filtersToQuery } from "@/lib/state/filters";
+import { useTabFilters, filtersToQuery } from "@/lib/state/filters";
 
 const fetcher = async (url: string): Promise<SupervisionBundle> => {
   const res = await fetch(url, { headers: { Accept: "application/json" } });
@@ -14,7 +14,7 @@ const fetcher = async (url: string): Promise<SupervisionBundle> => {
 };
 
 export function useSupervision() {
-  const filters = useFilters();
+  const filters = useTabFilters("supervision");
   const url = `/api/supervision${filtersToQuery(filters)}`;
   const { data, error, isLoading, isValidating, mutate } = useSWR<SupervisionBundle>(url, fetcher, {
     revalidateOnFocus: false,
