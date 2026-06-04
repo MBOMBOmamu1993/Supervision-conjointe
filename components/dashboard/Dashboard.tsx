@@ -150,7 +150,7 @@ function Welcome({ onStart }: { onStart: () => void }) {
 function Home({ onOpen }: { onOpen: (key: string) => void }) {
   return (
     <div className="flex h-full flex-col overflow-y-auto">
-      <div className="flex h-24 shrink-0 items-center gap-5 px-8 text-white" style={{ background: "#00205c", borderBottom: "3px solid #0093d5" }}>
+      <div className="sticky top-0 z-30 flex h-24 shrink-0 items-center gap-5 px-8 text-white" style={{ background: "#00205c", borderBottom: "3px solid #0093d5" }}>
         <img src={OMS} alt="OMS" className="h-12 w-auto" />
         <div className="flex-1 text-center">
           <div className="text-[11px] font-bold uppercase tracking-[0.22em] text-white/60">Programme Élargi de Vaccination · OMS — République Démocratique du Congo</div>
