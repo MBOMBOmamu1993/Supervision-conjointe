@@ -16,6 +16,7 @@ import { ENV, koboAuthHeader } from "@/lib/server/env";
 import {
   KOBO_SOURCES,
   CQD_SOURCES,
+  RCM_SOURCE,
   koboExportUrl,
   koboDataUrl,
   type KoboSource,
@@ -209,6 +210,55 @@ export async function fetchCqdSource(src: CqdSource, opts: { force?: boolean } =
 
 export async function fetchAllCqdSources(opts: { force?: boolean } = {}): Promise<CqdFetch[]> {
   return Promise.all(CQD_SOURCES.map((s) => fetchCqdSource(s, opts)));
+}
+
+/* ----------------------- Source RCM (Monitorage rapide de convenance) ----------------------- */
+
+export interface RcmFetch {
+  label: string;
+  rows: RawRow[];
+  ok: boolean;
+  error?: string;
+}
+
+/**
+ * Récupère le formulaire RCM. Données LIVE (data.json, repeats imbriqués)
+ * prioritaires car elles conservent la structure `menage → enfant` nécessaire
+ * à l'agrégation au niveau enfant ; repli sur l'export XLSX figé. Le formulaire
+ * peut être vide (aucune soumission) — on renvoie alors `rows: []`.
+ */
+export async function fetchRcmSource(opts: { force?: boolean } = {}): Promise<RcmFetch> {
+  const cacheKey = "kobo:rcm";
+  if (!opts.force) {
+    const cached = cacheGet<RcmFetch>(cacheKey);
+    if (cached) return cached;
+  }
+  const exportUrl = koboExportUrl(RCM_SOURCE, ENV.KOBO_BASE_URL);
+  const dataUrl = koboDataUrl(RCM_SOURCE, ENV.KOBO_BASE_URL) + "?limit=30000";
+  try {
+    const rows = await pRetry(
+      async () => {
+        try {
+          const buf = await fetchBuffer(dataUrl, "application/json");
+          const json = JSON.parse(new TextDecoder().decode(buf));
+          return (Array.isArray(json) ? json : json.results ?? []) as RawRow[];
+        } catch (e) {
+          if (e instanceof AbortError) throw e;
+          const buf = await fetchBuffer(exportUrl, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+          return parseXlsx(buf);
+        }
+      },
+      { retries: MAX_ATTEMPTS - 1, minTimeout: 1000, maxTimeout: 4000 }
+    );
+    const result: RcmFetch = { label: RCM_SOURCE.label, rows, ok: true };
+    cacheSet(cacheKey, result);
+    return result;
+  } catch (err) {
+    const stale = cacheGetStale<RcmFetch>(cacheKey);
+    if (stale) return stale;
+    // Formulaire sans données / Kobo indisponible : pipeline prêt, visuels vides.
+    return { label: RCM_SOURCE.label, rows: [], ok: true, error: err instanceof Error ? err.message : String(err) };
+  }
 }
 
 export function flushKoboCache(): void {

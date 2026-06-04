@@ -48,6 +48,28 @@ export const CQD_SOURCES: CqdSource[] = [
   { key: "as", label: "Contrôle qualité des données — Aire de santé", assetUid: "aaQZRLWXQ6rpTWr3uR3SEU", exportUid: "esbbnddHn8i5jMH8k9QBQmd" },
 ];
 
+/**
+ * Formulaire « Monitorage rapide de convenance » (RCM).
+ * Même projet / même token Kobo que les supervisions conjointes. Le formulaire
+ * comporte des repeats imbriqués (`menage` → `enfant`) ; l'agrégation se fait au
+ * niveau enfant. Le formulaire n'a pas encore de soumissions : les visuels
+ * s'alimentent automatiquement dès les premières données.
+ */
+export interface RcmSource {
+  key: "rcm";
+  label: string;
+  assetUid: string;
+  exportUid: string;
+}
+export const RCM_SOURCE: RcmSource = {
+  key: "rcm",
+  label: "Monitorage rapide de convenance",
+  assetUid: "acs8Na8fUTpyyoxhcKFwC5",
+  exportUid: "esc4DesE6zhkp5tYZ5ZkMjR",
+};
+export const rcmExportUrl = (base = KOBO_BASE_URL) => koboExportUrl(RCM_SOURCE, base);
+export const rcmDataUrl = (base = KOBO_BASE_URL) => koboDataUrl(RCM_SOURCE, base);
+
 export function koboExportUrl(src: { assetUid: string; exportUid: string }, base = KOBO_BASE_URL): string {
   return `${base}/api/v2/assets/${src.assetUid}/export-settings/${src.exportUid}/data.xlsx`;
 }

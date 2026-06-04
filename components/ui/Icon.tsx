@@ -1,4 +1,5 @@
 import type { SVGProps } from "react";
+import { DICONS } from "@/components/dashboard/icons";
 
 export type IconName =
   | "home" | "time" | "component" | "analyse" | "report"
@@ -7,9 +8,14 @@ export type IconName =
   | "down" | "up" | "calendar" | "doc" | "bars" | "refresh"
   | "map-pin" | "layers" | "building" | "database" | "download"
   | "scale" | "child" | "pop" | "road" | "fridge" | "syringe" | "flag" | "truck" | "hand" | "clip"
-  | "chevron-down" | "chevron-left" | "chevron-right" | "check";
+  | "chevron-down" | "chevron-left" | "chevron-right" | "check"
+  // Icônes du nouveau shell (rendues via DICONS en repli) :
+  | "link" | "gauge" | "overview" | "antenne" | "zs" | "as" | "synthese"
+  | "chart" | "concord" | "erreurs" | "form" | "enfants" | "table"
+  | "question" | "reco" | "cotation" | "rank" | "comment" | "message"
+  | "legend" | "penta" | "rr" | "quality" | "route" | "eval";
 
-const P: Record<IconName, JSX.Element> = {
+const P: Partial<Record<IconName, JSX.Element>> = {
   home: (<><path d="M3 10.5 12 3l9 7.5" /><path d="M5 9.5V20h14V9.5" /></>),
   time: (<><path d="M3 17l5-5 4 3 8-8" /><path d="M3 21h18" /></>),
   component: (<><circle cx="12" cy="12" r="3" /><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M18.4 5.6l-2.1 2.1M7.7 16.3l-2.1 2.1" /></>),
@@ -55,9 +61,10 @@ const P: Record<IconName, JSX.Element> = {
 };
 
 export function Icon({ name, ...props }: { name: IconName } & SVGProps<SVGSVGElement>) {
+  const el = P[name];
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" {...props}>
-      {P[name]}
+      {el ?? <g dangerouslySetInnerHTML={{ __html: DICONS[name] ?? "" }} />}
     </svg>
   );
 }

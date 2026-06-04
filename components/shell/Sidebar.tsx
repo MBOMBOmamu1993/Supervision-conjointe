@@ -19,26 +19,7 @@ interface MainTab {
 }
 
 const NAV: MainTab[] = [
-  {
-    key: "supervision",
-    label: "Supervision conjointe PEV OMS RDC",
-    icon: "hands",
-    subs: [
-      { href: "/", label: "Vue d'ensemble" },
-      { href: "/comparaison", label: "Performance structures et temps" },
-      { href: "/composantes", label: "Performance par composantes" },
-    ],
-  },
-  {
-    key: "qualite",
-    label: "Qualité des données",
-    icon: "database",
-    subs: [
-      { href: "/qualite-donnees", label: "Vue globale — centres de santé" },
-      { href: "/qualite-donnees/detail", label: "Détail par centre de santé" },
-      { href: "/qualite-donnees/zs", label: "Par zones de santé" },
-    ],
-  },
+  { key: "dashboard", label: "Tableau de bord Tshuapa", icon: "home", href: "/" },
   {
     key: "etat",
     label: "État de lieux Tshuapa",
