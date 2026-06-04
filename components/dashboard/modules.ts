@@ -2,7 +2,7 @@
  * Définition des onglets (modules) et de leurs pages — porté de `js/app.js`
  * du handoff. La navigation se fait par la barre latérale.
  */
-export type PageLevel = "all" | "antenne" | "zs" | "as";
+export type PageLevel = "all" | "antenne" | "zs" | "as" | "none";
 
 export interface PageDef {
   id: string;
@@ -22,6 +22,15 @@ export interface ModuleDef {
 }
 
 export const MODULES: ModuleDef[] = [
+  {
+    key: "etat", name: "État de lieux", icon: "map", tone: "oms", live: true,
+    desc: "Informations générales, accessibilité, planification, engagement communautaire et ressources de la province.",
+    pages: [
+      { id: "edl_infos", label: "Informations générales", icon: "legend", lvl: "all" },
+      { id: "edl_planif", label: "Planification & communauté", icon: "reco", lvl: "all" },
+      { id: "edl_ressources", label: "Ressources & partenaires", icon: "form", lvl: "all" },
+    ],
+  },
   {
     key: "supervision", name: "Supervision conjointe", icon: "link", tone: "navy", live: true,
     desc: "Réalisation, scores et cotations des supervisions Antenne · ZS · Aire de santé.",
@@ -68,6 +77,13 @@ export const MODULES: ModuleDef[] = [
   { key: "sav", name: "SAV", icon: "route", tone: "warn", live: false, desc: "Stratégies avancées de vaccination — à intégrer prochainement." },
   { key: "rapport", name: "Rapport hebdomadaire des consultants", icon: "report", tone: "teal", live: false, desc: "Suivi hebdomadaire des activités des consultants — à venir." },
   { key: "evaluation", name: "Évaluation des consultants", icon: "eval", tone: "danger", live: false, desc: "Évaluation de la performance des consultants — à venir." },
+  {
+    key: "telecharger", name: "Télécharger rapport", icon: "download", tone: "good", live: true,
+    desc: "Génération automatique des rapports PEV & Contrôle qualité des données (PowerPoint).",
+    pages: [
+      { id: "tr_rapport", label: "Rapports automatisés", icon: "report", lvl: "none" },
+    ],
+  },
 ];
 
 export const LVL_FILTERS: Record<PageLevel, string[]> = {
@@ -75,9 +91,10 @@ export const LVL_FILTERS: Record<PageLevel, string[]> = {
   antenne: ["province", "antenne", "type", "periode"],
   zs: ["province", "antenne", "zs", "type", "periode"],
   as: ["province", "antenne", "zs", "as", "type", "periode"],
+  none: [],
 };
 export const LVL_LABEL: Record<PageLevel, string> = {
-  all: "Tous les filtres", antenne: "Niveau Antenne", zs: "Niveau Zone de santé", as: "Niveau Aire de santé",
+  all: "Tous les filtres", antenne: "Niveau Antenne", zs: "Niveau Zone de santé", as: "Niveau Aire de santé", none: "Aucun filtre",
 };
 
 export const moduleByKey = (k: string) => MODULES.find((m) => m.key === k);

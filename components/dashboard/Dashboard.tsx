@@ -238,13 +238,15 @@ function ModuleView({ mod, page, onSelectPage, onHome }: { mod: ModuleDef; page:
           </div>
           <img src={PEV} alt="PEV" className="h-[46px] w-auto" />
         </div>
-        <FilterBarShell allow={allow} />
+        {allow.length > 0 && <FilterBarShell allow={allow} />}
         <div className="flex-1 overflow-y-auto px-5 py-5" style={{ background: "#eef2f7" }}>
           <div className="mx-auto max-w-[1200px]">
             {Comp ? <Comp /> : <div className="py-16 text-center text-surface-500">Page à concevoir.</div>}
-            <div className="mt-4 text-center text-[11.5px] text-surface-500">
-              Filtres actifs : <b className="text-navy-700">{LVL_LABEL[page.lvl]}</b> — {allow.map((f) => filterLabels[f]).join(" · ")}
-            </div>
+            {allow.length > 0 && (
+              <div className="mt-4 text-center text-[11.5px] text-surface-500">
+                Filtres actifs : <b className="text-navy-700">{LVL_LABEL[page.lvl]}</b> — {allow.map((f) => filterLabels[f]).join(" · ")}
+              </div>
+            )}
           </div>
         </div>
       </div>

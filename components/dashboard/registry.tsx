@@ -7,6 +7,8 @@ import {
   CqdZsComparaison, CqdZsConcordance, CqdZsErreurs,
 } from "./pages/Qualite";
 import { RcmVue, RcmVaccination, RcmRaisons, RcmTableaux } from "./pages/Rcm";
+import { Edl1, Edl2, Edl3 } from "@/components/proto/etatlieux";
+import TelechargerRapport from "@/app/telecharger-rapport/page";
 
 /** id de page → composant de rendu (toutes les pages sont alimentées en LIVE). */
 export const PAGE_REGISTRY: Record<string, () => JSX.Element> = {
@@ -31,4 +33,10 @@ export const PAGE_REGISTRY: Record<string, () => JSX.Element> = {
   rcm_vaccination: RcmVaccination,
   rcm_raisons: RcmRaisons,
   rcm_tableaux: RcmTableaux,
+  // État de lieux
+  edl_infos: Edl1,
+  edl_planif: Edl2,
+  edl_ressources: Edl3,
+  // Télécharger rapport
+  tr_rapport: TelechargerRapport,
 };

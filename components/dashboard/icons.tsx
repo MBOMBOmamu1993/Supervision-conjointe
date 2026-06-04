@@ -41,6 +41,8 @@ export const DICONS: Record<string, string> = {
   down: '<path d="M12 5v14M5 12l7 7 7-7"/>',
   up: '<path d="M12 19V5M5 12l7-7 7 7"/>',
   home: '<path d="m3 10.5 9-7.5 9 7.5"/><path d="M5 9.5V20h14V9.5"/>',
+  map: '<path d="m9 4-6 2.5v13L9 17l6 2.5 6-2.5v-13L15 6 9 4Z"/><path d="M9 4v13M15 6v13"/>',
+  download: '<path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/>',
   emptyset: '<circle cx="12" cy="12" r="9"/><path d="m6 6 12 12"/>',
 };
 
