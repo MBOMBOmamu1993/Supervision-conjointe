@@ -552,16 +552,19 @@ export function buildBundle(sources: SourceFetch[], filters: Filters, targets: S
       provinces: uniqueSorted(allUnfiltered.map((r) => r.province)),
       antennes: uniqueSorted(allUnfiltered.map((r) => r.antenne)),
       zones: uniqueSorted(allUnfiltered.map((r) => r.zone)),
-      aires: uniqueSorted(allUnfiltered.map((r) => r.aire)),
+      // L'aire n'est un libellé unique qu'au niveau AS ; aux niveaux antenne/ZS
+      // le champ peut être vide ou agréger plusieurs aires — on l'exclut.
+      aires: uniqueSorted(allUnfiltered.filter((r) => r.level === "as").map((r) => r.aire)),
       months: Array.from(new Set(allUnfiltered.map((r) => r.month).filter((m): m is string => !!m))).sort(),
       types: uniqueSorted(allUnfiltered.map((r) => r.typeLabel)),
       // Tuples géographiques (antennes canonicalisées) pour les filtres en
-      // cascade Province → Antenne → ZS → Aire côté client.
+      // cascade Province → Antenne → ZS → Aire côté client. L'aire n'est
+      // renseignée que pour les enregistrements AS.
       geo: allUnfiltered.map((r) => ({
         province: r.province,
         antenne: canonAntenne(r.antenne),
         zone: r.zone,
-        aire: r.aire,
+        aire: r.level === "as" ? r.aire : null,
       })),
     },
     kpi,

@@ -49,6 +49,28 @@ const REASONS_VACC: Record<string, string> = {
 const lastSeg = (k: string) => k.split(/[/.]/).pop()!.toLowerCase();
 const str = (v: unknown): string => (v == null ? "" : String(v).trim());
 
+/**
+ * Nettoyage des libellés géographiques encodés « type_parent_nom » (valeurs XML
+ * Kobo). Le nom réel est en fin de chaîne, précédé du code de niveau (prov/ant/
+ * zs/as) et du nom du parent immédiat. Ex. « as_befale_bekiri » (zone Befale)
+ * → « Bekiri » ; « ant_tshuapa_boende » → « Boende ».
+ */
+const GEO_TYPE_PREFIX = new Set(["prov", "province", "ant", "antenne", "zs", "zone", "cs", "as", "aire"]);
+function prettifyGeo(s: string): string {
+  return s.split(/[_\s]+/).filter(Boolean)
+    .map((w) => (/^\d+$/.test(w) ? w : w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()))
+    .join(" ");
+}
+function cleanGeoName(raw: string | null, parents: (string | null)[]): string | null {
+  if (!raw) return null;
+  let parts = String(raw).split("_").filter(Boolean);
+  if (parts.length > 1 && GEO_TYPE_PREFIX.has(norm(parts[0]))) parts = parts.slice(1);
+  const parentToks = new Set(parents.filter((p): p is string => !!p).flatMap((p) => norm(p).split(" ")).filter(Boolean));
+  while (parts.length > 1 && parentToks.has(norm(parts[0]))) parts = parts.slice(1);
+  const cleaned = prettifyGeo(parts.join(" "));
+  return cleaned || prettifyGeo(raw);
+}
+
 /** Carte d'accès aux scalaires d'un objet, indexée par suffixe de nom de champ. */
 function scalarMap(obj: Record<string, unknown>): Record<string, unknown> {
   const m: Record<string, unknown> = {};
@@ -110,11 +132,17 @@ function normalize(rows: RawRow[]): Child[] {
   return raw.map((m) => {
     const vacc = {} as Record<RcmAntigene, string>;
     for (const ag of RCM_ANTIGENES) vacc[ag] = str(pick(m, ANTIGENE_FIELD[ag])).toLowerCase();
+    // Libellés géographiques nettoyés (retrait du code de niveau et des parents
+    // encodés en préfixe) — appliqués en cascade Province → Antenne → ZS → Aire.
+    const province = cleanGeoName(str(pick(m, "province")) || null, []);
+    const antenne = cleanGeoName(str(pick(m, "antenne")) || null, [province]);
+    const zone = cleanGeoName(str(pick(m, "zone_sante")) || str(pick(m, "zone")) || null, [antenne, province]);
+    const aire = cleanGeoName(str(pick(m, "aire_sante")) || str(pick(m, "aire")) || null, [zone, antenne, province]);
     return {
-      province: str(pick(m, "province")) || null,
-      antenne: str(pick(m, "antenne")) || null,
-      zone: str(pick(m, "zone_sante")) || str(pick(m, "zone")) || null,
-      aire: str(pick(m, "aire_sante")) || str(pick(m, "aire")) || null,
+      province,
+      antenne,
+      zone,
+      aire,
       month: toMonth(pick(m, "date_enquete")) ?? toMonth(pick(m, "today")) ?? toMonth(pick(m, "_submission_time")),
       distance: str(pick(m, "distance_cs")).toLowerCase(),
       carte: str(pick(m, "carte_vaccination")).toLowerCase(),

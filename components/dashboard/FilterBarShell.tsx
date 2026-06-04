@@ -19,10 +19,24 @@ import { edlGeoTuples } from "@/lib/etat-lieux/edl-filter";
 import { PeriodFilter } from "@/components/shell/PeriodFilter";
 import { Icon } from "@/components/ui/Icon";
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+function Field({ label, children, onReset, active }: { label: string; children: React.ReactNode; onReset?: () => void; active?: boolean }) {
   return (
     <div className="flex min-w-0 flex-col gap-[3px]">
-      <label className="px-0.5 text-[10px] font-extrabold uppercase tracking-[0.09em] text-slate-500">{label}</label>
+      <div className="flex items-center justify-between gap-1 px-0.5">
+        <label className="text-[10px] font-extrabold uppercase tracking-[0.09em] text-slate-500">{label}</label>
+        {onReset ? (
+          <button
+            type="button"
+            onClick={onReset}
+            disabled={!active}
+            title="Réinitialiser ce filtre"
+            aria-label="Réinitialiser ce filtre"
+            className="inline-flex h-[15px] w-[15px] items-center justify-center rounded text-slate-400 transition hover:bg-slate-100 hover:text-oms-600 disabled:cursor-default disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-slate-400"
+          >
+            <Icon name="refresh" className="h-[11px] w-[11px]" strokeWidth={2.4} />
+          </button>
+        ) : null}
+      </div>
       {children}
     </div>
   );
@@ -56,31 +70,31 @@ function FilterBarView({ allow, geoTuples, months }: { allow: string[]; geoTuple
     <div className="relative z-20 shrink-0 border-b border-slate-200 bg-white">
       <div className="flex flex-wrap items-end gap-2.5 px-4 py-2.5">
         {show("province") && (
-          <Field label="Province">
+          <Field label="Province" active={!!f.province} onReset={() => f.resetField("province")}>
             <Select value={f.province} placeholder="Toutes" options={geo.provinces}
               onChange={(v) => f.set({ province: v, antenne: null, zone: null, aire: null })} />
           </Field>
         )}
         {show("antenne") && (
-          <Field label="Antenne">
+          <Field label="Antenne" active={!!f.antenne} onReset={() => f.resetField("antenne")}>
             <Select value={f.antenne} placeholder="Toutes" options={geo.antennes}
               onChange={(v) => f.set({ antenne: v, zone: null, aire: null })} />
           </Field>
         )}
         {show("zs") && (
-          <Field label="Zone de santé">
+          <Field label="Zone de santé" active={!!f.zone} onReset={() => f.resetField("zone")}>
             <Select value={f.zone} placeholder="Toutes" options={geo.zones}
               onChange={(v) => f.set({ zone: v, aire: null })} />
           </Field>
         )}
         {show("as") && (
-          <Field label="Aire de santé">
+          <Field label="Aire de santé" active={!!f.aire} onReset={() => f.resetField("aire")}>
             <Select value={f.aire} placeholder="Toutes" options={geo.aires}
               onChange={(v) => f.set({ aire: v })} />
           </Field>
         )}
         {show("type") && (
-          <Field label="Type de supervision">
+          <Field label="Type de supervision" active={f.types.length > 0} onReset={() => f.resetField("types")}>
             <Select
               value={selectedGroup?.label ?? null}
               placeholder="Tous les types"
@@ -90,7 +104,7 @@ function FilterBarView({ allow, geoTuples, months }: { allow: string[]; geoTuple
           </Field>
         )}
         {show("periode") && (
-          <Field label="Période">
+          <Field label="Période" active={f.months.length > 0} onReset={() => f.resetField("months")}>
             <PeriodFilter value={f.months} available={months} onChange={(m) => f.set({ months: m })} />
           </Field>
         )}

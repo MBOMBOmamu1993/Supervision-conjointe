@@ -482,16 +482,21 @@ export function buildCqdBundle(sources: CqdFetch[], filters: CqdFilters): CqdBun
       provinces: uniq(allUnfiltered.map((r) => r.province)),
       antennes: uniq(allUnfiltered.map((r) => r.antenne)),
       zones: uniq(allUnfiltered.map((r) => r.zone)),
-      aires: uniq(allUnfiltered.map((r) => r.aire)),
+      // L'aire de santé n'a de sens qu'au niveau AS : au niveau ZS, le champ
+      // « aire » est un agrégat des aires échantillonnées (valeurs combinées)
+      // qui pollueraient la liste — on ne retient donc que les aires des AS.
+      aires: uniq(allUnfiltered.filter((r) => r.level === "as").map((r) => r.aire)),
       months: uniq(allUnfiltered.map((r) => r.month)),
       types: uniq(allUnfiltered.map((r) => r.typeLabel)),
       // Tuples géographiques (antennes canonicalisées) → filtres en cascade
       // Province → Antenne → ZS → Aire, dérivés des données de CET onglet.
+      // L'aire n'est renseignée que pour les enregistrements AS (au niveau ZS
+      // elle agrège plusieurs aires → on la met à null pour ne pas l'afficher).
       geo: allUnfiltered.map((r) => ({
         province: r.province,
         antenne: canonAntenne(r.antenne),
         zone: r.zone,
-        aire: r.aire,
+        aire: r.level === "as" ? r.aire : null,
       })),
     },
     levels: {
