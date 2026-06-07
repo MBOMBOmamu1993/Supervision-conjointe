@@ -14,7 +14,11 @@ export const ENV = {
   KOBO_USERNAME: opt("KOBO_USERNAME"),
   KOBO_PASSWORD: opt("KOBO_PASSWORD"),
   CACHE_TTL_SECONDS: Number(opt("CACHE_TTL_SECONDS", "300")) || 300,
+  /** TTL court pour les onglets AT (collecte continue → temps réel). */
+  AT_CACHE_TTL_SECONDS: Number(opt("AT_CACHE_TTL_SECONDS", "60")) || 60,
   TARGETS_JSON: opt("SUPERVISION_TARGETS_JSON"),
+  /** URL CSV publiée du Google Sheet « BASE SAISIE DONNEES SAV » (optionnel). */
+  SAV_BASE_SAISIE_CSV_URL: opt("SAV_BASE_SAISIE_CSV_URL"),
 };
 
 /** Cibles attendues (mensuelles, échelle provinciale). Surchargeable via JSON. */

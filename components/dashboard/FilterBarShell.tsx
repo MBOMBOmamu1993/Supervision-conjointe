@@ -14,6 +14,8 @@ import { useTabFilters, TYPE_GROUPS } from "@/lib/state/filters";
 import { useSupervision } from "@/lib/client/api";
 import { useCqd } from "@/lib/client/cqd-api";
 import { useRcm } from "@/lib/client/rcm-api";
+import { useSav } from "@/lib/client/sav-api";
+import { useRapportAt, useEvaluationAt } from "@/lib/client/at-api";
 import { cascadeOptions, type GeoTuple } from "@/lib/geo";
 import { edlGeoTuples } from "@/lib/etat-lieux/edl-filter";
 import { PeriodFilter } from "@/components/shell/PeriodFilter";
@@ -59,8 +61,8 @@ function Select({ value, onChange, options, placeholder }: {
   );
 }
 
-/** Présentation pure : reçoit les tuples géo + mois de l'onglet actif. */
-function FilterBarView({ tab, allow, geoTuples, months }: { tab: string; allow: string[]; geoTuples: GeoTuple[]; months: string[] }) {
+/** Présentation pure : reçoit les tuples géo + mois (+ liste AT) de l'onglet actif. */
+function FilterBarView({ tab, allow, geoTuples, months, ats = [] }: { tab: string; allow: string[]; geoTuples: GeoTuple[]; months: string[]; ats?: string[] }) {
   const f = useTabFilters(tab);
   const geo = cascadeOptions(geoTuples, { province: f.province, antenne: f.antenne, zone: f.zone, aire: f.aire });
   const selectedGroup = TYPE_GROUPS.find((g) => g.key === f.types[0]);
@@ -91,6 +93,12 @@ function FilterBarView({ tab, allow, geoTuples, months }: { tab: string; allow: 
           <Field label="Aire de santé" active={!!f.aire} onReset={() => f.resetField("aire")}>
             <Select value={f.aire} placeholder="Toutes" options={geo.aires}
               onChange={(v) => f.set({ aire: v })} />
+          </Field>
+        )}
+        {show("at") && (
+          <Field label="Assistant technique" active={!!f.at} onReset={() => f.resetField("at")}>
+            <Select value={f.at} placeholder="Tous les AT" options={ats}
+              onChange={(v) => f.set({ at: v })} />
           </Field>
         )}
         {show("type") && (
@@ -146,10 +154,31 @@ function EdlFilters({ allow }: { allow: string[] }) {
   return <FilterBarView tab="etat" allow={allow} geoTuples={edlGeoTuples()} months={[]} />;
 }
 
+function SavFilters({ allow }: { allow: string[] }) {
+  const { data } = useSav();
+  const opt = data?.filters;
+  return <FilterBarView tab="sav" allow={allow} geoTuples={(opt?.geo as GeoTuple[]) ?? []} months={opt?.months ?? []} />;
+}
+
+function RapportFilters({ allow }: { allow: string[] }) {
+  const { data } = useRapportAt();
+  const opt = data?.filters;
+  return <FilterBarView tab="rapport" allow={allow} geoTuples={(opt?.geo as GeoTuple[]) ?? []} months={opt?.months ?? []} ats={opt?.ats ?? []} />;
+}
+
+function EvalFilters({ allow }: { allow: string[] }) {
+  const { data } = useEvaluationAt();
+  const opt = data?.filters;
+  return <FilterBarView tab="evaluation" allow={allow} geoTuples={(opt?.geo as GeoTuple[]) ?? []} months={opt?.months ?? []} ats={opt?.ats ?? []} />;
+}
+
 /** Sélectionne la source d'options selon l'onglet actif (clé de module). */
 export function FilterBarShell({ allow, source }: { allow: string[]; source: string }) {
   if (source === "qualite") return <CqdFilters allow={allow} />;
   if (source === "rcm") return <RcmFilters allow={allow} />;
   if (source === "etat") return <EdlFilters allow={allow} />;
+  if (source === "sav") return <SavFilters allow={allow} />;
+  if (source === "rapport") return <RapportFilters allow={allow} />;
+  if (source === "evaluation") return <EvalFilters allow={allow} />;
   return <SupervisionFilters allow={allow} />;
 }
