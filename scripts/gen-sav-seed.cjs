@@ -143,6 +143,56 @@ function buildSup(file){
   })};
 }
 
+
+/* ---- BASE SAISIE DONNEES SAV (Google Sheet) : tableaux par AS × âge × antigène ----
+   En-têtes multi-lignes : ligne âge (0–11/12–23/24–59), ligne antigène, ligne dose. */
+const BS_AGES = [["0 à 11","age_0_11"],["12","age_12_23"],["24","age_24_59"]];
+function bsAge(v){ const x=s(v).replace(/\s+/g," "); for(const[m,k]of BS_AGES) if(x.includes(m)) return k; return null; }
+function bsKey(label,dose){
+  const L=s(label).toUpperCase().replace(/\s+/g,""); const d=s(dose);
+  if(!L) return null;
+  if(L.startsWith("BCG")) return "BCG";
+  if(L.startsWith("VAA")) return "VAA";
+  if(L.startsWith("VPO")) return "VPO"+d;
+  if(L.startsWith("PENTA")) return "PENTA"+d;
+  if(L.startsWith("PCV")||L.startsWith("PNEUMO")) return "PCV"+d;
+  if(L.startsWith("ROTA")) return "ROTA"+d;
+  if(L.startsWith("VPI")) return "VPI"+d;
+  if(L.startsWith("VAR")||L.startsWith("RR")) return "RR"+d;
+  if(L.startsWith("VAP")) return "VAP"+d;
+  return null;
+}
+function parseBaseSheet(wb,name){
+  if(!wb.Sheets[name]) return [];
+  const rows=XLSX.utils.sheet_to_json(wb.Sheets[name],{defval:null,raw:false,header:1});
+  const ageRow=rows.findIndex(r=>r.some(c=>/0\s*à\s*11/.test(s(c))));
+  if(ageRow<0) return [];
+  const antiRow=rows.findIndex((r,i)=>i>ageRow && r.some(c=>/^(BCG|PENTA|VPO)$/i.test(s(c))));
+  const doseRow=antiRow+1;
+  const ageArr=rows[ageRow],antiArr=rows[antiRow],doseArr=rows[doseRow];
+  const cols=[]; let curAge=null,curAnti=null;
+  for(let c=3;c<ageArr.length;c++){
+    if(s(ageArr[c])){curAge=bsAge(ageArr[c]);curAnti=null;}
+    if(s(antiArr[c])) curAnti=s(antiArr[c]);
+    cols.push({c,age:curAge,key:bsKey(curAnti,doseArr[c])});
+  }
+  const out=[];
+  for(let i=doseRow+1;i<rows.length;i++){
+    const r=rows[i]; if(!r) continue;
+    const antenne=s(r[0]),zone=s(r[1]),aire=s(r[2]);
+    if(!aire||/total/i.test(aire)) continue;
+    const rec={antenne,zone,aire,byAgeAntigene:{age_0_11:{},age_12_23:{},age_24_59:{}}};
+    for(const m of cols){ if(!m.age||!m.key) continue; const v=num(r[m.c]); if(v) rec.byAgeAntigene[m.age][m.key]=(rec.byAgeAntigene[m.age][m.key]||0)+v; }
+    out.push(rec);
+  }
+  return out;
+}
+function buildBaseSaisie(file){
+  const wb=XLSX.readFile(file);
+  return { identifies: parseBaseSheet(wb,"Identification "), vaccines: parseBaseSheet(wb,"Synth par AS et ZS") };
+}
+
+const BASE_SAISIE_FILE = process.env.SAV_BASE_SAISIE || (U + "a534b317-BASE_SAISIE_DONNEES_SAV1.xlsx");
 const seed = {
   generatedFrom: "Exports Kobo SAV (activité terminée) — " + new Date().toISOString().slice(0,10),
   antigenes: ANTI,
@@ -151,6 +201,7 @@ const seed = {
   resultats: buildResultats(F.resultats),
   planif: buildPlanif(F.planif),
   supervision: buildSup(F.supervision),
+  baseSaisie: buildBaseSaisie(BASE_SAISIE_FILE),
 };
 
 const out = path.join(__dirname, "..", "data", "sav", "sav-seed.json");
@@ -161,3 +212,4 @@ console.log("identCs fiches:", seed.identCs.fiches.length, "enfants:", seed.iden
 console.log("identRelais fiches:", seed.identRelais.fiches.length, "enfants:", seed.identRelais.enfants.length);
 console.log("resultats:", seed.resultats.length, "planif fiches:", seed.planif.fiches.length, "sessions:", seed.planif.sessions.length);
 console.log("supervision rows:", seed.supervision.rows.length, "questions:", seed.supervision.questions.length);
+console.log("baseSaisie identifies:", seed.baseSaisie.identifies.length, "vaccines:", seed.baseSaisie.vaccines.length);
