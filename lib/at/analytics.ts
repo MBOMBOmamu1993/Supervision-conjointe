@@ -14,7 +14,7 @@ import { canonAntenne, norm } from "@/lib/geo";
 import {
   type AtComponentDef, type AtComponentKey, type AtComponentScore, type AtScore,
   type AtNiveau, type AtNiveauDef, type AtRecord, type AtFilterOptions,
-  type RapportBundle, type EvaluationBundle,
+  type RapportBundle, type EvaluationBundle, type AtNarratives, type NarrativeItem,
 } from "./types";
 
 /* ============================ Constantes paramétrables ============================ */
@@ -93,6 +93,79 @@ function selectMulti(v: unknown): string[] {
   if (Array.isArray(v)) return v.map(str).filter(Boolean);
   const s = str(v);
   return s ? s.split(/[\s,;]+/).filter(Boolean) : [];
+}
+
+/* ============================ Extraction des champs narratifs ============================ */
+/* Noms de champs issus du XLSForm « Rapport mensuel des AT » (asset avvVUwZZwkg…).
+   On lit les VERBATIMS texte exactement aux champs prévus à cet effet. */
+
+/** Champs texte « problème majeur / constat ». */
+const CONSTAT_TEXT_FIELDS = [
+  "supervision_as_constats",        // 3. Principaux constats supervision AS
+  "supervision_zs_constats",        // 4. Principaux constats supervision ZS
+  "supervision_antenne_constats",   // 5. Principaux constats supervision Antenne
+  "problemes_donnees_autre",        // 10. Autre problème de données précisé
+  "problemes_monitorage_zs_autre",  // 11. Autre problème de monitorage précisé
+];
+/** Champs select_multiple listant des problèmes (codes → libellés). */
+const CONSTAT_MULTI_FIELDS = ["problemes_donnees", "problemes_monitorage_zs"];
+/** Champs texte « recommandations / actions correctrices ». */
+const RECO_TEXT_FIELDS = [
+  "recommandations_ccpev",              // 2. Principales recommandations CCPeV
+  "supervision_zs_recommandations",     // 4. Recommandations supervision ZS
+  "supervision_antenne_recommandations",// 5. Recommandations supervision Antenne
+  "recommandations_coordination",       // 9. Recommandations réunions coordination
+  "recommandations_monitorage_zs",      // 11. Recommandations monitorage ZS
+  "actions_correctrices_donnees",       // 10. Actions correctrices proposées
+  "actions_correctrices_monitorage_zs", // 11. Actions correctrices retenues
+];
+/** Commentaire sur la transmission du rapport trimestriel de l'Antenne PEV. */
+const PEV_COMMENT_FIELDS = ["commentaire_rapport_trim"]; // 12. Commentaires
+
+/** Libellés des choix de la liste « problemes » (XLSForm). */
+const PROBLEMES_LABELS: Record<string, string> = {
+  faible_completude: "Faible complétude des rapports",
+  retard_rapportage: "Retard de rapportage",
+  faible_couverture: "Faible couverture vaccinale",
+  hausse_zero_dose: "Hausse des enfants zéro dose",
+  hausse_sous_vaccines: "Hausse des sous-vaccinés",
+  rupture_vaccins: "Rupture de vaccins",
+  problemes_cdf: "Problèmes de chaîne du froid",
+  faible_seances_avancees: "Faible tenue des séances avancées",
+  faible_surveillance_mpv: "Faible surveillance des MPV",
+  donnees_incoherentes: "Données incohérentes",
+  absence_validation_donnees: "Absence de validation des données",
+};
+
+/** Une valeur est-elle du texte libre exploitable (pas un code, un oui/non, un nombre ou une date) ? */
+function isNarrativeText(s: string): boolean {
+  const t = s.trim();
+  if (t.length < 2) return false;
+  if (/^[0-9.,\-\s%/]+$/.test(t)) return false;       // nombres, pourcentages
+  if (/^\d{4}-\d{2}/.test(t)) return false;            // dates ISO
+  if (!/[a-zàâäéèêëîïôöùûüç]/i.test(t)) return false;  // au moins une lettre
+  const low = norm(t);
+  if (["oui", "non", "na", "nonapplicable", "non applicable", "sans objet", "yes", "no", "true", "false", "null", "nan"].includes(low)) return false;
+  return true;
+}
+
+const dedup = (xs: string[]): string[] => [...new Set(xs.map((x) => x.trim()).filter(Boolean))];
+
+/** Extrait les verbatims du formulaire AT à partir des champs prévus à cet effet. */
+function extractNarratives(m: Record<string, unknown>): AtNarratives {
+  const problemes: string[] = [];
+  for (const f of CONSTAT_TEXT_FIELDS) { const t = str(pick(m, f)); if (isNarrativeText(t)) problemes.push(t); }
+  for (const f of CONSTAT_MULTI_FIELDS) {
+    for (const code of selectMulti(pick(m, f))) {
+      const lab = PROBLEMES_LABELS[code.toLowerCase()];
+      if (lab) problemes.push(lab); // « autre »/« na » ignorés : le détail vient du champ texte *_autre
+    }
+  }
+  const recommandations: string[] = [];
+  for (const f of RECO_TEXT_FIELDS) { const t = str(pick(m, f)); if (isNarrativeText(t)) recommandations.push(t); }
+  const commentairePev: string[] = [];
+  for (const f of PEV_COMMENT_FIELDS) { const t = str(pick(m, f)); if (isNarrativeText(t)) commentairePev.push(t); }
+  return { problemes: dedup(problemes), recommandations: dedup(recommandations), commentairePev: dedup(commentairePev) };
 }
 
 const MONTHS_FR = ["janvier", "février", "mars", "avril", "mai", "juin", "juillet", "août", "septembre", "octobre", "novembre", "décembre"];
@@ -266,6 +339,7 @@ function normalizeRows(rows: RawRow[]): AtRecord[] {
       monthIndex: mi,
       score: computeAtScore(m),
       raw: numericRaw(m),
+      narratives: extractNarratives(m),
     };
   });
 }
@@ -340,6 +414,21 @@ const rawS = (r: AtRecord, k: string): string => String(r.raw[k] ?? "");
 function monthCols(recs: AtRecord[]): { key: string; label: string }[] {
   return [...new Map(recs.filter((r) => r.month).map((r) => [r.month!, r.monthLabel ?? r.month!])).entries()]
     .sort().map(([key, label]) => ({ key, label }));
+}
+
+/** Aplati les verbatims d'une catégorie en items contextualisés (AT · antenne · mois). */
+function collectNarratives(recs: AtRecord[], pickList: (n: AtNarratives) => string[]): NarrativeItem[] {
+  const out: NarrativeItem[] = [];
+  const seen = new Set<string>();
+  for (const r of recs) {
+    for (const text of pickList(r.narratives)) {
+      const dedupKey = `${r.nomAt}|${r.month ?? ""}|${text}`;
+      if (seen.has(dedupKey)) continue;
+      seen.add(dedupKey);
+      out.push({ at: r.nomAt, antenne: r.antenne, month: r.month, monthLabel: r.monthLabel, text });
+    }
+  }
+  return out;
 }
 
 /* ============================ Bundle Rapport mensuel ============================ */
@@ -451,6 +540,8 @@ export function buildRapportBundle(fetched: { label: string; rows: RawRow[]; ok:
       rapportsParAt: ats.map((at) => ({ at, count: recs.filter((r) => r.nomAt === at).length })),
       rapportsParMois: months.map((mc) => ({ month: mc.key, label: mc.label, count: recs.filter((r) => r.month === mc.key).length })),
       scoreParAtMois, months,
+      constats: collectNarratives(recs, (n) => n.problemes),
+      recommandations: collectNarratives(recs, (n) => n.recommandations),
     },
     reunions: { kpi: reuKpi, prevuesVsAppuyees: reunionTypes, tauxParType: reunionTypes.map((t) => ({ type: t.type, taux: pct(t.appuyees, t.prevues) })), tableParAtMois: reunionsTableParAt, months },
     supervisions: {
@@ -496,6 +587,7 @@ export function buildRapportBundle(fetched: { label: string; rows: RawRow[]; ok:
         omsJustifieesPct: pct(omsJust, omsFin),
       },
       ospParAntenne, typesActivites, rapportsTrimParAntenne, omsJustifieesParAntenne,
+      commentairesRapportPev: collectNarratives(recs, (n) => n.commentairePev),
     },
   };
 }
