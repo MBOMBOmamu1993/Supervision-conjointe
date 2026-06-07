@@ -31,12 +31,14 @@ export interface FilterValues {
   months: string[];
   /** Groupes de types de supervision sélectionnés (clés de TYPE_GROUPS). */
   types: string[];
+  /** Assistant technique sélectionné (onglets Rapport mensuel / Évaluation AT). */
+  at: string | null;
 }
 
-export type FilterField = "province" | "antenne" | "zone" | "aire" | "months" | "types";
+export type FilterField = "province" | "antenne" | "zone" | "aire" | "months" | "types" | "at";
 
 export const EMPTY_FILTERS: FilterValues = {
-  province: null, antenne: null, zone: null, aire: null, months: [], types: [],
+  province: null, antenne: null, zone: null, aire: null, months: [], types: [], at: null,
 };
 
 /**
@@ -67,6 +69,7 @@ export const useFiltersStore = create<FiltersStore>((set) => ({
         : field === "zone" ? { zone: null, aire: null }
         : field === "aire" ? { aire: null }
         : field === "months" ? { months: [] }
+        : field === "at" ? { at: null }
         : { types: [] };
       return { tabs: { ...s.tabs, [tab]: { ...cur, ...patch } } };
     }),
@@ -101,6 +104,7 @@ export function filtersToQuery(f: FilterValues): string {
   if (f.aire) p.set("aire", f.aire);
   if (f.months && f.months.length) p.set("months", f.months.join(","));
   if (f.types && f.types.length) p.set("types", f.types.join(","));
+  if (f.at) p.set("at", f.at);
   const s = p.toString();
   return s ? `?${s}` : "";
 }

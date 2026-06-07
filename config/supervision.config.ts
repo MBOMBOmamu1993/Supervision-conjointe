@@ -70,6 +70,39 @@ export const RCM_SOURCE: RcmSource = {
 export const rcmExportUrl = (base = KOBO_BASE_URL) => koboExportUrl(RCM_SOURCE, base);
 export const rcmDataUrl = (base = KOBO_BASE_URL) => koboDataUrl(RCM_SOURCE, base);
 
+/* ----------------------- Sources SAV (Semaine Africaine de Vaccination) ----------------------- */
+/**
+ * Les 5 formulaires KoboToolbox de la SAV (activité terminée → exports XLSX
+ * figés exhaustifs). Même projet / même token que le reste du dashboard.
+ */
+export interface SavSource { key: string; label: string; assetUid: string; exportUid: string; }
+
+export const SAV_SOURCES: SavSource[] = [
+  { key: "ident_cs",     label: "SAV — Identification EZD/ESV par Centre de santé", assetUid: "auKr7bzjsRNoohpveySTVA", exportUid: "esvjFiKSo7tfMQMcpxvrYga" },
+  { key: "ident_relais", label: "SAV — Identification EZD/ESV par relais",          assetUid: "asJpNSD7cpyqDyrkrUp7kL", exportUid: "esULo4gSfeEmuKBn4n3dgg5" },
+  { key: "resultats",    label: "SAV — Résultats vaccination par équipe",           assetUid: "akKgEGx4H4ngXpf6jecCnG", exportUid: "esVv8TpVCDXyWzDy5reV3LE" },
+  { key: "supervision",  label: "SAV — Supervision des équipes",                    assetUid: "aNbqyLNEssNK8SJjP5C52Z", exportUid: "esJpDYBSSBSB4GAFkxYWs4x" },
+  { key: "planif",       label: "SAV — Planification session de vaccination",       assetUid: "aTULFAgubcP55V7VsSbcer", exportUid: "esMPxESLfJK4Dsh4ediJdBb" },
+];
+
+/* ----------------------- Source Rapport mensuel + Évaluation des AT ----------------------- */
+/**
+ * Formulaire « Rapport mensuel des AT ». Source unique des onglets « Rapport
+ * mensuel des consultants » et « Évaluation des consultants » (collecte
+ * continue → synchronisation temps réel, TTL court).
+ */
+export interface AtSource { key: "at"; label: string; assetUid: string; exportUid: string; }
+export const AT_SOURCE: AtSource = {
+  key: "at",
+  label: "Rapport mensuel des AT et Évaluation",
+  assetUid: "avvVUwZZwkg24iz2Ztj3wi",
+  exportUid: "esJkyaePnnusbTbfLRZRpbk",
+};
+export const savExportUrl = (src: SavSource, base = KOBO_BASE_URL) => koboExportUrl(src, base);
+export const savDataUrl = (src: SavSource, base = KOBO_BASE_URL) => koboDataUrl(src, base);
+export const atExportUrl = (base = KOBO_BASE_URL) => koboExportUrl(AT_SOURCE, base);
+export const atDataUrl = (base = KOBO_BASE_URL) => koboDataUrl(AT_SOURCE, base);
+
 export function koboExportUrl(src: { assetUid: string; exportUid: string }, base = KOBO_BASE_URL): string {
   return `${base}/api/v2/assets/${src.assetUid}/export-settings/${src.exportUid}/data.xlsx`;
 }
