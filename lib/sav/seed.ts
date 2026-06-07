@@ -46,6 +46,10 @@ export interface SeedSupRow {
   difficultesList: string[];
   difficultes: string | null; actions: string | null; recommandations: string | null;
 }
+export interface SeedBaseRow {
+  antenne: string | null; zone: string | null; aire: string | null;
+  byAgeAntigene: Record<AgeKey, Partial<Record<AntigeneKey, number>>>;
+}
 export interface SavSeed {
   antigenes: AntigeneKey[];
   identCs: { fiches: SeedFiche[]; enfants: SeedChild[] };
@@ -53,6 +57,8 @@ export interface SavSeed {
   resultats: SeedResult[];
   planif: { fiches: SeedPlanFiche[]; sessions: SeedSession[] };
   supervision: { questions: string[]; rows: SeedSupRow[] };
+  /** BASE SAISIE DONNEES SAV (Google Sheet) : détail par AS × âge × antigène. */
+  baseSaisie: { identifies: SeedBaseRow[]; vaccines: SeedBaseRow[] };
 }
 
 export const SAV_SEED = seedJson as unknown as SavSeed;

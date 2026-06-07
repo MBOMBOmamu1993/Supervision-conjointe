@@ -336,7 +336,63 @@ export function SavResultats() {
         <CardTitle icon="rank" tone="red" title="Top 5 aires de santé — taux de récupération le plus faible" />
         {s.topAsFaibles.length ? <ProtoScoreBar horiz height={210} unit="%" max={100} cats={s.topAsFaibles.map((x) => x.label)} vals={s.topAsFaibles.map((x) => x.value)} /> : <Empty />}
       </div>
+      <div className="card card-pad">
+        <CardTitle icon="syringe" tone="green" title="Nombre d'enfants vaccinés par antigène et par tranche d'âge" sub="Source : BASE SAISIE DONNEES SAV" />
+        <AntiAgeTable rows={s.vaccinesParTrancheAntigene} />
+      </div>
+      <div className="card card-pad">
+        <CardTitle icon="gauge" tone="blue" title="% d'enfants vaccinés par antigène et par tranche d'âge" sub="Source : BASE SAISIE DONNEES SAV · vaccinés ÷ identifiés" />
+        <AntiAgePctTable rows={s.pctParTrancheAntigene} />
+      </div>
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-3">
+        <div className="card card-pad lg:col-span-7">
+          <CardTitle icon="chart" tone="violet" title="Enfants vaccinés par tranche d'âge — PENTA1, PENTA3, VPI1, VPI2, RR1, RR2" sub="Source : BASE SAISIE DONNEES SAV" />
+          {s.syntheseAntigenes.some((a) => a.a0 + a.a1 + a.a2 > 0) ? (
+            <ProtoGroupedBar height={230} unit="" colors={[C.orange, C.blue, C.violet]} cats={s.syntheseAntigenes.map((a) => a.antigene)}
+              series={[
+                { name: "0 – 11 mois", data: s.syntheseAntigenes.map((a) => a.a0) },
+                { name: "12 – 23 mois", data: s.syntheseAntigenes.map((a) => a.a1) },
+                { name: "24 – 59 mois", data: s.syntheseAntigenes.map((a) => a.a2) },
+              ]} />
+          ) : <Empty />}
+        </div>
+        <div className="card card-pad lg:col-span-5">
+          <CardTitle icon="table" tone="navy" title="% d'enfants récupérés" sub="vaccinés ÷ identifiés (BASE SAISIE)" />
+          <table className="dtable">
+            <thead><tr><th className="name">Antigène</th><th>0–11</th><th>12–23</th><th>24–59</th><th>% récup.</th></tr></thead>
+            <tbody>{s.syntheseAntigenes.map((a) => (
+              <tr key={a.antigene}><td className="name">{a.antigene}</td><td>{a.a0}</td><td>{a.a1}</td><td>{a.a2}</td><td style={{ background: heat(a.pctRecup) }}>{pctTxt(a.pctRecup)}</td></tr>
+            ))}</tbody>
+          </table>
+        </div>
+      </div>
     </div>
+  );
+}
+
+/* Tableaux antigène × tranche d'âge (BASE SAISIE) — colonnes dérivées des données. */
+function AntiAgeTable({ rows }: { rows: { ageLabel: string; values: Record<string, number> }[] }) {
+  const cols = rows[0] ? Object.keys(rows[0].values).filter((k) => rows.some((r) => r.values[k] > 0)) : [];
+  if (!cols.length) return <Empty msg="Ventilation par antigène : en attente de la BASE SAISIE DONNEES SAV." />;
+  return (
+    <div className="overflow-x-auto"><table className="dtable">
+      <thead><tr><th className="name">Tranche d'âge</th>{cols.map((c) => <th key={c}>{c}</th>)}</tr></thead>
+      <tbody>{rows.map((r) => (
+        <tr key={r.ageLabel}><td className="name">{r.ageLabel}</td>{cols.map((c) => <td key={c}>{r.values[c] ?? 0}</td>)}</tr>
+      ))}</tbody>
+    </table></div>
+  );
+}
+function AntiAgePctTable({ rows }: { rows: { ageLabel: string; values: Record<string, number | null> }[] }) {
+  const cols = rows[0] ? Object.keys(rows[0].values).filter((k) => rows.some((r) => r.values[k] != null)) : [];
+  if (!cols.length) return <Empty msg="Ventilation par antigène : en attente de la BASE SAISIE DONNEES SAV." />;
+  return (
+    <div className="overflow-x-auto"><table className="dtable">
+      <thead><tr><th className="name">Tranche d'âge</th>{cols.map((c) => <th key={c}>{c}</th>)}</tr></thead>
+      <tbody>{rows.map((r) => (
+        <tr key={r.ageLabel}><td className="name">{r.ageLabel}</td>{cols.map((c) => { const v = r.values[c]; return <td key={c} style={{ background: heat(v) }}>{v == null ? "—" : `${v}%`}</td>; })}</tr>
+      ))}</tbody>
+    </table></div>
   );
 }
 

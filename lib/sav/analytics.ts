@@ -67,7 +67,6 @@ function ageCounts(children: SeedChild[]) {
 const missedCount = (children: SeedChild[], ag: AntigeneKey) => children.reduce((a, c) => a + (c.missed[ag] ? 1 : 0), 0);
 
 /* ============================ Build bundle ============================ */
-const AGE_TABLE_ANTIGENES: AntigeneKey[] = ["BCG", "VPO1", "PENTA1", "PCV1", "ROTA1", "VPO3", "VPI1", "PENTA3", "RR1", "VAA", "VAP1"];
 const RECUP_ANTIGENES: AntigeneKey[] = ["PENTA1", "PENTA3", "VPI1", "VPI2", "RR1", "RR2"];
 const RES_AS_ANTIGENES: AntigeneKey[] = ["PENTA1", "PENTA3", "VPI1", "RR1", "VAA"];
 
@@ -93,6 +92,22 @@ export function buildSavBundle(f: SavFilters): SavBundle {
 
   const resultats = seed.resultats.filter((r) => matchF(r, f));
   const sup = seed.supervision.rows.filter((r) => matchF(r, f));
+
+  /* --- BASE SAISIE DONNEES SAV : filtrée par Province/Antenne/ZS (les noms d'AS de
+     la BASE SAISIE diffèrent des aires Kobo → on n'applique pas le filtre Aire). --- */
+  const bsMatch = (g: { antenne: string | null; zone: string | null }) =>
+    (!f.antenne || eq(canonAntenne(g.antenne), canonAntenne(f.antenne))) &&
+    (!f.zone || eq(g.zone, f.zone));
+  const bsIdent = seed.baseSaisie.identifies.filter(bsMatch);
+  const bsVacc = seed.baseSaisie.vaccines.filter(bsMatch);
+  const bsAgg = (rows: typeof bsIdent, age: "age_0_11" | "age_12_23" | "age_24_59", ag: AntigeneKey) =>
+    sum(rows.map((r) => r.byAgeAntigene[age]?.[ag] ?? 0));
+  const AGE_ROWS: [("age_0_11" | "age_12_23" | "age_24_59"), string][] = [["age_0_11", "0 – 11 mois"], ["age_12_23", "12 – 23 mois"], ["age_24_59", "24 – 59 mois"]];
+  const baseAgeTable = (rows: typeof bsIdent) => AGE_ROWS.map(([g, label]) => {
+    const values: Record<string, number> = {};
+    for (const ag of ANTIGENE_ORDER) values[ANTIGENE_LABEL[ag]] = bsAgg(rows, g, ag);
+    return { ageLabel: label, values };
+  });
 
   /* --- Options de filtres (toutes sources, avant filtre géo) --- */
   const allGeo = [
@@ -221,12 +236,8 @@ export function buildSavBundle(f: SavFilters): SavBundle {
       kpi: { identifies: identCount, zeroDose: identZero, sousVaccines: identSous, dosesManquees: identDoses, csUniques: identFiches.length },
       parTrancheAge: ageCounts(identChildren),
       parZsTrancheAge: zonesIdent.map((z) => { const a = ageCounts(identChildren.filter((c) => c.zone === z)); return { zone: z, a0: a.age_0_11, a1: a.age_12_23, a2: a.age_24_59 }; }),
-      dosesParTrancheAntigene: ([["age_0_11", "0 – 11 mois"], ["age_12_23", "12 – 23 mois"], ["age_24_59", "24 – 59 mois"]] as const).map(([g, label]) => {
-        const grp = identChildren.filter((c) => c.ageGroup === g);
-        const values: Record<string, number> = {};
-        for (const ag of AGE_TABLE_ANTIGENES) values[ANTIGENE_LABEL[ag]] = missedCount(grp, ag);
-        return { ageLabel: label, values };
-      }),
+      // Source : BASE SAISIE DONNEES SAV (Google Sheet) — enfants manqués par âge × antigène.
+      dosesParTrancheAntigene: baseAgeTable(bsIdent),
       parAsTrancheAge: airesIdent.map((a) => { const grp = identChildren.filter((c) => c.aire === a); const ac = ageCounts(grp); return { aire: a, zone: grp[0]?.zone ?? null, a0: ac.age_0_11, a1: ac.age_12_23, a2: ac.age_24_59, total: grp.length }; }).filter((r) => r.total > 0).sort((x, y) => y.total - x.total),
       topAs: topAsManques,
     },
@@ -285,12 +296,22 @@ export function buildSavBundle(f: SavFilters): SavBundle {
         return { aire: a, values, total, identifies: ident, taux: tauxByAire(a) };
       }).sort((x, y) => y.total - x.total),
       topAsFaibles: airesResult.map((a) => ({ label: a, value: tauxByAire(a) ?? 0 })).filter((d) => missDosesByAire(d.label) > 0).sort((x, y) => x.value - y.value).slice(0, 5),
+      // Graphique/tableau unique PENTA1/PENTA3/VPI1/VPI2/RR1/RR2 par tranche d'âge + % récupérés.
+      // Source : BASE SAISIE DONNEES SAV (vaccinés ÷ identifiés).
       syntheseAntigenes: RECUP_ANTIGENES.map((ag) => {
-        const a0 = sum(resultats.map((r) => r.byAntigeneAge[ag].a0)), a1 = sum(resultats.map((r) => r.byAntigeneAge[ag].a1)), a2 = sum(resultats.map((r) => r.byAntigeneAge[ag].a2));
-        const miss = missedCount(identChildren, ag);
-        return { antigene: ANTIGENE_LABEL[ag], a0, a1, a2, pctRecup: pct(a0 + a1 + a2, miss) };
+        const a0 = bsAgg(bsVacc, "age_0_11", ag), a1 = bsAgg(bsVacc, "age_12_23", ag), a2 = bsAgg(bsVacc, "age_24_59", ag);
+        const identTot = bsAgg(bsIdent, "age_0_11", ag) + bsAgg(bsIdent, "age_12_23", ag) + bsAgg(bsIdent, "age_24_59", ag);
+        return { antigene: ANTIGENE_LABEL[ag], a0, a1, a2, pctRecup: pct(a0 + a1 + a2, identTot) };
       }),
       antigeneOptions: RECUP_ANTIGENES.map((ag) => ANTIGENE_LABEL[ag]),
+      // Nb d'enfants vaccinés par antigène × tranche d'âge (Source : BASE SAISIE).
+      vaccinesParTrancheAntigene: baseAgeTable(bsVacc),
+      // % enfants vaccinés par antigène × tranche d'âge (vaccinés ÷ identifiés, BASE SAISIE).
+      pctParTrancheAntigene: AGE_ROWS.map(([g, label]) => {
+        const values: Record<string, number | null> = {};
+        for (const ag of ANTIGENE_ORDER) values[ANTIGENE_LABEL[ag]] = pct(bsAgg(bsVacc, g, ag), bsAgg(bsIdent, g, ag));
+        return { ageLabel: label, values };
+      }),
     },
 
     supervision: {

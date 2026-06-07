@@ -112,6 +112,10 @@ export interface SavBundle {
     topAsFaibles: SavCount[];
     syntheseAntigenes: { antigene: string; a0: number; a1: number; a2: number; pctRecup: number | null }[];
     antigeneOptions: string[];
+    /** Enfants vaccinés par antigène × tranche d'âge (Source : BASE SAISIE). */
+    vaccinesParTrancheAntigene: AgeAntigeneRow[];
+    /** % enfants vaccinés par antigène × tranche d'âge (vaccinés ÷ identifiés, BASE SAISIE). */
+    pctParTrancheAntigene: { ageLabel: string; values: Record<string, number | null> }[];
   };
 
   /* 6. Supervision équipes */
