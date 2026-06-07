@@ -109,8 +109,8 @@ export const MODULES: ModuleDef[] = [
     ],
   },
   {
-    key: "telecharger", name: "Télécharger Bulletin mensuel de l'appui de l'OMS à Tshuapa PEV de routine", icon: "download", tone: "good", live: true,
-    desc: "Génération automatique des rapports PEV & Contrôle qualité des données (PowerPoint).",
+    key: "telecharger", name: "Télécharger Bulletin mensuel de l'appui de l'OMS à Tshuapa PEV de routine", icon: "download", tone: "good", live: false,
+    desc: "Génération automatique du bulletin mensuel (PowerPoint) — à venir.",
     pages: [
       { id: "tr_rapport", label: "Rapports automatisés", icon: "report", lvl: "none" },
     ],
