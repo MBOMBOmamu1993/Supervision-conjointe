@@ -46,6 +46,30 @@ function ListCard({ icon, tone, title, items }: { icon: string; tone: Tone; titl
   );
 }
 
+/* Verbatims (texte libre du formulaire Kobo) contextualisés AT · antenne · mois. */
+type Verbatim = { at: string; antenne: string | null; month: string | null; monthLabel: string | null; text: string };
+function NarrativeCard({ icon, tone, title, sub, items, emptyMsg }: { icon: string; tone: Tone; title: string; sub?: string; items: Verbatim[]; emptyMsg?: string }) {
+  return (
+    <div className="card card-pad">
+      <CardTitle icon={icon as never} tone={tone} title={title} sub={sub} />
+      {items.length ? (
+        <ul className="space-y-2">
+          {items.map((v, i) => (
+            <li key={i} className="rounded-lg border border-slate-200 bg-slate-50/60 px-3 py-2">
+              <div className="text-[12.5px] leading-snug text-surface-800">{v.text}</div>
+              <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[10.5px] font-semibold text-surface-500">
+                {v.antenne && <span className="rounded bg-white px-1.5 py-0.5 ring-1 ring-slate-200">{v.antenne}</span>}
+                <span className="rounded bg-white px-1.5 py-0.5 ring-1 ring-slate-200">{v.at}</span>
+                {(v.monthLabel || v.month) && <span className="rounded bg-white px-1.5 py-0.5 ring-1 ring-slate-200">{v.monthLabel ?? v.month}</span>}
+              </div>
+            </li>
+          ))}
+        </ul>
+      ) : <Empty msg={emptyMsg ?? "Aucun verbatim saisi sur la période."} />}
+    </div>
+  );
+}
+
 /* ===================== 1. Vue d'ensemble / Généralités ===================== */
 export function RapVue() {
   const { data, refresh } = useRapportAt();
@@ -92,6 +116,17 @@ export function RapVue() {
           </table></div>
         ) : <Empty />}
       </div>
+      <section>
+        <SectionBar icon="message">Problèmes majeurs / constats & recommandations</SectionBar>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+          <NarrativeCard icon="erreurs" tone="red" title="Problèmes majeurs identifiés / constats"
+            sub="Verbatims des supervisions (AS · ZS · Antenne), de la validation des données et du monitorage ZS"
+            items={data.vue.constats} emptyMsg="Aucun problème ou constat saisi sur la période filtrée." />
+          <NarrativeCard icon="reco" tone="green" title="Recommandations & actions correctrices"
+            sub="Verbatims des réunions CCPeV, supervisions, coordination, validation et monitorage ZS"
+            items={data.vue.recommandations} emptyMsg="Aucune recommandation saisie sur la période filtrée." />
+        </div>
+      </section>
     </div>
   );
 }
@@ -329,6 +364,12 @@ export function RapOsp() {
           {s.omsJustifieesParAntenne.some((r) => r.pct != null) ? <ProtoScoreBar horiz height={210} unit="%" max={100} cats={s.omsJustifieesParAntenne.map((r) => r.antenne)} vals={s.omsJustifieesParAntenne.map((r) => r.pct ?? 0)} /> : <Empty />}
         </div>
       </div>
+      <section>
+        <SectionBar icon="message">Transmission du rapport trimestriel de l'Antenne PEV</SectionBar>
+        <NarrativeCard icon="report" tone="violet" title="Commentaires sur la transmission du rapport trimestriel PEV"
+          sub="Verbatims saisis par les AT (section 12 du formulaire)"
+          items={s.commentairesRapportPev} emptyMsg="Aucun commentaire saisi sur la transmission du rapport trimestriel sur la période filtrée." />
+      </section>
     </div>
   );
 }

@@ -34,6 +34,25 @@ export interface AtScore {
   niveau: AtNiveau | null;
 }
 
+/* ----------------------- Champs narratifs (texte libre Kobo) ----------------------- */
+
+/** Verbatims texte saisis dans le formulaire (problèmes/constats, recommandations,
+ *  commentaire sur la transmission du rapport trimestriel de l'Antenne PEV). */
+export interface AtNarratives {
+  problemes: string[];        // problème majeur identifié / constat
+  recommandations: string[];  // recommandations
+  commentairePev: string[];   // commentaire sur le rapport trimestriel PEV
+}
+
+/** Verbatim contextualisé (AT · antenne · mois) pour l'affichage. */
+export interface NarrativeItem {
+  at: string;
+  antenne: string | null;
+  month: string | null;
+  monthLabel: string | null;
+  text: string;
+}
+
 /* ----------------------- Enregistrement AT normalisé ----------------------- */
 
 export interface AtRecord {
@@ -47,6 +66,7 @@ export interface AtRecord {
   monthIndex: number | null; // 0..11
   score: AtScore;
   raw: Record<string, number | string | null>;
+  narratives: AtNarratives;
 }
 
 /* ----------------------- Bundles ----------------------- */
@@ -66,6 +86,10 @@ export interface RapportBundle {
     rapportsParMois: { month: string; label: string; count: number }[];
     scoreParAtMois: { at: string; antenne: string | null; byMonth: Record<string, number | null>; moyenne: number | null }[];
     months: { key: string; label: string }[];
+    /** Verbatims « problème majeur / constat » remontés par les AT. */
+    constats: NarrativeItem[];
+    /** Verbatims « recommandations » remontés par les AT. */
+    recommandations: NarrativeItem[];
   };
   reunions: {
     kpi: { ccpevTenues: number; ccpevPrevues: number; survAppuyees: number; survPrevues: number; validAppuyees: number; validPrevues: number; revuesAppuyees: number; revuesPrevues: number };
@@ -98,6 +122,8 @@ export interface RapportBundle {
     typesActivites: string[];
     rapportsTrimParAntenne: { antenne: string; transmis: number; attendus: number; statut: boolean }[];
     omsJustifieesParAntenne: { antenne: string; pct: number | null }[];
+    /** Commentaires sur la transmission du rapport trimestriel de l'Antenne PEV. */
+    commentairesRapportPev: NarrativeItem[];
   };
 }
 
