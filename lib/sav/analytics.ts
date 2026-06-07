@@ -139,7 +139,10 @@ export function buildSavBundle(f: SavFilters): SavBundle {
   const airesResult = uniq(resultats.map((r) => r.aire));
   const recupByAire = (a: string | null) => sum(resultats.filter((r) => r.aire === a).map((r) => r.totalDoses));
   const identByAire = (a: string | null) => identChildren.filter((c) => c.aire === a).length;
-  const asSousSeuil = airesResult.filter((a) => { const t = pct(recupByAire(a), identByAire(a)); return t != null && t < 50; }).length;
+  // Doses manquées identifiées par AS (dénominateur du taux de récupération, niveau doses).
+  const missDosesByAire = (a: string | null) => sum(identChildren.filter((c) => c.aire === a).map((c) => ANTIGENE_ORDER.reduce((x, ag) => x + (c.missed[ag] ? 1 : 0), 0)));
+  const tauxByAire = (a: string | null) => pct(recupByAire(a), missDosesByAire(a));
+  const asSousSeuil = airesResult.filter((a) => { const t = tauxByAire(a); return t != null && t < 50; }).length;
 
   /* --- Supervision --- */
   const questions = seed.supervision.questions;
@@ -254,7 +257,17 @@ export function buildSavBundle(f: SavFilters): SavBundle {
     },
 
     resultats: {
-      kpi: { recuperes, tauxRecup: pct(recuperes, identCount), zeroDoseRecuperes: null, asSousSeuil },
+      kpi: {
+        recuperes,
+        // Taux de récupération au niveau DOSES (comparable) : doses de récupération
+        // administrées ÷ doses manquées identifiées au CS. Peut dépasser 100 % car la
+        // récupération couvre au-delà des seuls enfants identifiés au centre de santé.
+        tauxRecup: pct(sum(resultats.map((r) => r.totalDoses)), identDoses),
+        // Zéro dose récupérés ≈ doses PENTA1 administrées en récupération (le zéro dose
+        // se définit par PENTA1 non reçu → l'administration de PENTA1 le récupère).
+        zeroDoseRecuperes: sum(resultats.map((r) => r.byAntigene.PENTA1)),
+        asSousSeuil,
+      },
       tauxByZsAntigene: RECUP_ANTIGENES.map((ag) => ({
         antigene: ANTIGENE_LABEL[ag],
         zones: zonesAll.map((z) => {
@@ -269,9 +282,9 @@ export function buildSavBundle(f: SavFilters): SavBundle {
         const values: Record<string, number> = {};
         for (const ag of RES_AS_ANTIGENES) values[ANTIGENE_LABEL[ag]] = sum(rr.map((r) => r.byAntigene[ag]));
         const total = sum(rr.map((r) => r.totalDoses)); const ident = identByAire(a);
-        return { aire: a, values, total, identifies: ident, taux: pct(total, ident) };
+        return { aire: a, values, total, identifies: ident, taux: tauxByAire(a) };
       }).sort((x, y) => y.total - x.total),
-      topAsFaibles: airesResult.map((a) => ({ label: a, value: pct(recupByAire(a), identByAire(a)) ?? 0 })).filter((d) => identByAire(d.label) > 0).sort((x, y) => x.value - y.value).slice(0, 5),
+      topAsFaibles: airesResult.map((a) => ({ label: a, value: tauxByAire(a) ?? 0 })).filter((d) => missDosesByAire(d.label) > 0).sort((x, y) => x.value - y.value).slice(0, 5),
       syntheseAntigenes: RECUP_ANTIGENES.map((ag) => {
         const a0 = sum(resultats.map((r) => r.byAntigeneAge[ag].a0)), a1 = sum(resultats.map((r) => r.byAntigeneAge[ag].a1)), a2 = sum(resultats.map((r) => r.byAntigeneAge[ag].a2));
         const miss = missedCount(identChildren, ag);

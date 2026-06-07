@@ -80,12 +80,13 @@ month: f.month??null,
 const RES_LABEL = { BCG:"BCG",VPO1:"VPO 1",VPO2:"VPO 2",VPO3:"VPO 3",PENTA1:"Penta 1",PENTA2:"Penta 2",PENTA3:"Penta 3",
   PCV1:"Pneumo 1",PCV2:"Pneumo 2",PCV3:"Pneumo 3",ROTA1:"Rotasiil 1",ROTA2:"Rotasiil 2",ROTA3:"Rotasiil 3",
   VPI1:"VPI 1",VPI2:"VPI 2",RR1:"VAR/RR 1",RR2:"VAR/RR 2",VAA:"VAA",VAP1:"VAP 1",VAP2:"VAP 2",VAP3:"VAP 3",VAP4:"VAP 4" };
+const RES_TOTAL={BCG:"total_bcg",VPO1:"total_vpo1",VPO2:"total_vpo2",VPO3:"total_vpo3",PENTA1:"total_penta1",PENTA2:"total_penta2",PENTA3:"total_penta3",PCV1:"total_pneumo1",PCV2:"total_pneumo2",PCV3:"total_pneumo3",ROTA1:"total_rotasiil1",ROTA2:"total_rotasiil2",ROTA3:"total_rotasiil3",VPI1:"total_vpi1",VPI2:"total_vpi2",RR1:"total_varrr1",RR2:"total_varrr2",VAA:"total_vaa",VAP1:"total_vap1",VAP2:"total_vap2",VAP3:"total_vap3",VAP4:"total_vap4"};
 function buildResultats(file){
   const {wb,o}=sheets(file); const rows=pick(wb,o,(n)=>/sulat|vaccination/i.test(n)) ;
   return rows.map((r)=>{
     const byAntigene={}, byAntigeneAge={};
     for(const ag of ANTI){ const L=RES_LABEL[ag];
-      byAntigene[ag]=num(r[L]);
+      byAntigene[ag]=num(r[RES_TOTAL[ag]]);
       byAntigeneAge[ag]={a0:num(r[L+" — 0 à 11 mois"]),a1:num(r[L+" — 12 à 23 mois"]),a2:num(r[L+" — 24 à 59 mois"])};
     }
     return {

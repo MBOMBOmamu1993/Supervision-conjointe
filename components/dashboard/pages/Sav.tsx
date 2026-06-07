@@ -288,16 +288,18 @@ export function SavResultats() {
   const { data } = useSav();
   if (!data) return <Empty msg="Synchronisation…" />;
   const s = data.resultats;
+  const maxTaux = Math.max(100, ...s.tauxByZsAntigene.flatMap((a) => a.zones.map((z) => z.taux ?? 0)));
   return (
     <div className="space-y-4">
       {!data.meta.hasData && <Pending />}
-      <Banner icon="syringe" tone="green" title="Résultats de la récupération" sub="Taux de récupération = enfants vaccinés ÷ enfants identifiés" />
+      <Banner icon="syringe" tone="green" title="Résultats de la récupération" sub="Doses administrées en récupération vs doses manquées identifiées au CS" />
+      <Dedup html={`<b>Lecture du taux de récupération</b> : il rapporte les <b>doses de récupération administrées</b> aux <b>doses manquées identifiées</b> au centre de santé. Il peut <b>dépasser 100 %</b> lorsque la récupération touche des enfants au-delà de ceux identifiés au CS (la SAV vaccine plus largement que l'échantillon identifié).`} />
       <section>
         <SectionBar icon="bars">Indicateurs clés</SectionBar>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          <KpiTile icon="syringe" tone="green" label="Enfants récupérés" value={s.kpi.recuperes} sub="vaccinés" />
-          <KpiTile icon="gauge" tone="blue" label="Taux de récupération" value={pctTxt(s.kpi.tauxRecup)} sub="vaccinés / identifiés" />
-          <KpiTile icon="enfants" tone="orange" label="Zéro dose récupérés" value={s.kpi.zeroDoseRecuperes ?? "—"} sub="des zéro dose" />
+          <KpiTile icon="syringe" tone="green" label="Doses de récupération" value={s.kpi.recuperes} sub="doses administrées" />
+          <KpiTile icon="gauge" tone="blue" label="Taux de récupération" value={pctTxt(s.kpi.tauxRecup)} sub="doses récup. / doses manquées" />
+          <KpiTile icon="enfants" tone="orange" label="Zéro dose récupérés" value={s.kpi.zeroDoseRecuperes ?? "—"} sub="PENTA1 administré" />
           <KpiTile icon="rank" tone="red" label="AS sous le seuil (50 %)" value={s.kpi.asSousSeuil} sub="à relancer" />
         </div>
       </section>
@@ -305,13 +307,13 @@ export function SavResultats() {
         <div className="card card-pad lg:col-span-7">
           <CardTitle icon="chart" tone="green" title="Taux de récupération par zone de santé et antigène" sub="vaccinés ÷ identifiés" />
           {s.tauxByZsAntigene.length && s.tauxByZsAntigene[0].zones.length ? (
-            <ProtoGroupedBar height={230} unit="%" max={100} cats={s.tauxByZsAntigene.map((a) => a.antigene)}
+            <ProtoGroupedBar height={230} unit="%" max={Math.ceil(maxTaux / 50) * 50} cats={s.tauxByZsAntigene.map((a) => a.antigene)}
               colors={[C.blue, C.orange, C.green]}
               series={s.tauxByZsAntigene[0].zones.map((z, zi) => ({ name: z.zone, data: s.tauxByZsAntigene.map((a) => a.zones[zi]?.taux ?? 0) }))} />
           ) : <Empty />}
         </div>
         <div className="card card-pad lg:col-span-5">
-          <CardTitle icon="enfants" tone="violet" title="Enfants vaccinés par tranche d'âge" sub="Source : BASE SAISIE DONNEES SAV" />
+          <CardTitle icon="enfants" tone="violet" title="Doses administrées par tranche d'âge" sub="récupération — formulaire Résultats" />
           <Donut height={210} data={[
             { name: "0 – 11 mois", value: s.enfantsByTrancheAge.age_0_11, color: C.orange },
             { name: "12 – 23 mois", value: s.enfantsByTrancheAge.age_12_23, color: C.blue },
@@ -320,7 +322,7 @@ export function SavResultats() {
         </div>
       </div>
       <div className="card card-pad">
-        <CardTitle icon="table" tone="navy" title="Enfants vaccinés par aire de santé et antigène (extrait)" sub="Source : BASE SAISIE DONNEES SAV" />
+        <CardTitle icon="table" tone="navy" title="Doses administrées par aire de santé et antigène (extrait)" sub="récupération — formulaire Résultats" />
         {s.parAsTable.length ? (
           <div className="overflow-x-auto"><table className="dtable">
             <thead><tr><th className="name">Aire de santé</th>{Object.keys(s.parAsTable[0].values).map((a) => <th key={a}>{a}</th>)}<th>Total</th><th>Identifiés</th><th>Taux récup.</th></tr></thead>
