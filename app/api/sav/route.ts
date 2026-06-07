@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from "next/server";
-import { fetchAllSavSources, fetchBaseSaisieSav } from "@/lib/sav/kobo-client";
 import { buildSavBundle, type SavFilters } from "@/lib/sav/analytics";
 import { ENV } from "@/lib/server/env";
 
@@ -21,10 +20,9 @@ export async function GET(req: NextRequest) {
     aire: sp.get("aire"),
     months: multi(sp, "months"),
   };
-  const force = sp.get("force") === "1";
   try {
-    const [sources, baseSaisie] = await Promise.all([fetchAllSavSources({ force }), fetchBaseSaisieSav({ force })]);
-    const bundle = buildSavBundle(sources, baseSaisie, filters);
+    // Activité SAV terminée : données figées normalisées (exports Kobo officiels).
+    const bundle = buildSavBundle(filters);
     return NextResponse.json(bundle, {
       headers: { "Cache-Control": `public, max-age=0, s-maxage=${ENV.CACHE_TTL_SECONDS}, stale-while-revalidate=60` },
     });

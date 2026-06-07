@@ -1,446 +1,304 @@
 /**
  * Analytique SAV (Semaine Africaine de Vaccination) — couvre les 6 pages.
  *
- * Les exports Kobo SAV ont des libellés FR longs : la résolution des colonnes
- * se fait par mots-clés (insensible casse/accents), comme le reste du repo. Deux
- * formulaires (`ident_cs` et `planif`) sont soumis une fois par CS mais
- * comportent des doublons → on déduplique par centre de santé AVANT tout calcul
- * (`dedupeByCs`, 1 fiche/CS = la plus récente). Les ventilations par antigène ×
- * tranche d'âge proviennent de la « BASE SAISIE DONNEES SAV » si configurée,
- * sinon repli sur les exports Kobo. Aucune page ne plante sans données.
+ * Source : seed normalisé `data/sav/sav-seed.json` (exports Kobo SAV figés —
+ * activité terminée). Les deux formulaires soumis une fois par CS (`ident_cs`,
+ * `planif`) sont dédupliqués par centre de santé AVANT tout calcul
+ * (`dedupeByCs`, 1 fiche/CS = la plus récente). Aucune page ne plante.
  */
-import type { RawRow } from "@/lib/supervision/types";
 import { canonAntenne, norm } from "@/lib/geo";
+import type { SavBundle, DedupInfo, SavCount } from "./types";
 import {
-  SAV_ANTIGENES, type SavAntigene, type SavBundle, type DedupInfo, type SavCount,
-} from "./types";
-import type { SavFetch, BaseSaisieFetch } from "./kobo-client";
+  SAV_SEED, ANTIGENE_ORDER, ANTIGENE_LABEL,
+  type AntigeneKey, type SeedFiche, type SeedChild, type SeedResult, type SeedPlanFiche, type SeedSession, type SeedSupRow,
+} from "./seed";
 
 export interface SavFilters { province: string | null; antenne: string | null; zone: string | null; aire: string | null; months: string[] }
 
-const str = (v: unknown): string => (v == null ? "" : String(v).trim());
-const lastSeg = (k: string) => k.split(/[/.]/).pop()!;
-const normKey = (s: string) => norm(s).replace(/[\s_]+/g, " ").trim();
-const normTight = (s: string) => norm(s).replace(/[\s_]+/g, "");
-
-function num(v: unknown): number {
-  if (v == null || v === "") return 0;
-  const n = Number(String(v).replace(",", ".").replace(/[^0-9.\-]/g, ""));
-  return Number.isFinite(n) ? n : 0;
-}
+const eq = (a: string | null, b: string | null) => norm(a ?? "") === norm(b ?? "");
+const uniq = (xs: (string | null)[]) => [...new Set(xs.filter((x): x is string => !!x))].sort((a, b) => a.localeCompare(b, "fr"));
 const sum = (xs: number[]) => xs.reduce((a, b) => a + b, 0);
 const pct = (n: number, d: number): number | null => (d > 0 ? Math.round((n / d) * 1000) / 10 : null);
-const uniq = (xs: (string | null)[]) => [...new Set(xs.filter((x): x is string => !!x))].sort();
 
-/** Map scalaire d'une ligne, indexée par clé normalisée du dernier segment. */
-function rowMap(row: RawRow): Map<string, unknown> {
-  const m = new Map<string, unknown>();
-  for (const [k, v] of Object.entries(row)) {
-    if (v !== null && typeof v === "object") continue;
-    m.set(normKey(lastSeg(k)), v);
-  }
-  return m;
-}
-
-/** Première valeur dont la clé contient TOUS les tokens donnés. */
-function get(m: Map<string, unknown>, ...tokens: string[]): unknown {
-  const toks = tokens.map((t) => norm(t));
-  for (const [k, v] of m) if (toks.every((t) => k.includes(t))) return v;
-  return null;
-}
-function getStr(m: Map<string, unknown>, ...tokens: string[]): string { return str(get(m, ...tokens)); }
-function getNum(m: Map<string, unknown>, ...tokens: string[]): number { return num(get(m, ...tokens)); }
-
-/* --------- Géographie commune --------- */
-interface Geo { province: string | null; antenne: string | null; zone: string | null; aire: string | null }
-function readGeo(m: Map<string, unknown>): Geo {
-  return {
-    province: getStr(m, "province") || null,
-    antenne: canonAntenne(getStr(m, "antenne") || null),
-    zone: (getStr(m, "zone", "sante") || getStr(m, "zone")) || null,
-    aire: (getStr(m, "aire", "sante") || getStr(m, "centre", "sante") || getStr(m, "aire") || getStr(m, "ess")) || null,
-  };
-}
-function submissionTime(m: Map<string, unknown>): number {
-  const s = getStr(m, "submission", "time") || getStr(m, "end") || getStr(m, "today") || getStr(m, "date");
-  const t = Date.parse(s);
-  return Number.isFinite(t) ? t : 0;
-}
-function monthOf(m: Map<string, unknown>): string | null {
-  const s = getStr(m, "submission", "time") || getStr(m, "end") || getStr(m, "today") || getStr(m, "date");
-  const mm = s.match(/(\d{4})-(\d{2})/);
-  return mm ? `${mm[1]}-${mm[2]}` : null;
-}
-
-/* ============================ Déduplication par CS ============================ */
-
-/**
- * Déduplique des lignes par centre de santé : clé = norm(Zone) | norm(Aire/CS).
- * Conserve la fiche la plus récente (`_submission_time`/`end`) ; départage à
- * date égale par la fiche la plus complète (max enfants / sessions).
- */
-export function dedupeByCs(rows: RawRow[]): { kept: RawRow[]; info: DedupInfo } {
-  const byKey = new Map<string, { row: RawRow; time: number; weight: number }>();
-  for (const row of rows) {
-    const m = rowMap(row);
-    const g = readGeo(m);
-    const key = `${norm(g.zone ?? "")}|${norm(g.aire ?? "")}`;
-    if (key === "|") { // pas de géo exploitable : conserver tel quel sous clé unique
-      byKey.set(`__raw_${byKey.size}`, { row, time: submissionTime(m), weight: 0 });
-      continue;
-    }
-    const weight = getNum(m, "enfant") + getNum(m, "session") + getNum(m, "attendu");
-    const cur = byKey.get(key);
-    const cand = { row, time: submissionTime(m), weight };
-    if (!cur || cand.time > cur.time || (cand.time === cur.time && cand.weight > cur.weight)) byKey.set(key, cand);
-  }
-  const kept = [...byKey.values()].map((e) => e.row);
-  return { kept, info: { raw: rows.length, kept: kept.length, removed: rows.length - kept.length } };
-}
-
-/* ============================ Résolution des antigènes ============================ */
-
-/** Trouve, pour un antigène, la colonne « manqué » (compte) d'une ligne. */
-function antigeneMissed(m: Map<string, unknown>, ag: SavAntigene): number {
-  const tight = normTight(ag);
-  for (const [k, v] of m) {
-    const kt = normTight(k);
-    if (kt.includes(tight) && /(manqu|nonrecu|nonvacc|rate|absent)/.test(kt)) return num(v);
-  }
-  // Repli : colonne portant exactement le nom de l'antigène (valeur = compte manqué)
-  for (const [k, v] of m) if (normTight(k) === tight) return num(v);
-  return 0;
-}
-
-/* ============================ Filtres ============================ */
-
-function matchGeo(g: Geo, f: SavFilters): boolean {
-  const eq = (a: string | null, b: string | null) => norm(a ?? "") === norm(b ?? "");
+interface GeoMonth { province: string | null; antenne: string | null; zone: string | null; aire: string | null; month: string | null }
+function matchF(g: GeoMonth, f: SavFilters): boolean {
   return (!f.province || eq(g.province, f.province)) &&
     (!f.antenne || eq(canonAntenne(g.antenne), canonAntenne(f.antenne))) &&
     (!f.zone || eq(g.zone, f.zone)) &&
-    (!f.aire || eq(g.aire, f.aire));
+    (!f.aire || eq(g.aire, f.aire)) &&
+    (f.months.length === 0 || (g.month != null && f.months.includes(g.month)));
 }
 
-interface Parsed { m: Map<string, unknown>; g: Geo; month: string | null }
-function parseRows(rows: RawRow[]): Parsed[] {
-  return rows.map((row) => { const m = rowMap(row); return { m, g: readGeo(m), month: monthOf(m) }; });
+/* ============================ Déduplication par CS ============================ */
+/** Clé CS = norm(Zone) | norm(Centre de santé || Aire). */
+function csKey(f: { zone: string | null; cs?: string | null; aire: string | null }): string {
+  return `${norm(f.zone ?? "")}|${norm(f.cs ?? f.aire ?? "")}`;
 }
-function filterParsed(ps: Parsed[], f: SavFilters): Parsed[] {
-  return ps.filter((p) => matchGeo(p.g, f) && (f.months.length === 0 || (p.month != null && f.months.includes(p.month))));
+/** Retourne l'ensemble des ids de fiches retenues (1 par CS = la plus récente). */
+function dedupeFiches<T extends { id: string; time: number; zone: string | null; aire: string | null; cs?: string | null; identifies?: number; sessionsPlanifiees?: number }>(
+  fiches: T[]
+): { keptIds: Set<string>; info: DedupInfo } {
+  const best = new Map<string, T>();
+  for (const f of fiches) {
+    const k = csKey(f);
+    const cur = best.get(k);
+    const w = (f.identifies ?? 0) + (f.sessionsPlanifiees ?? 0);
+    const cw = cur ? (cur.identifies ?? 0) + (cur.sessionsPlanifiees ?? 0) : -1;
+    if (!cur || f.time > cur.time || (f.time === cur.time && w > cw)) best.set(k, f);
+  }
+  const keptIds = new Set([...best.values()].map((f) => f.id));
+  return { keptIds, info: { raw: fiches.length, kept: keptIds.size, removed: fiches.length - keptIds.size } };
 }
+
+/** Helper exposé (compat) : déduplique une liste de fiches et renvoie celles retenues. */
+export function dedupeByCs<T extends { id: string; time: number; zone: string | null; aire: string | null; cs?: string | null; identifies?: number; sessionsPlanifiees?: number }>(fiches: T[]) {
+  const { keptIds, info } = dedupeFiches(fiches);
+  return { kept: fiches.filter((f) => keptIds.has(f.id)), info };
+}
+
+/* ============================ Agrégations enfants ============================ */
+function ageCounts(children: SeedChild[]) {
+  return {
+    age_0_11: children.filter((c) => c.ageGroup === "age_0_11").length,
+    age_12_23: children.filter((c) => c.ageGroup === "age_12_23").length,
+    age_24_59: children.filter((c) => c.ageGroup === "age_24_59").length,
+  };
+}
+const missedCount = (children: SeedChild[], ag: AntigeneKey) => children.reduce((a, c) => a + (c.missed[ag] ? 1 : 0), 0);
 
 /* ============================ Build bundle ============================ */
+const AGE_TABLE_ANTIGENES: AntigeneKey[] = ["BCG", "VPO1", "PENTA1", "PCV1", "ROTA1", "VPO3", "VPI1", "PENTA3", "RR1", "VAA", "VAP1"];
+const RECUP_ANTIGENES: AntigeneKey[] = ["PENTA1", "PENTA3", "VPI1", "VPI2", "RR1", "RR2"];
+const RES_AS_ANTIGENES: AntigeneKey[] = ["PENTA1", "PENTA3", "VPI1", "RR1", "VAA"];
 
-const EMPTY_AGE = { age_0_11: 0, age_12_23: 0, age_24_59: 0 };
+export function buildSavBundle(f: SavFilters): SavBundle {
+  const seed = SAV_SEED;
 
-export function buildSavBundle(sources: SavFetch[], baseSaisie: BaseSaisieFetch, f: SavFilters): SavBundle {
-  const byKey = (k: string) => sources.find((s) => s.key === k);
-  const identCsRaw = byKey("ident_cs")?.rows ?? [];
-  const planifRaw = byKey("planif")?.rows ?? [];
-  const relaisRaw = byKey("ident_relais")?.rows ?? [];
-  const resultatsRaw = byKey("resultats")?.rows ?? [];
-  const supRaw = byKey("supervision")?.rows ?? [];
+  /* --- Déduplication (sur toutes les fiches, avant filtre) --- */
+  const identDedup = dedupeFiches(seed.identCs.fiches);
+  const planifDedup = dedupeFiches(seed.planif.fiches);
 
-  // Déduplication par CS (ident_cs + planif).
-  const identCsDedup = dedupeByCs(identCsRaw);
-  const planifDedup = dedupeByCs(planifRaw);
+  /* --- Fiches retenues + filtrées --- */
+  const identFiches = seed.identCs.fiches.filter((x) => identDedup.keptIds.has(x.id) && matchF(x, f));
+  const identFicheIds = new Set(identFiches.map((x) => x.id));
+  const identChildren = seed.identCs.enfants.filter((c) => identFicheIds.has(c.ficheId));
 
-  // Options de filtres : agrégées sur toutes les sources.
-  const allParsed = [identCsDedup.kept, planifDedup.kept, relaisRaw, resultatsRaw, supRaw].flatMap(parseRows);
-  const geoTuples = allParsed.map((p) => ({ province: p.g.province, antenne: canonAntenne(p.g.antenne), zone: p.g.zone, aire: p.g.aire }));
+  const planifFiches = seed.planif.fiches.filter((x) => planifDedup.keptIds.has(x.id) && matchF(x, f));
+  const planifFicheIds = new Set(planifFiches.map((x) => x.id));
+  const planifSessions = seed.planif.sessions.filter((sx) => planifFicheIds.has(sx.ficheId) && matchF(sx, f));
+
+  const relaisFiches = seed.identRelais.fiches.filter((x) => matchF(x, f));
+  const relaisFicheIds = new Set(relaisFiches.map((x) => x.id));
+  const relaisChildren = seed.identRelais.enfants.filter((c) => relaisFicheIds.has(c.ficheId));
+
+  const resultats = seed.resultats.filter((r) => matchF(r, f));
+  const sup = seed.supervision.rows.filter((r) => matchF(r, f));
+
+  /* --- Options de filtres (toutes sources, avant filtre géo) --- */
+  const allGeo = [
+    ...seed.identCs.fiches, ...seed.planif.fiches, ...seed.identRelais.fiches, ...seed.resultats,
+    ...seed.supervision.rows.map((r) => ({ ...r })),
+  ];
   const filterOptions = {
-    provinces: uniq(allParsed.map((p) => p.g.province)),
-    antennes: uniq(allParsed.map((p) => canonAntenne(p.g.antenne))),
-    zones: uniq(allParsed.map((p) => p.g.zone)),
-    aires: uniq(allParsed.map((p) => p.g.aire)),
-    months: uniq(allParsed.map((p) => p.month)),
-    geo: geoTuples,
+    provinces: uniq(allGeo.map((x) => x.province)),
+    antennes: uniq(allGeo.map((x) => canonAntenne(x.antenne))),
+    zones: uniq(allGeo.map((x) => x.zone)),
+    aires: uniq(allGeo.map((x) => x.aire)),
+    months: uniq(allGeo.map((x) => (x as { month?: string | null }).month ?? null)),
+    geo: allGeo.map((x) => ({ province: x.province, antenne: canonAntenne(x.antenne), zone: x.zone, aire: x.aire })),
   };
+  const airesTotal = filterOptions.aires.length;
 
-  // Application des filtres.
-  const identCs = filterParsed(parseRows(identCsDedup.kept), f);
-  const planif = filterParsed(parseRows(planifDedup.kept), f);
-  const relais = filterParsed(parseRows(relaisRaw), f);
-  const resultats = filterParsed(parseRows(resultatsRaw), f);
-  const sup = filterParsed(parseRows(supRaw), f);
+  /* --- Identification CS --- */
+  const identCount = identChildren.length;
+  const identZero = identChildren.filter((c) => c.zeroDose).length;
+  const identSous = identChildren.filter((c) => c.sousVaccine).length;
+  const identDoses = sum(identChildren.map((c) => ANTIGENE_ORDER.reduce((a, ag) => a + (c.missed[ag] ? 1 : 0), 0)));
+  const zonesIdent = uniq(identChildren.map((c) => c.zone));
+  const airesIdent = uniq(identChildren.map((c) => c.aire));
 
-  /* ---- Helpers de comptage identification ---- */
-  const enfIdentifies = (ps: Parsed[]) => sum(ps.map((p) => {
-    const v = getNum(p.m, "enfant", "identifi") || getNum(p.m, "total", "enfant") || getNum(p.m, "nombre", "enfant");
-    return v;
-  }));
-  const zeroDose = (ps: Parsed[]) => sum(ps.map((p) => getNum(p.m, "zero", "dose"))) || ps.reduce((a, p) => a + antigeneMissed(p.m, "Penta1"), 0);
-  const sousVacc = (ps: Parsed[]) => sum(ps.map((p) => getNum(p.m, "sous", "vaccin"))) || ps.reduce((a, p) => a + Math.max(0, antigeneMissed(p.m, "Penta3") - antigeneMissed(p.m, "Penta1")), 0);
-  const dosesManquees = (ps: Parsed[]) => sum(ps.map((p) => sum(SAV_ANTIGENES.map((ag) => antigeneMissed(p.m, ag)))));
-
-  /* ---- Doses manquées par antigène (province) ---- */
-  const dosesByAntigene: SavCount[] = SAV_ANTIGENES.map((ag) => ({ label: ag, value: sum(identCs.map((p) => antigeneMissed(p.m, ag))) }))
+  const dosesByAntigene: SavCount[] = ANTIGENE_ORDER
+    .map((ag) => ({ label: ANTIGENE_LABEL[ag], value: missedCount(identChildren, ag) }))
     .filter((d) => d.value > 0);
-
-  /* ---- Enfants manqués par ZS ---- */
-  const zonesIdent = uniq(identCs.map((p) => p.g.zone));
-  const enfantsManquesByZs: SavCount[] = zonesIdent.map((z) => ({ label: z, value: enfIdentifies(identCs.filter((p) => p.g.zone === z)) })).filter((d) => d.value > 0);
-
-  /* ---- Top AS enfants manqués ---- */
-  const airesIdent = uniq(identCs.map((p) => p.g.aire));
+  const enfantsManquesByZs: SavCount[] = zonesIdent.map((z) => ({ label: z, value: identChildren.filter((c) => c.zone === z).length })).filter((d) => d.value > 0);
   const topAsManques: SavCount[] = airesIdent
-    .map((a) => ({ label: a, value: enfIdentifies(identCs.filter((p) => p.g.aire === a)) }))
+    .map((a) => ({ label: a, value: identChildren.filter((c) => c.aire === a).length }))
     .sort((x, y) => y.value - x.value).slice(0, 5).filter((d) => d.value > 0);
 
-  /* ---- Planification ---- */
-  const sessions = (ps: Parsed[]) => sum(ps.map((p) => getNum(p.m, "session") || 1));
-  const enfAttendus = (ps: Parsed[]) => sum(ps.map((p) => getNum(p.m, "enfant", "attendu") || getNum(p.m, "attendu")));
-  const planifSessions = sum(planif.map((p) => getNum(p.m, "session", "planifi") || getNum(p.m, "nombre", "session") || 1));
-  const planifEnfants = enfAttendus(planif);
-  const asWithProg = uniq(planif.filter((p) => (getNum(p.m, "session") || 1) > 0).map((p) => p.g.aire));
-  const sessionType = (p: Parsed) => {
-    const t = norm(getStr(p.m, "type", "session") || getStr(p.m, "strategie") || getStr(p.m, "type"));
-    if (/avanc/.test(t)) return "avancee"; if (/mobile/.test(t)) return "mobile"; if (/fixe|autre/.test(t)) return "fixe";
-    return "avancee";
+  /* --- Planification --- */
+  const planSessions = sum(planifFiches.map((x) => x.sessionsPlanifiees));
+  const planEnfants = sum(planifFiches.map((x) => x.enfantsAttendus));
+  const planAvancees = sum(planifFiches.map((x) => x.sessionsAvancees));
+  const planMobiles = sum(planifFiches.map((x) => x.sessionsMobiles));
+  const planFixes = Math.max(0, planSessions - planAvancees - planMobiles);
+  const airesAvecProg = uniq(planifFiches.filter((x) => x.sessionsPlanifiees > 0).map((x) => x.aire));
+
+  /* --- Résultats --- */
+  const recuperes = sum(resultats.map((r) => r.totalDoses));
+  const zonesAll = uniq([...identChildren.map((c) => c.zone), ...planifFiches.map((p) => p.zone), ...resultats.map((r) => r.zone)]);
+  const airesResult = uniq(resultats.map((r) => r.aire));
+  const recupByAire = (a: string | null) => sum(resultats.filter((r) => r.aire === a).map((r) => r.totalDoses));
+  const identByAire = (a: string | null) => identChildren.filter((c) => c.aire === a).length;
+  const asSousSeuil = airesResult.filter((a) => { const t = pct(recupByAire(a), identByAire(a)); return t != null && t < 50; }).length;
+
+  /* --- Supervision --- */
+  const questions = seed.supervision.questions;
+  const ouiParQuestion: SavCount[] = questions.map((q) => {
+    const considered = sup.filter((r) => r.q[q] === "oui" || r.q[q] === "non");
+    return { label: q.replace(/\s*\?$/, ""), value: pct(considered.filter((r) => r.q[q] === "oui").length, considered.length) ?? 0, _key: q } as SavCount & { _key: string };
+  }).filter((d) => (d as { value: number }).value >= 0 && sup.some((r) => r.q[(d as { _key: string })._key] != null));
+  const ouiSorted = [...ouiParQuestion].sort((a, b) => b.value - a.value);
+  const top7Q = ouiSorted.slice().sort((a, b) => a.value - b.value).slice(0, 7); // les plus problématiques d'abord pour la heatmap
+  const supAires = uniq(sup.map((r) => r.aire));
+  const ouiGlobal = ouiParQuestion.length ? Math.round((sum(ouiParQuestion.map((q) => q.value)) / ouiParQuestion.length) * 10) / 10 : null;
+
+  const topList = (arr: string[]) => {
+    const m = new Map<string, number>();
+    for (const v of arr) { const t = (v ?? "").trim(); if (t.length < 3) continue; m.set(t, (m.get(t) ?? 0) + 1); }
+    return [...m.entries()].sort((a, b) => b[1] - a[1]).slice(0, 7).map((e) => e[0]);
   };
-  const sessionsParType = { avancee: 0, fixe: 0, mobile: 0 };
-  for (const p of planif) sessionsParType[sessionType(p) as keyof typeof sessionsParType] += getNum(p.m, "session") || 1;
+  const topProblemes = topList(sup.flatMap((r) => r.difficultesList ?? []));
+  const topActions = topList(sup.map((r) => r.actions ?? "").filter(Boolean));
+  const topReco = topList(sup.map((r) => r.recommandations ?? "").filter(Boolean));
 
-  /* ---- Identification CS totals ---- */
-  const identCsIdent = enfIdentifies(identCs);
-  const identCsZero = zeroDose(identCs);
-  const identCsSous = sousVacc(identCs);
-
-  /* ---- Relais totals ---- */
-  const relaisIdent = enfIdentifies(relais);
-
-  /* ---- Résultats ---- */
-  const recuperes = sum(resultats.map((p) => getNum(p.m, "vaccin") || getNum(p.m, "recuper")));
-  const tauxRecupGlobal = pct(recuperes, identCsIdent || relaisIdent);
-
-  /* ---- Supervision : proportion de Oui par question ---- */
-  const supQuestions = (() => {
-    if (sup.length === 0) return [] as SavCount[];
-    const keys = new Set<string>();
-    for (const p of sup) for (const [k, v] of p.m) {
-      const val = norm(str(v));
-      if (/^(oui|non)$/.test(val) && !/submission|uuid|validation/.test(k)) keys.add(k);
-    }
-    return [...keys].map((k) => {
-      const considered = sup.filter((p) => { const v = norm(str(p.m.get(k))); return v === "oui" || v === "non"; });
-      const oui = considered.filter((p) => norm(str(p.m.get(k))) === "oui").length;
-      return { label: prettyQuestion(k), value: pct(oui, considered.length) ?? 0 };
-    }).filter((d) => d.value > 0);
-  })();
-  const supAires = uniq(sup.map((p) => p.g.aire));
-  const ouiGlobalPct = supQuestions.length ? Math.round((sum(supQuestions.map((q) => q.value)) / supQuestions.length) * 10) / 10 : null;
-
-  /* ---- Synthèse par ZS (vue d'ensemble) ---- */
-  const zonesAll = uniq([...identCs, ...planif, ...resultats].map((p) => p.g.zone));
+  /* --- Synthèse par ZS (vue) --- */
   const syntheseByZs = zonesAll.map((z) => {
-    const ic = identCs.filter((p) => p.g.zone === z), pl = planif.filter((p) => p.g.zone === z), rs = resultats.filter((p) => p.g.zone === z);
-    const ident = enfIdentifies(ic), attendus = enfAttendus(pl), recup = sum(rs.map((p) => getNum(p.m, "vaccin") || getNum(p.m, "recuper")));
+    const ic = identChildren.filter((c) => c.zone === z);
+    const pl = planifFiches.filter((p) => p.zone === z);
+    const rs = resultats.filter((r) => r.zone === z);
+    const ident = ic.length, recup = sum(rs.map((r) => r.totalDoses));
     return {
-      zone: z, cs: uniq(ic.map((p) => p.g.aire)).length, enfantsIdentifies: ident,
-      zeroDose: zeroDose(ic), sousVaccines: sousVacc(ic), sessions: sessions(pl),
-      enfantsAttendus: attendus, enfantsRecuperes: recup, tauxRecup: pct(recup, ident),
+      zone: z, cs: uniq(ic.map((c) => c.cs ?? c.aire)).length, enfantsIdentifies: ident,
+      zeroDose: ic.filter((c) => c.zeroDose).length, sousVaccines: ic.filter((c) => c.sousVaccine).length,
+      sessions: sum(pl.map((p) => p.sessionsPlanifiees)), enfantsAttendus: sum(pl.map((p) => p.enfantsAttendus)),
+      enfantsRecuperes: recup, tauxRecup: pct(recup, ident),
     };
   });
-
-  const hasData = sources.some((s) => s.rows.length > 0);
 
   return {
     meta: {
       generatedAt: new Date().toISOString(),
-      sources: sources.map((s) => ({ key: s.key, label: s.label, rows: s.rows.length, ok: s.ok, error: s.error })),
-      baseSaisie: { configured: baseSaisie.configured, ok: baseSaisie.ok, rows: baseSaisie.rows.length, error: baseSaisie.error },
-      hasData,
+      sources: [
+        { key: "ident_cs", label: "SAV — Identification EZD/ESV par CS", rows: seed.identCs.fiches.length, ok: true },
+        { key: "ident_relais", label: "SAV — Identification par relais", rows: seed.identRelais.fiches.length, ok: true },
+        { key: "resultats", label: "SAV — Résultats vaccination", rows: seed.resultats.length, ok: true },
+        { key: "supervision", label: "SAV — Supervision des équipes", rows: seed.supervision.rows.length, ok: true },
+        { key: "planif", label: "SAV — Planification", rows: seed.planif.fiches.length, ok: true },
+      ],
+      baseSaisie: { configured: true, ok: true, rows: seed.identCs.enfants.length },
+      hasData: identCount + recuperes + sup.length > 0,
     },
     filters: filterOptions,
-    dedup: { identCs: identCsDedup.info, planif: planifDedup.info },
+    dedup: { identCs: identDedup.info, planif: planifDedup.info },
 
     vue: {
       kpi: {
-        identCsFiches: identCsDedup.info.kept,
-        planifFiches: planifDedup.info.kept,
-        asRelais: uniq(relais.map((p) => p.g.aire)).length, asRelaisTotal: filterOptions.aires.length,
-        asRelaisPct: pct(uniq(relais.map((p) => p.g.aire)).length, filterOptions.aires.length),
-        asResultats: uniq(resultats.map((p) => p.g.aire)).length, asResultatsTotal: filterOptions.aires.length,
-        asResultatsPct: pct(uniq(resultats.map((p) => p.g.aire)).length, filterOptions.aires.length),
+        identCsFiches: identFiches.length,
+        planifFiches: planifFiches.length,
+        asRelais: uniq(relaisChildren.map((c) => c.aire)).length, asRelaisTotal: airesTotal,
+        asRelaisPct: pct(uniq(relaisChildren.map((c) => c.aire)).length, airesTotal),
+        asResultats: airesResult.length, asResultatsTotal: airesTotal, asResultatsPct: pct(airesResult.length, airesTotal),
         supervisionForms: sup.length,
       },
       formsByType: [
-        { label: "Identification CS", value: identCs.length },
-        { label: "Planification", value: planif.length },
-        { label: "Ident. relais", value: relais.length },
+        { label: "Identification CS", value: identFiches.length },
+        { label: "Planification", value: planifFiches.length },
+        { label: "Ident. relais", value: relaisFiches.length },
         { label: "Résultats", value: resultats.length },
         { label: "Supervision", value: sup.length },
       ],
       enfantsManquesByZs,
-      statutVaccinal: { zeroDose: identCsZero, sousVaccines: identCsSous, autres: Math.max(0, identCsIdent - identCsZero - identCsSous) },
+      statutVaccinal: { zeroDose: identZero, sousVaccines: identSous, autres: Math.max(0, identCount - identZero - identSous) },
       dosesByAntigene,
       topAsManques,
       syntheseByZs,
     },
 
     identCs: {
-      kpi: { identifies: identCsIdent, zeroDose: identCsZero, sousVaccines: identCsSous, dosesManquees: dosesManquees(identCs), csUniques: identCsDedup.info.kept },
-      parTrancheAge: ageSplit(identCs),
-      parZsTrancheAge: zonesIdent.map((z) => ({ zone: z, ...ageSplitTriple(identCs.filter((p) => p.g.zone === z)) })),
-      dosesParTrancheAntigene: ageAntigeneTable(baseSaisie, identCs),
-      parAsTrancheAge: asAgeTable(identCs),
+      kpi: { identifies: identCount, zeroDose: identZero, sousVaccines: identSous, dosesManquees: identDoses, csUniques: identFiches.length },
+      parTrancheAge: ageCounts(identChildren),
+      parZsTrancheAge: zonesIdent.map((z) => { const a = ageCounts(identChildren.filter((c) => c.zone === z)); return { zone: z, a0: a.age_0_11, a1: a.age_12_23, a2: a.age_24_59 }; }),
+      dosesParTrancheAntigene: ([["age_0_11", "0 – 11 mois"], ["age_12_23", "12 – 23 mois"], ["age_24_59", "24 – 59 mois"]] as const).map(([g, label]) => {
+        const grp = identChildren.filter((c) => c.ageGroup === g);
+        const values: Record<string, number> = {};
+        for (const ag of AGE_TABLE_ANTIGENES) values[ANTIGENE_LABEL[ag]] = missedCount(grp, ag);
+        return { ageLabel: label, values };
+      }),
+      parAsTrancheAge: airesIdent.map((a) => { const grp = identChildren.filter((c) => c.aire === a); const ac = ageCounts(grp); return { aire: a, zone: grp[0]?.zone ?? null, a0: ac.age_0_11, a1: ac.age_12_23, a2: ac.age_24_59, total: grp.length }; }).filter((r) => r.total > 0).sort((x, y) => y.total - x.total),
       topAs: topAsManques,
     },
 
     identRelais: {
-      kpi: { identifies: relaisIdent, zeroDose: zeroDose(relais), sousVaccines: sousVacc(relais), relais: relais.length, asCount: uniq(relais.map((p) => p.g.aire)).length },
-      parTrancheAge: ageSplit(relais),
-      parZsTrancheAge: uniq(relais.map((p) => p.g.zone)).map((z) => ({ zone: z, ...ageSplitTriple(relais.filter((p) => p.g.zone === z)) })),
-      comparaisonCsCommunaute: zonesAll.map((z) => ({ zone: z, cs: enfIdentifies(identCs.filter((p) => p.g.zone === z)), communaute: enfIdentifies(relais.filter((p) => p.g.zone === z)) })),
-      parAsTrancheAge: asAgeTable(relais),
-      topAs: uniq(relais.map((p) => p.g.aire)).map((a) => ({ label: a, value: enfIdentifies(relais.filter((p) => p.g.aire === a)) })).sort((x, y) => y.value - x.value).slice(0, 5).filter((d) => d.value > 0),
+      kpi: { identifies: relaisChildren.length, zeroDose: relaisChildren.filter((c) => c.zeroDose).length, sousVaccines: relaisChildren.filter((c) => c.sousVaccine).length, relais: relaisFiches.length, asCount: uniq(relaisChildren.map((c) => c.aire)).length },
+      parTrancheAge: ageCounts(relaisChildren),
+      parZsTrancheAge: uniq(relaisChildren.map((c) => c.zone)).map((z) => { const a = ageCounts(relaisChildren.filter((c) => c.zone === z)); return { zone: z, a0: a.age_0_11, a1: a.age_12_23, a2: a.age_24_59 }; }),
+      comparaisonCsCommunaute: zonesAll.map((z) => ({ zone: z, cs: identChildren.filter((c) => c.zone === z).length, communaute: relaisChildren.filter((c) => c.zone === z).length })),
+      parAsTrancheAge: uniq(relaisChildren.map((c) => c.aire)).map((a) => { const grp = relaisChildren.filter((c) => c.aire === a); const ac = ageCounts(grp); return { aire: a, zone: grp[0]?.zone ?? null, a0: ac.age_0_11, a1: ac.age_12_23, a2: ac.age_24_59, total: grp.length }; }).filter((r) => r.total > 0).sort((x, y) => y.total - x.total),
+      topAs: uniq(relaisChildren.map((c) => c.aire)).map((a) => ({ label: a, value: relaisChildren.filter((c) => c.aire === a).length })).sort((x, y) => y.value - x.value).slice(0, 5).filter((d) => d.value > 0),
     },
 
     planif: {
-      kpi: { sessions: planifSessions, enfantsAttendus: planifEnfants, asAvecProgramme: asWithProg.length, asTotal: filterOptions.aires.length, ratio: identCsIdent > 0 ? Math.round((planifEnfants / identCsIdent) * 10) / 10 : null },
-      sessionsParType,
-      asProgramme: { avec: asWithProg.length, sans: Math.max(0, filterOptions.aires.length - asWithProg.length) },
-      enfantsAttendusByZs: uniq(planif.map((p) => p.g.zone)).map((z) => ({ label: z, value: enfAttendus(planif.filter((p) => p.g.zone === z)) })).filter((d) => d.value > 0),
-      asProgrammeTable: airesProgrammeTable(filterOptions.aires, planif, geoTuples),
-      programmeParAs: planif.map((p) => ({
-        aire: p.g.aire ?? "—",
-        date: getStr(p.m, "date", "prevu") || getStr(p.m, "date", "session") || getStr(p.m, "date") || null,
-        type: sessionTypeLabel(sessionType(p)),
-        site: getStr(p.m, "site") || getStr(p.m, "localite") || getStr(p.m, "lieu") || null,
-        enfantsAttendus: getNum(p.m, "enfant", "attendu") || getNum(p.m, "attendu"),
-        equipe: getStr(p.m, "membre") || getStr(p.m, "equipe") || getStr(p.m, "vaccinateur") || null,
+      kpi: { sessions: planSessions, enfantsAttendus: planEnfants, asAvecProgramme: airesAvecProg.length, asTotal: airesTotal, ratio: identCount > 0 ? Math.round((planEnfants / identCount) * 10) / 10 : null },
+      sessionsParType: { avancee: planAvancees, fixe: planFixes, mobile: planMobiles },
+      asProgramme: { avec: airesAvecProg.length, sans: Math.max(0, airesTotal - airesAvecProg.length) },
+      enfantsAttendusByZs: uniq(planifFiches.map((p) => p.zone)).map((z) => ({ label: z, value: sum(planifFiches.filter((p) => p.zone === z).map((p) => p.enfantsAttendus)) })).filter((d) => d.value > 0),
+      asProgrammeTable: filterOptions.aires.map((a) => {
+        const pf = planifFiches.filter((p) => p.aire === a);
+        const sessions = sum(pf.map((p) => p.sessionsPlanifiees));
+        return { aire: a, zone: pf[0]?.zone ?? null, sessions, enfantsAttendus: sum(pf.map((p) => p.enfantsAttendus)), programme: sessions > 0 };
+      }).filter((r) => r.zone != null || r.sessions > 0).sort((x, y) => Number(y.programme) - Number(x.programme) || y.enfantsAttendus - x.enfantsAttendus),
+      programmeParAs: planifSessions.map((sx) => ({
+        aire: sx.aire ?? "—", date: sx.date, type: sessionTypeLabel(sx.type, sx.autreType),
+        site: sx.site, enfantsAttendus: sx.enfantsAttendus, equipe: sx.equipe ? sx.equipe.replace(/\n/g, " · ") : null,
       })).sort((a, b) => (a.aire || "").localeCompare(b.aire || "")),
     },
 
     resultats: {
-      kpi: {
-        recuperes, tauxRecup: tauxRecupGlobal,
-        zeroDoseRecuperes: null,
-        asSousSeuil: uniq(resultats.map((p) => p.g.aire)).filter((a) => { const ident = enfIdentifies(identCs.filter((q) => q.g.aire === a)); const rec = sum(resultats.filter((q) => q.g.aire === a).map((q) => getNum(q.m, "vaccin") || getNum(q.m, "recuper"))); const t = pct(rec, ident); return t != null && t < 50; }).length,
-      },
-      tauxByZsAntigene: ["Penta1", "Penta3", "VPI1", "VPI2", "RR1", "RR2"].map((ag) => ({
-        antigene: ag,
+      kpi: { recuperes, tauxRecup: pct(recuperes, identCount), zeroDoseRecuperes: null, asSousSeuil },
+      tauxByZsAntigene: RECUP_ANTIGENES.map((ag) => ({
+        antigene: ANTIGENE_LABEL[ag],
         zones: zonesAll.map((z) => {
-          const ident = identCs.filter((p) => p.g.zone === z).reduce((a, p) => a + (1), 0);
-          const rec = resultats.filter((p) => p.g.zone === z).reduce((a, p) => a + antigeneVaccine(p.m, ag), 0);
-          const idn = identCs.filter((p) => p.g.zone === z).reduce((a, p) => a + antigeneMissed(p.m, ag as SavAntigene), 0);
-          return { zone: z, taux: pct(rec, idn || ident) };
+          const vacc = sum(resultats.filter((r) => r.zone === z).map((r) => r.byAntigene[ag]));
+          const miss = missedCount(identChildren.filter((c) => c.zone === z), ag);
+          return { zone: z, taux: pct(vacc, miss) };
         }),
       })),
-      enfantsByTrancheAge: ageSplit(resultats, true),
-      parAsTable: uniq(resultats.map((p) => p.g.aire)).map((a) => {
-        const rr = resultats.filter((p) => p.g.aire === a);
+      enfantsByTrancheAge: { age_0_11: sum(resultats.map((r) => r.a0)), age_12_23: sum(resultats.map((r) => r.a1)), age_24_59: sum(resultats.map((r) => r.a2)) },
+      parAsTable: airesResult.map((a) => {
+        const rr = resultats.filter((r) => r.aire === a);
         const values: Record<string, number> = {};
-        for (const ag of ["Penta1", "Penta3", "VPI1", "RR1", "VAA"]) values[ag] = rr.reduce((s, p) => s + antigeneVaccine(p.m, ag), 0);
-        const total = rr.reduce((s, p) => s + (getNum(p.m, "vaccin") || getNum(p.m, "recuper")), 0);
-        const ident = enfIdentifies(identCs.filter((p) => p.g.aire === a));
+        for (const ag of RES_AS_ANTIGENES) values[ANTIGENE_LABEL[ag]] = sum(rr.map((r) => r.byAntigene[ag]));
+        const total = sum(rr.map((r) => r.totalDoses)); const ident = identByAire(a);
         return { aire: a, values, total, identifies: ident, taux: pct(total, ident) };
+      }).sort((x, y) => y.total - x.total),
+      topAsFaibles: airesResult.map((a) => ({ label: a, value: pct(recupByAire(a), identByAire(a)) ?? 0 })).filter((d) => identByAire(d.label) > 0).sort((x, y) => x.value - y.value).slice(0, 5),
+      syntheseAntigenes: RECUP_ANTIGENES.map((ag) => {
+        const a0 = sum(resultats.map((r) => r.byAntigeneAge[ag].a0)), a1 = sum(resultats.map((r) => r.byAntigeneAge[ag].a1)), a2 = sum(resultats.map((r) => r.byAntigeneAge[ag].a2));
+        const miss = missedCount(identChildren, ag);
+        return { antigene: ANTIGENE_LABEL[ag], a0, a1, a2, pctRecup: pct(a0 + a1 + a2, miss) };
       }),
-      topAsFaibles: uniq(resultats.map((p) => p.g.aire)).map((a) => {
-        const ident = enfIdentifies(identCs.filter((p) => p.g.aire === a));
-        const rec = sum(resultats.filter((p) => p.g.aire === a).map((p) => getNum(p.m, "vaccin") || getNum(p.m, "recuper")));
-        return { label: a, value: pct(rec, ident) ?? 0 };
-      }).filter((d) => d.value > 0).sort((x, y) => x.value - y.value).slice(0, 5),
-      syntheseAntigenes: ["Penta1", "Penta3", "VPI1", "VPI2", "RR1", "RR2"].map((ag) => ({
-        antigene: ag,
-        a0: resultats.reduce((s, p) => s + antigeneVaccine(p.m, ag), 0), a1: 0, a2: 0,
-        pctRecup: pct(resultats.reduce((s, p) => s + antigeneVaccine(p.m, ag), 0), identCs.reduce((s, p) => s + antigeneMissed(p.m, ag as SavAntigene), 0)),
-      })),
-      antigeneOptions: ["Penta1", "Penta3", "VPI1", "VPI2", "RR1", "RR2"],
+      antigeneOptions: RECUP_ANTIGENES.map((ag) => ANTIGENE_LABEL[ag]),
     },
 
     supervision: {
-      kpi: { realisees: sup.length, asCount: supAires.length, ouiGlobalPct, questionsCount: supQuestions.length },
-      ouiParQuestion: supQuestions.sort((a, b) => b.value - a.value),
+      kpi: { realisees: sup.length, asCount: supAires.length, ouiGlobalPct: ouiGlobal, questionsCount: ouiParQuestion.length },
+      ouiParQuestion: ouiSorted.map((q) => ({ label: q.label, value: q.value })),
       ouiParQuestionAs: supAires.map((a) => {
-        const rr = sup.filter((p) => p.g.aire === a);
+        const rr = sup.filter((r) => r.aire === a);
         const values: Record<string, number | null> = {};
-        for (const q of supQuestions.slice(0, 7)) {
-          const key = [...rr[0]?.m.keys() ?? []].find((k) => prettyQuestion(k) === q.label);
-          if (!key) { values[q.label] = null; continue; }
-          const considered = rr.filter((p) => { const v = norm(str(p.m.get(key))); return v === "oui" || v === "non"; });
-          values[q.label] = pct(considered.filter((p) => norm(str(p.m.get(key))) === "oui").length, considered.length);
-        }
+        for (const q of top7Q) { const key = (q as SavCount & { _key: string })._key; const cons = rr.filter((r) => r.q[key] === "oui" || r.q[key] === "non"); values[q.label] = pct(cons.filter((r) => r.q[key] === "oui").length, cons.length); }
         return { aire: a, values };
       }),
-      topProblemes: topText(sup, ["probleme", "constat", "difficulte"], 7),
-      topActions: topText(sup, ["action", "correctrice", "corrective"], 7),
-      topRecommandations: topText(sup, ["recommand"], 7),
+      topProblemes, topActions, topRecommandations: topReco,
     },
   };
 }
 
-/* ---- Antigène vacciné (résultats) ---- */
-function antigeneVaccine(m: Map<string, unknown>, ag: string): number {
-  const tight = normTight(ag);
-  for (const [k, v] of m) { const kt = normTight(k); if (kt.includes(tight) && /(vaccin|recup|recu)/.test(kt)) return num(v); }
-  return 0;
-}
-
-/* ---- Répartition par tranche d'âge (best effort) ---- */
-function ageSplit(ps: Parsed[], vacc = false): { age_0_11: number; age_12_23: number; age_24_59: number } {
-  const a0 = sum(ps.map((p) => getNum(p.m, "0", "11") || getNum(p.m, "0 a 11") || getNum(p.m, "moins", "12")));
-  const a1 = sum(ps.map((p) => getNum(p.m, "12", "23")));
-  const a2 = sum(ps.map((p) => getNum(p.m, "24", "59")));
-  if (a0 + a1 + a2 > 0) return { age_0_11: a0, age_12_23: a1, age_24_59: a2 };
-  return { ...EMPTY_AGE };
-}
-function ageSplitTriple(ps: Parsed[]): { a0: number; a1: number; a2: number } {
-  const s = ageSplit(ps);
-  return { a0: s.age_0_11, a1: s.age_12_23, a2: s.age_24_59 };
-}
-function asAgeTable(ps: Parsed[]): { aire: string; zone: string | null; a0: number; a1: number; a2: number; total: number }[] {
-  const aires = uniq(ps.map((p) => p.g.aire));
-  return aires.map((a) => {
-    const rr = ps.filter((p) => p.g.aire === a); const s = ageSplitTriple(rr);
-    return { aire: a, zone: rr[0]?.g.zone ?? null, a0: s.a0, a1: s.a1, a2: s.a2, total: s.a0 + s.a1 + s.a2 };
-  }).filter((r) => r.total > 0).sort((x, y) => y.total - x.total);
-}
-
-/** Tableau doses manquées par tranche d'âge × antigène (BASE SAISIE prioritaire). */
-function ageAntigeneTable(base: BaseSaisieFetch, identCs: Parsed[]) {
-  const antigenes = ["BCG", "VPO1", "Penta1", "PCV1", "Rota1", "VPO3", "VPI1", "Penta3", "RR1", "VAA", "VAP1"];
-  const ages = [
-    { key: "age_0_11", label: "0 – 11 mois" },
-    { key: "age_12_23", label: "12 – 23 mois" },
-    { key: "age_24_59", label: "24 – 59 mois" },
-  ];
-  // Source BASE SAISIE si disponible (lignes par AS avec colonnes par antigène/âge),
-  // sinon répartition approximative depuis l'export Kobo.
-  const rows = base.ok && base.rows.length ? base.rows.map(rowMap) : identCs.map((p) => p.m);
-  return ages.map((ag) => {
-    const values: Record<string, number> = {};
-    for (const anti of antigenes) values[anti] = sum(rows.map((m) => antigeneMissed(m, anti as SavAntigene)));
-    return { ageLabel: ag.label, values };
-  });
-}
-
-/* ---- Tableau AS avec/sans programme ---- */
-function airesProgrammeTable(aires: string[], planif: Parsed[], _geo: unknown) {
-  return aires.map((a) => {
-    const rr = planif.filter((p) => p.g.aire === a);
-    const sessions = sum(rr.map((p) => num(get(p.m, "session")) || 1));
-    const enfantsAttendus = sum(rr.map((p) => getNum(p.m, "enfant", "attendu") || getNum(p.m, "attendu")));
-    return { aire: a, zone: rr[0]?.g.zone ?? null, sessions, enfantsAttendus, programme: rr.length > 0 && sessions > 0 };
-  }).sort((x, y) => Number(y.programme) - Number(x.programme) || y.enfantsAttendus - x.enfantsAttendus);
-}
-
-function sessionTypeLabel(t: string): string { return t === "avancee" ? "Avancée" : t === "mobile" ? "Mobile" : "Fixe"; }
-
-/* ---- Texte libre top-N ---- */
-function topText(ps: Parsed[], tokens: string[], n: number): string[] {
-  const counts = new Map<string, number>();
-  for (const p of ps) for (const [k, v] of p.m) {
-    if (!tokens.some((t) => k.includes(norm(t)))) continue;
-    const s = str(v); if (s.length < 4) continue;
-    counts.set(s, (counts.get(s) ?? 0) + 1);
-  }
-  return [...counts.entries()].sort((a, b) => b[1] - a[1]).slice(0, n).map((e) => e[0]);
-}
-
-/* ---- Libellé de question de supervision ---- */
-function prettyQuestion(k: string): string {
-  const s = k.replace(/_/g, " ").trim();
-  return s.charAt(0).toUpperCase() + s.slice(1);
+function sessionTypeLabel(type: string | null, autre: string | null): string {
+  const t = norm(type ?? "");
+  if (/avanc/.test(t)) return "Avancée";
+  if (/mobile/.test(t)) return "Mobile";
+  if (/fixe/.test(t)) return "Fixe";
+  if (/autre/.test(t)) return autre || "Fixe"; // « Autre » = Fixe (cf. spec)
+  return type || "—";
 }
