@@ -343,7 +343,7 @@ export function SavSupervision() {
   const { data } = useSav();
   if (!data) return <Empty msg="Synchronisation…" />;
   const s = data.supervision;
-  const cols = s.ouiParQuestion.slice(0, 7).map((q) => q.label);
+  const cols = s.ouiParQuestionAs[0] ? Object.keys(s.ouiParQuestionAs[0].values) : [];
   const ListCard = ({ icon, tone, title, items }: { icon: string; tone: Tone; title: string; items: string[] }) => (
     <div className="card card-pad">
       <CardTitle icon={icon as never} tone={tone} title={title} />
