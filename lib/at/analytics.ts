@@ -99,29 +99,6 @@ function selectMulti(v: unknown): string[] {
 /* Noms de champs issus du XLSForm « Rapport mensuel des AT » (asset avvVUwZZwkg…).
    On lit les VERBATIMS texte exactement aux champs prévus à cet effet. */
 
-/** Champs texte « problème majeur / constat ». */
-const CONSTAT_TEXT_FIELDS = [
-  "supervision_as_constats",        // 3. Principaux constats supervision AS
-  "supervision_zs_constats",        // 4. Principaux constats supervision ZS
-  "supervision_antenne_constats",   // 5. Principaux constats supervision Antenne
-  "problemes_donnees_autre",        // 10. Autre problème de données précisé
-  "problemes_monitorage_zs_autre",  // 11. Autre problème de monitorage précisé
-];
-/** Champs select_multiple listant des problèmes (codes → libellés). */
-const CONSTAT_MULTI_FIELDS = ["problemes_donnees", "problemes_monitorage_zs"];
-/** Champs texte « recommandations / actions correctrices ». */
-const RECO_TEXT_FIELDS = [
-  "recommandations_ccpev",              // 2. Principales recommandations CCPeV
-  "supervision_zs_recommandations",     // 4. Recommandations supervision ZS
-  "supervision_antenne_recommandations",// 5. Recommandations supervision Antenne
-  "recommandations_coordination",       // 9. Recommandations réunions coordination
-  "recommandations_monitorage_zs",      // 11. Recommandations monitorage ZS
-  "actions_correctrices_donnees",       // 10. Actions correctrices proposées
-  "actions_correctrices_monitorage_zs", // 11. Actions correctrices retenues
-];
-/** Commentaire sur la transmission du rapport trimestriel de l'Antenne PEV. */
-const PEV_COMMENT_FIELDS = ["commentaire_rapport_trim"]; // 12. Commentaires
-
 /** Libellés des choix de la liste « problemes » (XLSForm). */
 const PROBLEMES_LABELS: Record<string, string> = {
   faible_completude: "Faible complétude des rapports",
@@ -151,21 +128,43 @@ function isNarrativeText(s: string): boolean {
 
 const dedup = (xs: string[]): string[] => [...new Set(xs.map((x) => x.trim()).filter(Boolean))];
 
-/** Extrait les verbatims du formulaire AT à partir des champs prévus à cet effet. */
-function extractNarratives(m: Record<string, unknown>): AtNarratives {
-  const problemes: string[] = [];
-  for (const f of CONSTAT_TEXT_FIELDS) { const t = str(pick(m, f)); if (isNarrativeText(t)) problemes.push(t); }
-  for (const f of CONSTAT_MULTI_FIELDS) {
-    for (const code of selectMulti(pick(m, f))) {
-      const lab = PROBLEMES_LABELS[code.toLowerCase()];
-      if (lab) problemes.push(lab); // « autre »/« na » ignorés : le détail vient du champ texte *_autre
-    }
+/** Lit un champ texte unique s'il contient du verbatim exploitable. */
+function txt(m: Record<string, unknown>, name: string): string[] {
+  const t = str(pick(m, name));
+  return isNarrativeText(t) ? [t] : [];
+}
+/** Traduit un select_multiple « problemes » en libellés (hors « autre »/« na »). */
+function problemeLabels(m: Record<string, unknown>, name: string): string[] {
+  const out: string[] = [];
+  for (const code of selectMulti(pick(m, name))) {
+    const lab = PROBLEMES_LABELS[code.toLowerCase()];
+    if (lab) out.push(lab);
   }
-  const recommandations: string[] = [];
-  for (const f of RECO_TEXT_FIELDS) { const t = str(pick(m, f)); if (isNarrativeText(t)) recommandations.push(t); }
-  const commentairePev: string[] = [];
-  for (const f of PEV_COMMENT_FIELDS) { const t = str(pick(m, f)); if (isNarrativeText(t)) commentairePev.push(t); }
-  return { problemes: dedup(problemes), recommandations: dedup(recommandations), commentairePev: dedup(commentairePev) };
+  return out;
+}
+
+/** Extrait les verbatims du formulaire AT, ventilés par champ d'origine. */
+function extractNarratives(m: Record<string, unknown>): AtNarratives {
+  return {
+    constatsAs: dedup(txt(m, "supervision_as_constats")),
+    constatsZs: dedup(txt(m, "supervision_zs_constats")),
+    constatsAntenne: dedup(txt(m, "supervision_antenne_constats")),
+    recoSupZs: dedup(txt(m, "supervision_zs_recommandations")),
+    recoSupAntenne: dedup(txt(m, "supervision_antenne_recommandations")),
+    recoCcpev: dedup(txt(m, "recommandations_ccpev")),
+    recoCoordination: dedup(txt(m, "recommandations_coordination")),
+    problemesDonnees: dedup(problemeLabels(m, "problemes_donnees")),
+    problemesMonitorageZs: dedup(problemeLabels(m, "problemes_monitorage_zs")),
+    problemesDonneesAutre: dedup(txt(m, "problemes_donnees_autre")),
+    problemesMonitorageZsAutre: dedup(txt(m, "problemes_monitorage_zs_autre")),
+    actionsDonnees: dedup(txt(m, "actions_correctrices_donnees")),
+    actionsMonitorageZs: dedup(txt(m, "actions_correctrices_monitorage_zs")),
+    observationsMonitorage: dedup(txt(m, "observations_monitorage")),
+    observationsRougeole: dedup(txt(m, "observations_rougeole")),
+    observationsTnnMapi: dedup(txt(m, "observations_tnn_mapi")),
+    commentaireRapportTrim: dedup(txt(m, "commentaire_rapport_trim")),
+    commentaireRapportsOms: dedup(txt(m, "commentaire_rapports_oms")),
+  };
 }
 
 const MONTHS_FR = ["janvier", "février", "mars", "avril", "mai", "juin", "juillet", "août", "septembre", "octobre", "novembre", "décembre"];
@@ -356,7 +355,7 @@ function numericRaw(m: Record<string, unknown>): Record<string, number | string 
     "nb_zs_supervision_attendues", "nb_zs_supervisees", "nb_form_supervision_zs_soumis",
     "nb_as_supervision_attendues", "nb_as_supervisees", "nb_form_supervision_as_soumis",
     "cible_monitorage_convenance", "nb_as_monitorage_convenance", "nb_form_monitorage_soumis",
-    "nb_cas_rougeole_notifies", "nb_cas_rougeole_investigues", "nb_prelevements_rougeole", "nb_resultats_labo_rougeole_recus",
+    "nb_zs_rougeole_epidemie", "nb_cas_rougeole_notifies", "nb_cas_rougeole_investigues", "nb_prelevements_rougeole", "nb_resultats_labo_rougeole_recus",
     "nb_cas_tnn_notifies", "nb_fiches_tnn_remontees", "nb_fiches_tnn_riposte", "nb_mapi_graves_notifiees", "nb_fiches_mapi_graves_remontees",
     "activites_oms_prevues", "autres_activites_oms_prevues", "activites_oms_realisees", "rapports_oms_remontes",
   ];
@@ -528,6 +527,84 @@ export function buildRapportBundle(fetched: { label: string; rows: RawRow[]; ok:
   const omsFin = sum(recs.map((r) => Math.max(rawN(r, "activites_oms_prevues"), rawN(r, "autres_activites_oms_prevues"))));
   const omsJust = sum(recs.map((r) => rawN(r, "rapports_oms_remontes") || rawN(r, "activites_oms_realisees")));
 
+  /* ---- Réunions : par AT × type + verbatims + top problèmes ---- */
+  const reunionsParAtType = ats.map((at) => {
+    const rr = recs.filter((r) => r.nomAt === at);
+    const ccpev = sum(rr.map((r) => rawN(r, "nb_ccpev_appuyees")));
+    const coordination = sum(rr.map((r) => rawN(r, "nb_reunions_coord_appuyees")));
+    const validation = sum(rr.map((r) => rawN(r, "nb_reunions_validation_appuyees")));
+    const monitorageZs = sum(rr.map((r) => rawN(r, "nb_reunions_monitorage_zs_appuyees")));
+    return { at, ccpev, coordination, validation, monitorageZs, total: ccpev + coordination + validation + monitorageZs };
+  });
+  const topFreq = (lists: ((n: AtNarratives) => string[])[]): { label: string; count: number }[] => {
+    const m = new Map<string, number>();
+    for (const r of recs) for (const pickList of lists) for (const v of pickList(r.narratives)) {
+      const t = v.trim(); if (t.length < 2) continue; m.set(t, (m.get(t) ?? 0) + 1);
+    }
+    return [...m.entries()].sort((a, b) => b[1] - a[1]).slice(0, 5).map(([label, count]) => ({ label, count }));
+  };
+  const reunionsRecommandations = collectNarratives(recs, (n) => [...n.recoCcpev, ...n.recoCoordination]);
+  const reunionsActions = collectNarratives(recs, (n) => [...n.actionsDonnees, ...n.actionsMonitorageZs]);
+  const topProblemesQualite = topFreq([(n) => n.problemesDonnees, (n) => n.problemesDonneesAutre]);
+  const topProblemesRevues = topFreq([(n) => n.problemesMonitorageZs, (n) => n.problemesMonitorageZsAutre]);
+
+  /* ---- Supervisions : par AT × niveau + évolution mensuelle + constats ---- */
+  const supParAtNiveau = ats.map((at) => {
+    const rr = recs.filter((r) => r.nomAt === at);
+    return {
+      at,
+      antAtt: sum(rr.map((r) => rawN(r, "nb_antennes_supervision_attendues"))), antReal: sum(rr.map((r) => rawN(r, "nb_antennes_supervisees"))),
+      zsAtt: sum(rr.map((r) => rawN(r, "nb_zs_supervision_attendues"))), zsReal: sum(rr.map((r) => rawN(r, "nb_zs_supervisees"))),
+      asAtt: sum(rr.map((r) => rawN(r, "nb_as_supervision_attendues"))), asReal: sum(rr.map((r) => rawN(r, "nb_as_supervisees"))),
+    };
+  });
+  const supEvolutionParMois = months.map((mc) => {
+    const rr = recs.filter((r) => r.month === mc.key);
+    const antenne = sum(rr.map((r) => rawN(r, "nb_antennes_supervisees")));
+    const zs = sum(rr.map((r) => rawN(r, "nb_zs_supervisees")));
+    const as = sum(rr.map((r) => rawN(r, "nb_as_supervisees")));
+    return { month: mc.key, label: mc.label, antenne, zs, as, total: antenne + zs + as };
+  });
+  const supConstatsParNiveau = [
+    { niveau: "Antenne", items: collectNarratives(recs, (n) => n.constatsAntenne) },
+    { niveau: "Zone de santé", items: collectNarratives(recs, (n) => n.constatsZs) },
+    { niveau: "Aire de santé", items: collectNarratives(recs, (n) => n.constatsAs) },
+  ];
+  const supConstats = collectNarratives(recs, (n) => [...n.constatsAntenne, ...n.constatsZs, ...n.constatsAs]);
+  const supRecommandations = collectNarratives(recs, (n) => [...n.recoSupAntenne, ...n.recoSupZs]);
+
+  /* ---- Surveillance : séries mensuelles par maladie + ripostes + listes ---- */
+  const survParMois = months.map((mc) => {
+    const rr = recs.filter((r) => r.month === mc.key);
+    const rougeoleN = sum(rr.map((r) => rawN(r, "nb_cas_rougeole_notifies")));
+    const rougeoleI = sum(rr.map((r) => rawN(r, "nb_cas_rougeole_investigues")));
+    const tnnN = sum(rr.map((r) => rawN(r, "nb_cas_tnn_notifies")));
+    const tnnI = sum(rr.map((r) => rawN(r, "nb_fiches_tnn_remontees")));
+    const mapiN = sum(rr.map((r) => rawN(r, "nb_mapi_graves_notifiees")));
+    const mapiI = sum(rr.map((r) => rawN(r, "nb_fiches_mapi_graves_remontees")));
+    return {
+      month: mc.key, label: mc.label,
+      rougeoleN, rougeoleI, rougeolePct: pct(rougeoleI, rougeoleN),
+      tnnN, tnnI, tnnPct: pct(tnnI, tnnN),
+      mapiN, mapiI, mapiPct: pct(mapiI, mapiN),
+      zsEpidemie: sum(rr.map((r) => rawN(r, "nb_zs_rougeole_epidemie"))),
+    };
+  });
+  const survTnnNotifies = sum(recs.map((r) => rawN(r, "nb_cas_tnn_notifies")));
+  const survTnnInvestigues = sum(recs.map((r) => rawN(r, "nb_fiches_tnn_remontees")));
+  const survMapiNotifiees = sum(recs.map((r) => rawN(r, "nb_mapi_graves_notifiees")));
+  const survMapiInvestiguees = sum(recs.map((r) => rawN(r, "nb_fiches_mapi_graves_remontees")));
+  const survRougeoleNotifies = sum(recs.map((r) => rawN(r, "nb_cas_rougeole_notifies")));
+  const survRougeoleInvestigues = sum(recs.map((r) => rawN(r, "nb_cas_rougeole_investigues")));
+  const survRipostesRougeole = recs.filter((r) => yna(rawS(r, "riposte_rougeole")) === "oui").length;
+  const survRipostesTnn = sum(recs.map((r) => rawN(r, "nb_fiches_tnn_riposte")));
+  const listeDispo = sum(recs.map((r) => rawN(r, "nb_zs_liste_rougeole_dispo")));
+  const listeAjour = sum(recs.map((r) => rawN(r, "nb_zs_liste_rougeole_ajour")));
+  const listesParAntenne = antennes.map((ant) => {
+    const rr = recs.filter((r) => r.antenne === ant);
+    return { antenne: ant, pct: pct(sum(rr.map((r) => rawN(r, "nb_zs_liste_rougeole_ajour"))), sum(rr.map((r) => rawN(r, "nb_zs_liste_rougeole_dispo")))) };
+  });
+
   return {
     meta: { generatedAt: new Date().toISOString(), source: { label: fetched.label, rows: fetched.rows.length, ok: fetched.ok, error: fetched.error }, hasData: all.length > 0 },
     filters,
@@ -540,10 +617,16 @@ export function buildRapportBundle(fetched: { label: string; rows: RawRow[]; ok:
       rapportsParAt: ats.map((at) => ({ at, count: recs.filter((r) => r.nomAt === at).length })),
       rapportsParMois: months.map((mc) => ({ month: mc.key, label: mc.label, count: recs.filter((r) => r.month === mc.key).length })),
       scoreParAtMois, months,
-      constats: collectNarratives(recs, (n) => n.problemes),
-      recommandations: collectNarratives(recs, (n) => n.recommandations),
     },
-    reunions: { kpi: reuKpi, prevuesVsAppuyees: reunionTypes, tauxParType: reunionTypes.map((t) => ({ type: t.type, taux: pct(t.appuyees, t.prevues) })), tableParAtMois: reunionsTableParAt, months },
+    reunions: {
+      kpi: reuKpi, prevuesVsAppuyees: reunionTypes, tauxParType: reunionTypes.map((t) => ({ type: t.type, taux: pct(t.appuyees, t.prevues) })),
+      tableParAtMois: reunionsTableParAt,
+      parAtType: reunionsParAtType,
+      recommandations: reunionsRecommandations,
+      actionsCorrectrices: reunionsActions,
+      topProblemesQualite, topProblemesRevues,
+      months,
+    },
     supervisions: {
       kpi: supKpi,
       attenduVsRealise: [
@@ -556,29 +639,40 @@ export function buildRapportBundle(fetched: { label: string; rows: RawRow[]; ok:
         { niveau: "ZS", taux: pct(supKpi.zsSup, supKpi.zsPrev) },
         { niveau: "AS", taux: pct(supKpi.asSup, supKpi.asPrev) },
       ],
-      tableParAtMois: supTableParAt, months,
+      tableParAtMois: supTableParAt,
+      parAtNiveau: supParAtNiveau,
+      evolutionParMois: supEvolutionParMois,
+      constatsParNiveau: supConstatsParNiveau,
+      constats: supConstats,
+      recommandations: supRecommandations,
+      months,
     },
     monitorage: {
       kpi: { realises: monRealises, prevus: monPrevus, pct: pct(monRealises, monPrevus), asCouvertes: monRealises, formsSoumis: sum(recs.map((r) => rawN(r, "nb_form_monitorage_soumis"))) },
-      parAtMois: monTableParAt, couverture: { couvertes: monRealises, nonCouvertes: Math.max(0, monPrevus - monRealises) }, months,
+      parAtMois: monTableParAt, couverture: { couvertes: monRealises, nonCouvertes: Math.max(0, monPrevus - monRealises) },
+      constats: collectNarratives(recs, (n) => n.observationsMonitorage),
+      months,
     },
     surveillance: {
       kpi: {
-        rougeoleNotifies: sum(recs.map((r) => rawN(r, "nb_cas_rougeole_notifies"))),
-        rougeoleInvestigues: sum(recs.map((r) => rawN(r, "nb_cas_rougeole_investigues"))),
-        rougeolePct: pct(sum(recs.map((r) => rawN(r, "nb_cas_rougeole_investigues"))), sum(recs.map((r) => rawN(r, "nb_cas_rougeole_notifies")))),
-        ripostes: recs.filter((r) => yna(rawS(r, "riposte_rougeole")) === "oui").length,
-        tnnNotifies: sum(recs.map((r) => rawN(r, "nb_cas_tnn_notifies"))),
-        tnnInvestigues: sum(recs.map((r) => rawN(r, "nb_fiches_tnn_remontees"))),
+        rougeoleNotifies: survRougeoleNotifies, rougeoleInvestigues: survRougeoleInvestigues, rougeolePct: pct(survRougeoleInvestigues, survRougeoleNotifies),
+        tnnNotifies: survTnnNotifies, tnnInvestigues: survTnnInvestigues, tnnPct: pct(survTnnInvestigues, survTnnNotifies),
+        mapiNotifiees: survMapiNotifiees, mapiInvestiguees: survMapiInvestiguees, mapiPct: pct(survMapiInvestiguees, survMapiNotifiees),
+        ripostesRougeole: survRipostesRougeole, ripostesTnn: survRipostesTnn,
       },
       rougeoleParAntenne,
       tnnMapi: {
-        tnnNotifies: sum(recs.map((r) => rawN(r, "nb_cas_tnn_notifies"))),
-        tnnInvestigues: sum(recs.map((r) => rawN(r, "nb_fiches_tnn_remontees"))),
-        ripostesTnn: sum(recs.map((r) => rawN(r, "nb_fiches_tnn_riposte"))),
-        mapiNotifiees: sum(recs.map((r) => rawN(r, "nb_mapi_graves_notifiees"))),
-        mapiInvestiguees: sum(recs.map((r) => rawN(r, "nb_fiches_mapi_graves_remontees"))),
+        tnnNotifies: survTnnNotifies, tnnInvestigues: survTnnInvestigues, ripostesTnn: survRipostesTnn,
+        mapiNotifiees: survMapiNotifiees, mapiInvestiguees: survMapiInvestiguees,
       },
+      parMois: survParMois,
+      ripostesParMaladie: [
+        { maladie: "Rougeole", notifies: survRougeoleNotifies, ripostes: survRipostesRougeole },
+        { maladie: "TNN", notifies: survTnnNotifies, ripostes: survRipostesTnn },
+      ],
+      listesLineaires: { dispo: listeDispo, ajour: listeAjour, pct: pct(listeAjour, listeDispo), parAntenne: listesParAntenne },
+      commentairesRougeole: collectNarratives(recs, (n) => n.observationsRougeole),
+      commentairesTnnMapi: collectNarratives(recs, (n) => n.observationsTnnMapi),
     },
     osp: {
       kpi: {
@@ -587,7 +681,8 @@ export function buildRapportBundle(fetched: { label: string; rows: RawRow[]; ok:
         omsJustifieesPct: pct(omsJust, omsFin),
       },
       ospParAntenne, typesActivites, rapportsTrimParAntenne, omsJustifieesParAntenne,
-      commentairesRapportPev: collectNarratives(recs, (n) => n.commentairePev),
+      commentairesRapportPev: collectNarratives(recs, (n) => n.commentaireRapportTrim),
+      commentairesRapportsOms: collectNarratives(recs, (n) => n.commentaireRapportsOms),
     },
   };
 }
