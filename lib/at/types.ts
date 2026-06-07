@@ -36,12 +36,34 @@ export interface AtScore {
 
 /* ----------------------- Champs narratifs (texte libre Kobo) ----------------------- */
 
-/** Verbatims texte saisis dans le formulaire (problèmes/constats, recommandations,
- *  commentaire sur la transmission du rapport trimestriel de l'Antenne PEV). */
+/** Verbatims texte saisis dans le formulaire, ventilés par champ d'origine. */
 export interface AtNarratives {
-  problemes: string[];        // problème majeur identifié / constat
-  recommandations: string[];  // recommandations
-  commentairePev: string[];   // commentaire sur le rapport trimestriel PEV
+  // Supervisions — constats par niveau
+  constatsAs: string[];
+  constatsZs: string[];
+  constatsAntenne: string[];
+  // Supervisions — recommandations
+  recoSupZs: string[];
+  recoSupAntenne: string[];
+  // Réunions — recommandations
+  recoCcpev: string[];
+  recoCoordination: string[];
+  // Problèmes (select_multiple → libellés) + précisions « Autre »
+  problemesDonnees: string[];
+  problemesMonitorageZs: string[];
+  problemesDonneesAutre: string[];
+  problemesMonitorageZsAutre: string[];
+  // Actions correctrices
+  actionsDonnees: string[];
+  actionsMonitorageZs: string[];
+  // Monitorage — observations
+  observationsMonitorage: string[];
+  // Surveillance — commentaires
+  observationsRougeole: string[];
+  observationsTnnMapi: string[];
+  // Rapports — commentaires
+  commentaireRapportTrim: string[];
+  commentaireRapportsOms: string[];
 }
 
 /** Verbatim contextualisé (AT · antenne · mois) pour l'affichage. */
@@ -86,16 +108,22 @@ export interface RapportBundle {
     rapportsParMois: { month: string; label: string; count: number }[];
     scoreParAtMois: { at: string; antenne: string | null; byMonth: Record<string, number | null>; moyenne: number | null }[];
     months: { key: string; label: string }[];
-    /** Verbatims « problème majeur / constat » remontés par les AT. */
-    constats: NarrativeItem[];
-    /** Verbatims « recommandations » remontés par les AT. */
-    recommandations: NarrativeItem[];
   };
   reunions: {
     kpi: { ccpevTenues: number; ccpevPrevues: number; survAppuyees: number; survPrevues: number; validAppuyees: number; validPrevues: number; revuesAppuyees: number; revuesPrevues: number };
     prevuesVsAppuyees: { type: string; prevues: number; appuyees: number }[];
     tauxParType: { type: string; taux: number | null }[];
     tableParAtMois: { at: string; byMonth: Record<string, number | null>; total: number }[];
+    /** Réunions appuyées par AT et par type de réunion. */
+    parAtType: { at: string; ccpev: number; coordination: number; validation: number; monitorageZs: number; total: number }[];
+    /** Synthèse des principales recommandations (CCPeV + coordination). */
+    recommandations: NarrativeItem[];
+    /** Actions correctrices proposées (validation des données + monitorage ZS). */
+    actionsCorrectrices: NarrativeItem[];
+    /** Top 5 des problèmes de qualité des données. */
+    topProblemesQualite: { label: string; count: number }[];
+    /** Top 5 des problèmes identifiés au cours des revues mensuelles ZS. */
+    topProblemesRevues: { label: string; count: number }[];
     months: { key: string; label: string }[];
   };
   supervisions: {
@@ -103,18 +131,45 @@ export interface RapportBundle {
     attenduVsRealise: { niveau: string; attendues: number; realisees: number }[];
     tauxParNiveau: { niveau: string; taux: number | null }[];
     tableParAtMois: { at: string; byMonth: Record<string, number | null>; total: number }[];
+    /** Supervisions attendues vs réalisées par AT et par niveau. */
+    parAtNiveau: { at: string; antAtt: number; antReal: number; zsAtt: number; zsReal: number; asAtt: number; asReal: number }[];
+    /** Évolution des supervisions réalisées par mois (par niveau). */
+    evolutionParMois: { month: string; label: string; antenne: number; zs: number; as: number; total: number }[];
+    /** Principaux constats par niveau (Antenne · ZS · AS). */
+    constatsParNiveau: { niveau: string; items: NarrativeItem[] }[];
+    /** Tous les constats de supervision. */
+    constats: NarrativeItem[];
+    /** Principales recommandations de supervision (ZS + Antenne). */
+    recommandations: NarrativeItem[];
     months: { key: string; label: string }[];
   };
   monitorage: {
     kpi: { realises: number; prevus: number; pct: number | null; asCouvertes: number; formsSoumis: number };
     parAtMois: { at: string; byMonth: Record<string, number | null>; total: number }[];
     couverture: { couvertes: number; nonCouvertes: number };
+    /** Principaux constats / observations du monitorage de convenance. */
+    constats: NarrativeItem[];
     months: { key: string; label: string }[];
   };
   surveillance: {
-    kpi: { rougeoleNotifies: number; rougeoleInvestigues: number; rougeolePct: number | null; ripostes: number; tnnNotifies: number; tnnInvestigues: number };
+    kpi: {
+      rougeoleNotifies: number; rougeoleInvestigues: number; rougeolePct: number | null;
+      tnnNotifies: number; tnnInvestigues: number; tnnPct: number | null;
+      mapiNotifiees: number; mapiInvestiguees: number; mapiPct: number | null;
+      ripostesRougeole: number; ripostesTnn: number;
+    };
     rougeoleParAntenne: { antenne: string; notifies: number; investigues: number; pct: number | null }[];
     tnnMapi: { tnnNotifies: number; tnnInvestigues: number; ripostesTnn: number; mapiNotifiees: number; mapiInvestiguees: number };
+    /** Séries mensuelles par maladie (cas notifiés, investigués, ZS en épidémie). */
+    parMois: { month: string; label: string; rougeoleN: number; rougeoleI: number; rougeolePct: number | null; tnnN: number; tnnI: number; tnnPct: number | null; mapiN: number; mapiI: number; mapiPct: number | null; zsEpidemie: number }[];
+    /** Cas notifiés vs ripostes organisées (rougeole · TNN). */
+    ripostesParMaladie: { maladie: string; notifies: number; ripostes: number }[];
+    /** Listes linéaires rougeole partagées / à jour. */
+    listesLineaires: { dispo: number; ajour: number; pct: number | null; parAntenne: { antenne: string; pct: number | null }[] };
+    /** Commentaires de surveillance rougeole. */
+    commentairesRougeole: NarrativeItem[];
+    /** Commentaires de surveillance TNN / MAPI graves. */
+    commentairesTnnMapi: NarrativeItem[];
   };
   osp: {
     kpi: { ospPartagesPct: number | null; activitesSpeciales: number; rapportsTrimTransmis: number; rapportsTrimAttendus: number; omsJustifieesPct: number | null };
@@ -124,6 +179,8 @@ export interface RapportBundle {
     omsJustifieesParAntenne: { antenne: string; pct: number | null }[];
     /** Commentaires sur la transmission du rapport trimestriel de l'Antenne PEV. */
     commentairesRapportPev: NarrativeItem[];
+    /** Commentaires sur les rapports des activités sous financement OMS. */
+    commentairesRapportsOms: NarrativeItem[];
   };
 }
 
