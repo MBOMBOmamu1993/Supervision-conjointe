@@ -126,12 +126,19 @@ export async function fetchSource(src: KoboSource, opts: { force?: boolean } = {
   try {
     const rows = await pRetry(
       async () => {
+        // Données LIVE (data.json) prioritaires : elles exposent les noms
+        // techniques (q_<token>_NN_score / _max, sc_…, max_…/mx_…) dont dépend
+        // la détection des questions notées. L'export XLSX figé d'une
+        // export-setting Kobo peut, lui, être régénéré avec des en-têtes en
+        // « libellés » (ou sans les champs calculate score/max) — auquel cas les
+        // structures restent comptées mais toutes les réponses tombent à 0.
         try {
-          return await fetchSourceXlsx(src);
+          const live = await fetchSourceJson(src);
+          if (live.length) return live;
+          throw new Error("data.json vide → repli sur l'export XLSX");
         } catch (e) {
-          if (e instanceof AbortError) throw e; // auth → ne pas réessayer en JSON
-          // Fallback JSON (export XLSX peut-être non régénéré côté Kobo)
-          return await fetchSourceJson(src);
+          if (e instanceof AbortError) throw e; // auth → ne pas réessayer en XLSX
+          return await fetchSourceXlsx(src);
         }
       },
       { retries: MAX_ATTEMPTS - 1, minTimeout: 1000, maxTimeout: 4000 }
