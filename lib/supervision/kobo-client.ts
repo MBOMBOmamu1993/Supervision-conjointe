@@ -25,6 +25,12 @@ import {
 } from "@/config/supervision.config";
 import type { RawRow } from "./types";
 import { CS_SEED_ROWS } from "@/data/supervision-cs-seed";
+import { detectScoreQuestions, getColumns } from "./schema";
+
+/** Vrai si les lignes exposent au moins une question notée (colonnes score/max). */
+function hasScoreQuestions(rows: RawRow[]): boolean {
+  return rows.length > 0 && detectScoreQuestions(getColumns(rows)).length > 0;
+}
 
 type CacheEntry<T> = { at: number; value: T };
 const memCache = new Map<string, CacheEntry<unknown>>();
@@ -126,20 +132,31 @@ export async function fetchSource(src: KoboSource, opts: { force?: boolean } = {
   try {
     const rows = await pRetry(
       async () => {
-        // Données LIVE (data.json) prioritaires : elles exposent les noms
-        // techniques (q_<token>_NN_score / _max, sc_…, max_…/mx_…) dont dépend
-        // la détection des questions notées. L'export XLSX figé d'une
-        // export-setting Kobo peut, lui, être régénéré avec des en-têtes en
-        // « libellés » (ou sans les champs calculate score/max) — auquel cas les
-        // structures restent comptées mais toutes les réponses tombent à 0.
+        // 1) Export XLSX prioritaire : c'est la source historiquement fiable
+        //    pour Antenne et Aire de santé (en-têtes techniques attendus).
+        let xlsx: RawRow[];
+        try {
+          xlsx = await fetchSourceXlsx(src);
+        } catch (e) {
+          if (e instanceof AbortError) throw e; // auth → inutile de réessayer
+          // XLSX indisponible (404/export non régénéré) → bascule data.json.
+          return await fetchSourceJson(src);
+        }
+        // 2) Si l'XLSX expose bien les questions notées (colonnes score/max),
+        //    on le garde tel quel.
+        if (hasScoreQuestions(xlsx)) return xlsx;
+        // 3) Sinon (export-setting régénérée avec des en-têtes « libellés » ou
+        //    sans les champs calculate score/max — cas de la ZS), on récupère
+        //    le data.json live, qui garantit les noms techniques. On ne le
+        //    retient que s'il apporte réellement les questions notées ; sinon on
+        //    conserve l'XLSX pour que les structures restent au moins comptées.
         try {
           const live = await fetchSourceJson(src);
-          if (live.length) return live;
-          throw new Error("data.json vide → repli sur l'export XLSX");
-        } catch (e) {
-          if (e instanceof AbortError) throw e; // auth → ne pas réessayer en XLSX
-          return await fetchSourceXlsx(src);
+          if (hasScoreQuestions(live)) return live;
+        } catch {
+          // data.json indisponible → on garde l'XLSX déjà récupéré.
         }
+        return xlsx;
       },
       { retries: MAX_ATTEMPTS - 1, minTimeout: 1000, maxTimeout: 4000 }
     );
