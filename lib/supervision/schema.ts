@@ -153,8 +153,26 @@ function prettyLabel(raw: string): string {
 }
 
 /**
+ * Feuille d'un nom de colonne Kobo : segment après le dernier « / ».
+ * Les data.json imbriquent les champs sous le nom de leur groupe
+ * (ex. « scores/sc_planification_01 ») alors que l'export XLSX les aplatit
+ * (« sc_planification_01 »). On détecte donc sur la feuille tout en conservant
+ * le chemin complet pour la lecture des valeurs de ligne.
+ */
+function leafName(col: string): string {
+  const i = col.lastIndexOf("/");
+  return i >= 0 ? col.slice(i + 1) : col;
+}
+
+/**
  * Détecte les paires score/max et les rattache à une composante + un libellé.
  * Le libellé est récupéré par position : [question][commentaire][score][max].
+ *
+ * Robuste aux deux formats de colonnes Kobo : noms techniques aplatis (export
+ * XLSX) et noms techniques préfixés par leur groupe (data.json live). La
+ * détection se fait sur la FEUILLE du nom ; le chemin complet est conservé pour
+ * la lecture des valeurs (`row[scoreCol]`). La colonne « max » est cherchée
+ * dans le même groupe que la colonne « score ».
  */
 export function detectScoreQuestions(columns: string[]): ScoreQuestion[] {
   const colSet = new Set(columns);
@@ -178,20 +196,26 @@ export function detectScoreQuestions(columns: string[]): ScoreQuestion[] {
     let token: string | null = null;
     let maxCol: string | null = null;
 
+    // Préfixe de groupe éventuel (data.json) — la colonne « max » partage le
+    // même groupe que la colonne « score ».
+    const leaf = leafName(col);
+    const slash = col.lastIndexOf("/");
+    const prefix = slash >= 0 ? col.slice(0, slash + 1) : "";
+
     // ZS : q_<token>_NN_score
-    let m = col.match(/^q_(.+)_\d+_score$/i);
+    let m = leaf.match(/^q_(.+)_\d+_score$/i);
     if (m) {
       token = m[1];
-      const cand = col.replace(/_score$/i, "_max");
+      const cand = prefix + leaf.replace(/_score$/i, "_max");
       if (colSet.has(cand)) maxCol = cand;
     }
     // CS / Antenne : sc_<token>_NN
     if (!token) {
-      m = col.match(/^sc_(.+)_\d+$/i);
+      m = leaf.match(/^sc_(.+)_\d+$/i);
       if (m) {
-        const rest = col.slice(3); // après "sc_"
-        const cMax = "max_" + rest;
-        const cMx = "mx_" + rest;
+        const rest = leaf.slice(3); // après "sc_"
+        const cMax = prefix + "max_" + rest;
+        const cMx = prefix + "mx_" + rest;
         if (colSet.has(cMax)) { token = m[1]; maxCol = cMax; }
         else if (colSet.has(cMx)) { token = m[1]; maxCol = cMx; }
       }
