@@ -89,6 +89,49 @@ export function canonTuples(tuples: GeoTuple[]): GeoTuple[] {
   }));
 }
 
+/* ----- Rattachement hiérarchique statique (base État de lieux Tshuapa) ----- */
+// Les formulaires Kobo ne renseignent pas toujours les niveaux parents (ex.
+// l'antenne d'une soumission ZS). On complète via la hiérarchie provinciale
+// connue : ZS → antenne et AS → ZS. Les clés sont normalisées (casse/accents).
+// NB : il existe une *antenne* « Boende » ET une *ZS* « Boende » — le
+// rattachement se fait toujours du niveau enfant vers le parent, jamais par
+// égalité de nom, pour éviter toute collision.
+import { EDL } from "@/data/edl-data";
+
+let _zsToAntenne: Map<string, string> | null = null;
+let _asToZs: Map<string, { zone: string; antenne: string }> | null = null;
+
+function zsToAntenneMap(): Map<string, string> {
+  if (!_zsToAntenne) {
+    _zsToAntenne = new Map();
+    for (const z of EDL.zsPop) _zsToAntenne.set(norm(z.zs), canonAntenne(z.antenne) ?? z.antenne);
+  }
+  return _zsToAntenne;
+}
+function asToZsMap(): Map<string, { zone: string; antenne: string }> {
+  if (!_asToZs) {
+    _asToZs = new Map();
+    for (const a of EDL.asPop) {
+      const key = norm(a.as);
+      // En cas d'homonymie d'AS entre ZS, on garde la première occurrence.
+      if (!_asToZs.has(key)) _asToZs.set(key, { zone: a.zs, antenne: canonAntenne(a.antenne) ?? a.antenne });
+    }
+  }
+  return _asToZs;
+}
+
+/** Antenne de rattachement d'une ZS (hiérarchie provinciale statique). */
+export function antenneOfZone(zone: string | null | undefined): string | null {
+  if (!zone) return null;
+  return zsToAntenneMap().get(norm(zone)) ?? null;
+}
+
+/** ZS (et antenne) de rattachement d'une aire de santé. */
+export function zoneOfAire(aire: string | null | undefined): { zone: string; antenne: string } | null {
+  if (!aire) return null;
+  return asToZsMap().get(norm(aire)) ?? null;
+}
+
 /**
  * Options en cascade : chaque niveau est restreint par les niveaux parents
  * déjà sélectionnés. Les listes sont dédoublonnées.

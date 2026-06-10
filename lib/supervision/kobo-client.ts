@@ -122,7 +122,31 @@ export interface SourceFetch {
   error?: string;
 }
 
-/** Récupère une source (XLSX puis fallback JSON) avec retry + cache. */
+/**
+ * Fusionne les lignes de l'export XLSX figé et du data.json live, dédoublonnées
+ * par `_uuid`. L'export-setting XLSX d'un formulaire n'est PAS régénéré à
+ * chaque soumission : les soumissions récentes (ex. ZS Boende) peuvent en être
+ * absentes alors qu'elles existent dans data.json — et inversement, le live
+ * peut perdre des colonnes score/max si le formulaire a été re-déployé. On
+ * prend comme base la source qui expose les questions notées (préférence au
+ * live, plus complet), puis on ajoute les soumissions de l'autre source qui
+ * manquent (les deux formats de colonnes cohabitent sans conflit : la
+ * détection score/max travaille sur la feuille du nom de colonne).
+ */
+function mergeSourceRows(xlsx: RawRow[] | null, live: RawRow[] | null): RawRow[] {
+  if (!xlsx && !live) return [];
+  if (!xlsx) return live!;
+  if (!live) return xlsx;
+  const uuidOf = (r: RawRow) => String(r["_uuid"] ?? "");
+  const liveScored = hasScoreQuestions(live);
+  const xlsxScored = hasScoreQuestions(xlsx);
+  const [base, extra] = liveScored || !xlsxScored ? [live, xlsx] : [xlsx, live];
+  const present = new Set(base.map(uuidOf).filter(Boolean));
+  const added = extra.filter((r) => { const u = uuidOf(r); return u !== "" && !present.has(u); });
+  return added.length ? base.concat(added) : base;
+}
+
+/** Récupère une source (fusion XLSX + data.json par _uuid) avec retry + cache. */
 export async function fetchSource(src: KoboSource, opts: { force?: boolean } = {}): Promise<SourceFetch> {
   const cacheKey = `kobo:${src.key}`;
   if (!opts.force) {
@@ -132,31 +156,19 @@ export async function fetchSource(src: KoboSource, opts: { force?: boolean } = {
   try {
     const rows = await pRetry(
       async () => {
-        // 1) Export XLSX prioritaire : c'est la source historiquement fiable
-        //    pour Antenne et Aire de santé (en-têtes techniques attendus).
-        let xlsx: RawRow[];
-        try {
-          xlsx = await fetchSourceXlsx(src);
-        } catch (e) {
-          if (e instanceof AbortError) throw e; // auth → inutile de réessayer
-          // XLSX indisponible (404/export non régénéré) → bascule data.json.
-          return await fetchSourceJson(src);
+        // Les deux sources sont interrogées en parallèle puis fusionnées par
+        // _uuid : ni l'export XLSX figé (souvent en retard sur les nouvelles
+        // soumissions), ni le data.json live (parfois sans les colonnes
+        // score/max attendues) n'est exhaustif seul.
+        const [xlsxRes, liveRes] = await Promise.allSettled([fetchSourceXlsx(src), fetchSourceJson(src)]);
+        if (xlsxRes.status === "rejected" && xlsxRes.reason instanceof AbortError) throw xlsxRes.reason;
+        if (liveRes.status === "rejected" && liveRes.reason instanceof AbortError) throw liveRes.reason;
+        const xlsx = xlsxRes.status === "fulfilled" ? xlsxRes.value : null;
+        const live = liveRes.status === "fulfilled" ? liveRes.value : null;
+        if (!xlsx && !live) {
+          throw (xlsxRes.status === "rejected" ? xlsxRes.reason : (liveRes as PromiseRejectedResult).reason);
         }
-        // 2) Si l'XLSX expose bien les questions notées (colonnes score/max),
-        //    on le garde tel quel.
-        if (hasScoreQuestions(xlsx)) return xlsx;
-        // 3) Sinon (export-setting régénérée avec des en-têtes « libellés » ou
-        //    sans les champs calculate score/max — cas de la ZS), on récupère
-        //    le data.json live, qui garantit les noms techniques. On ne le
-        //    retient que s'il apporte réellement les questions notées ; sinon on
-        //    conserve l'XLSX pour que les structures restent au moins comptées.
-        try {
-          const live = await fetchSourceJson(src);
-          if (hasScoreQuestions(live)) return live;
-        } catch {
-          // data.json indisponible → on garde l'XLSX déjà récupéré.
-        }
-        return xlsx;
+        return mergeSourceRows(xlsx, live);
       },
       { retries: MAX_ATTEMPTS - 1, minTimeout: 1000, maxTimeout: 4000 }
     );
