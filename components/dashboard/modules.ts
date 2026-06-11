@@ -33,12 +33,11 @@ export const MODULES: ModuleDef[] = [
   },
   {
     key: "supervision", name: "Supervision conjointe", icon: "link", tone: "navy", live: true,
-    desc: "Réalisation et résultats factuels des supervisions Antenne · ZS · Aire de santé.",
+    desc: "Réalisation et résultats des supervisions — niveau d'affichage dynamique : Antennes → Zones de santé → Aires de santé selon les filtres.",
     pages: [
-      { id: "sc_antennes", label: "Antennes", icon: "antenne", lvl: "antenne" },
-      { id: "sc_zones", label: "Zones de santé", icon: "zs", lvl: "zs" },
-      { id: "sc_aires", label: "Aires de santé", icon: "as", lvl: "as" },
-      { id: "sc_synthese", label: "Synthèse transversale", icon: "synthese", lvl: "all" },
+      { id: "sc_resultats", label: "Résultats de supervision", icon: "overview", lvl: "all" },
+      { id: "sc_score", label: "Score de conformité", icon: "cotation", lvl: "all" },
+      { id: "sc_constats", label: "Constats & recommandations", icon: "reco", lvl: "all" },
     ],
   },
   {

@@ -232,6 +232,31 @@ export const COTATION_LABEL: Record<CotationLevel, string> = { tres_bon: "Très 
 export const COTATION_COLOR: Record<CotationLevel, string> = { tres_bon: "#1f9d57", bon: "#0093d5", moyen: "#f59e0b", faible: "#e23636" };
 export const COTATION_ORDER: CotationLevel[] = ["tres_bon", "bon", "moyen", "faible"];
 
+/* ------------------ Interprétation du score de conformité ------------------ */
+/**
+ * Échelle d'interprétation du SCORE DE CONFORMITÉ (note explicative du système
+ * de scorage — feedback TL p.5-6). Mêmes seuils que la cotation historique
+ * (80/60/40), mais libellés et couleurs propres à la page « Score de
+ * conformité » (vert / jaune / orange / rouge).
+ */
+export interface ConformiteClass {
+  key: "conforme" | "partiel" | "faible" | "non_conforme";
+  label: string;
+  min: number;
+  color: string;
+  desc: string;
+}
+export const CONFORMITE_CLASSES: ConformiteClass[] = [
+  { key: "conforme", label: "Conforme", min: 80, color: "#1f9d57", desc: "Les standards du PEV sont globalement respectés." },
+  { key: "partiel", label: "Partiellement conforme", min: 60, color: "#eab308", desc: "Plusieurs standards sont respectés, mais des améliorations restent nécessaires." },
+  { key: "faible", label: "Faible conformité", min: 40, color: "#f08c00", desc: "Le niveau de respect des standards est insuffisant et nécessite un appui rapproché." },
+  { key: "non_conforme", label: "Non conforme", min: 0, color: "#e23636", desc: "Les standards du PEV sont faiblement respectés et des actions correctrices prioritaires sont requises." },
+];
+export function conformiteFor(scorePct: number): ConformiteClass {
+  for (const c of CONFORMITE_CLASSES) if (scorePct >= c.min) return c;
+  return CONFORMITE_CLASSES[CONFORMITE_CLASSES.length - 1];
+}
+
 /* ----- Seuils CQD (complétude / promptitude / concordance) ----- */
 export const CQD_THRESHOLDS: { level: CotationLevel; label: string; min: number; color: string }[] = [
   { level: "tres_bon", label: "Très bon", min: 90, color: "#1f9d57" },
