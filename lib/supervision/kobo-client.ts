@@ -17,6 +17,8 @@ import {
   KOBO_SOURCES,
   CQD_SOURCES,
   RCM_SOURCE,
+  AT_SOURCE,
+  SAV_SOURCES,
   koboExportUrl,
   koboDataUrl,
   type KoboSource,
@@ -133,6 +135,17 @@ export interface SourceFetch {
  * manquent (les deux formats de colonnes cohabitent sans conflit : la
  * détection score/max travaille sur la feuille du nom de colonne).
  */
+/** Ajoute à `base` les lignes de `extra` absentes (dédoublonnage par _uuid). */
+function mergeByUuid(base: RawRow[], extra: RawRow[]): RawRow[] {
+  if (!extra.length) return base;
+  const present = new Set(base.map((r) => String(r["_uuid"] ?? "")).filter(Boolean));
+  const added = extra.filter((r) => {
+    const u = String(r["_uuid"] ?? "");
+    return u !== "" && !present.has(u);
+  });
+  return added.length ? base.concat(added) : base;
+}
+
 function mergeSourceRows(xlsx: RawRow[] | null, live: RawRow[] | null): RawRow[] {
   if (!xlsx && !live) return [];
   if (!xlsx) return live!;
@@ -172,37 +185,42 @@ export async function fetchSource(src: KoboSource, opts: { force?: boolean } = {
       },
       { retries: MAX_ATTEMPTS - 1, minTimeout: 1000, maxTimeout: 4000 }
     );
-    // ANCIEN formulaire du même niveau (asset legacy) : ses soumissions sont
+    // ANCIENS formulaires du même niveau (assets legacy) : soumissions
     // récupérées via l'API et ajoutées si absentes (dédoublonnage par _uuid).
-    // Un échec sur le legacy ne casse jamais la source principale.
+    // Legacy explicite (config) + auto-découverte parmi les formulaires du
+    // compte. Un échec sur le legacy ne casse jamais la source principale.
     let merged = rows;
-    if (src.legacy) {
-      try {
-        const legacySrc: KoboSource = {
-          key: src.key,
-          label: `${src.label} (ancien formulaire)`,
-          assetUid: src.legacy.assetUid,
-          exportUid: src.legacy.exportUid ?? "",
-        };
-        const [lx, lj] = await Promise.allSettled([
-          src.legacy.exportUid ? fetchSourceXlsx(legacySrc) : Promise.reject(new Error("pas d'export XLSX legacy")),
-          fetchSourceJson(legacySrc),
-        ]);
-        const legacyRows = mergeSourceRows(
-          lx.status === "fulfilled" ? lx.value : null,
-          lj.status === "fulfilled" ? lj.value : null
-        );
-        if (legacyRows.length) {
-          const present = new Set(merged.map((r) => String(r["_uuid"] ?? "")).filter(Boolean));
-          const extra = legacyRows.filter((r) => {
-            const u = String(r["_uuid"] ?? "");
-            return u !== "" && !present.has(u);
-          });
-          if (extra.length) merged = merged.concat(extra);
+    try {
+      const discovered = await discoverLegacySupervisionAssets(src.key).catch(() => [] as KoboAssetInfo[]);
+      const legacyList: { assetUid: string; exportUid?: string }[] = [
+        ...(src.legacy ? [src.legacy] : []),
+        ...discovered
+          .filter((a) => a.uid !== src.legacy?.assetUid)
+          .map((a) => ({ assetUid: a.uid })),
+      ];
+      for (const legacy of legacyList) {
+        try {
+          const legacySrc: KoboSource = {
+            key: src.key,
+            label: `${src.label} (ancien formulaire)`,
+            assetUid: legacy.assetUid,
+            exportUid: legacy.exportUid ?? "",
+          };
+          const [lx, lj] = await Promise.allSettled([
+            legacy.exportUid ? fetchSourceXlsx(legacySrc) : Promise.reject(new Error("pas d'export XLSX legacy")),
+            fetchSourceJson(legacySrc),
+          ]);
+          const legacyRows = mergeSourceRows(
+            lx.status === "fulfilled" ? lx.value : null,
+            lj.status === "fulfilled" ? lj.value : null
+          );
+          merged = mergeByUuid(merged, legacyRows);
+        } catch {
+          /* cet asset legacy est indisponible : on continue avec les autres */
         }
-      } catch {
-        /* legacy indisponible : on garde la source principale + le seed local */
       }
+    } catch {
+      /* legacy indisponible : on garde la source principale + le seed local */
     }
     const result: SourceFetch = { level: src.key, label: src.label, rows: mergeCsSeed(src.key, merged), ok: true };
     cacheSet(cacheKey, result);
@@ -237,6 +255,87 @@ export interface CqdFetch {
   error?: string;
 }
 
+/* ----- Auto-découverte des ANCIENS formulaires CQ (assets d'origine) ----- */
+
+const nrm = (s: string) =>
+  s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+
+interface KoboAssetInfo { uid: string; name: string; submissions: number }
+
+/** Liste des formulaires du compte Kobo (cache 1 h). */
+async function listAccountAssets(): Promise<KoboAssetInfo[]> {
+  const cacheKey = "kobo:assets-index";
+  const cached = cacheGet<KoboAssetInfo[]>(cacheKey, 3600);
+  if (cached) return cached;
+  const url = `${ENV.KOBO_BASE_URL}/api/v2/assets.json?limit=500`;
+  const buf = await fetchBuffer(url, "application/json");
+  const json = JSON.parse(new TextDecoder().decode(buf));
+  const results = (json.results ?? []) as Record<string, unknown>[];
+  const assets: KoboAssetInfo[] = results
+    .filter((a) => a["asset_type"] === "survey")
+    .map((a) => ({
+      uid: String(a["uid"] ?? ""),
+      name: String(a["name"] ?? ""),
+      submissions: Number(a["deployment__submission_count"] ?? 0) || 0,
+    }))
+    .filter((a) => a.uid !== "");
+  cacheSet(cacheKey, assets);
+  return assets;
+}
+
+/** UID de tous les assets déjà configurés (à exclure de la découverte). */
+function configuredAssetUids(): Set<string> {
+  return new Set(
+    [
+      ...KOBO_SOURCES.flatMap((s) => [s.assetUid, s.legacy?.assetUid]),
+      ...CQD_SOURCES.flatMap((s) => [s.assetUid, s.legacy?.assetUid]),
+      RCM_SOURCE.assetUid,
+      AT_SOURCE.assetUid,
+      ...SAV_SOURCES.map((s) => s.assetUid),
+    ].filter((u): u is string => !!u)
+  );
+}
+
+/**
+ * Découvre les ANCIENS formulaires de SUPERVISION du niveau demandé :
+ * formulaires « checklist supervision PEV » du compte, du bon niveau
+ * (antenne / zone / centre de santé), avec des soumissions, non configurés.
+ * Exclut SAV et contrôle qualité.
+ */
+async function discoverLegacySupervisionAssets(level: StructureLevel): Promise<KoboAssetInfo[]> {
+  const known = configuredAssetUids();
+  const assets = await listAccountAssets();
+  const levelRe =
+    level === "as" ? /(^| )(cs|centre|aire)( |$)/ :
+    level === "zs" ? /(^| )(zs|zone)( |$)/ :
+    /(^| )antenne( |$)/;
+  return assets.filter((a) => {
+    if (!a.uid || known.has(a.uid) || a.submissions <= 0) return false;
+    const n = nrm(a.name);
+    return /supervision/.test(n) && /pev/.test(n) && levelRe.test(n) && !/sav/.test(n) && !/qualit/.test(n);
+  });
+}
+
+/**
+ * Découvre les ANCIENS formulaires de contrôle qualité du niveau demandé :
+ * formulaires du compte dont le nom évoque le contrôle qualité (« qualité »/
+ * « precision donnees ») et le niveau (CS/aire vs ZS/zone), avec des
+ * soumissions, et qui ne sont PAS déjà configurés. C'est là que vivent les
+ * anciens contrôles (ex. CQ CS de la ZS Boende, soumis sur l'ancien formulaire).
+ */
+async function discoverLegacyCqdAssets(key: "zs" | "as"): Promise<KoboAssetInfo[]> {
+  const known = configuredAssetUids();
+  const assets = await listAccountAssets();
+  const isCq = (n: string) => /qualit/.test(n) || /precision donnees/.test(n) || /controle? qualite/.test(n);
+  const isLevel = (n: string) =>
+    key === "as" ? /(^| )(cs|as|centre|aire)( |$)/.test(n) : /(^| )(zs|zone)( |$)/.test(n);
+  return assets.filter((a) => {
+    if (!a.uid || known.has(a.uid) || a.submissions <= 0) return false;
+    const n = nrm(a.name);
+    return isCq(n) && isLevel(n);
+  });
+}
+
 export async function fetchCqdSource(src: CqdSource, opts: { force?: boolean } = {}): Promise<CqdFetch> {
   const cacheKey = `kobo:cqd:${src.key}`;
   if (!opts.force) {
@@ -245,6 +344,14 @@ export async function fetchCqdSource(src: CqdSource, opts: { force?: boolean } =
   }
   const exportUrl = koboExportUrl(src, ENV.KOBO_BASE_URL);
   const dataUrl = koboDataUrl(src, ENV.KOBO_BASE_URL) + "?limit=30000";
+  // ANCIENS formulaires CQ du même niveau : config OU variable d'environnement
+  // (KOBO_CQD_LEGACY_CS / KOBO_CQD_LEGACY_ZS, format « assetUid[:exportUid] »),
+  // sinon AUTO-DÉCOUVERTE parmi les formulaires du compte Kobo.
+  const legacyEnv = src.key === "as" ? ENV.CQD_LEGACY_CS : ENV.CQD_LEGACY_ZS;
+  const explicitLegacy: { assetUid: string; exportUid?: string } | undefined =
+    src.legacy ?? (legacyEnv
+      ? { assetUid: legacyEnv.split(":")[0], exportUid: legacyEnv.split(":")[1] || undefined }
+      : undefined);
   try {
     const rows = await pRetry(
       async () => {
@@ -273,16 +380,48 @@ export async function fetchCqdSource(src: CqdSource, opts: { force?: boolean } =
         }
         if (!live || live.length === 0) return xlsx ?? [];
         if (!xlsx || xlsx.length === 0) return live;
-        const present = new Set(live.map((r) => String(r["_uuid"] ?? "")).filter(Boolean));
-        const extra = xlsx.filter((r) => {
-          const u = String(r["_uuid"] ?? "");
-          return u !== "" && !present.has(u);
-        });
-        return extra.length ? live.concat(extra) : live;
+        return mergeByUuid(live, xlsx);
       },
       { retries: MAX_ATTEMPTS - 1, minTimeout: 1000, maxTimeout: 4000 }
     );
-    const result: CqdFetch = { key: src.key, label: src.label, rows, ok: true };
+    // Soumissions des ANCIENS formulaires CQ (assets legacy) : récupérées via
+    // l'API et ajoutées si absentes — c'est là que vivent notamment les
+    // contrôles qualité CS de la ZS Boende. Un échec du legacy ne casse pas
+    // la source principale.
+    let merged = rows;
+    try {
+      const legacyList: { assetUid: string; exportUid?: string }[] = explicitLegacy
+        ? [explicitLegacy]
+        : (await discoverLegacyCqdAssets(src.key)).map((a) => ({ assetUid: a.uid }));
+      for (const legacy of legacyList) {
+        try {
+          const lDataUrl = koboDataUrl({ assetUid: legacy.assetUid }, ENV.KOBO_BASE_URL) + "?limit=30000";
+          const [lj, lx] = await Promise.allSettled([
+            (async () => {
+              const buf = await fetchBuffer(lDataUrl, "application/json");
+              const json = JSON.parse(new TextDecoder().decode(buf));
+              return (Array.isArray(json) ? json : json.results ?? []) as RawRow[];
+            })(),
+            (async () => {
+              if (!legacy.exportUid) return [] as RawRow[];
+              const url = koboExportUrl({ assetUid: legacy.assetUid, exportUid: legacy.exportUid }, ENV.KOBO_BASE_URL);
+              const buf = await fetchBuffer(url, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+              return parseXlsx(buf);
+            })(),
+          ]);
+          const legacyRows = mergeByUuid(
+            lj.status === "fulfilled" ? lj.value : [],
+            lx.status === "fulfilled" ? lx.value : []
+          );
+          merged = mergeByUuid(merged, legacyRows);
+        } catch {
+          /* cet asset legacy est indisponible : on continue avec les autres */
+        }
+      }
+    } catch {
+      /* découverte indisponible : on garde la source principale */
+    }
+    const result: CqdFetch = { key: src.key, label: src.label, rows: merged, ok: true };
     cacheSet(cacheKey, result);
     return result;
   } catch (err) {
