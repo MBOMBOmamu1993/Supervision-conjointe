@@ -4,6 +4,9 @@
    (hook useRcm). Le formulaire peut être sans soumission : un bandeau l'indique
    et les visuels s'alimentent automatiquement dès les premières données. */
 import { useRcm } from "@/lib/client/rcm-api";
+import { useDhis2Cv } from "@/lib/client/dhis2-api";
+import { norm } from "@/lib/geo";
+import { fmtMonth } from "@/lib/client/format";
 import type { RcmBundle } from "@/lib/rcm/types";
 import { SectionBar } from "@/components/ui/Card";
 import { KpiTile, CardTitle, Banner, C } from "@/components/proto/proto";
@@ -181,6 +184,91 @@ export function RcmRaisons() {
   );
 }
 
+/* ============= Tableau comparatif CV RCM vs CV DHIS2 (SNIS) ============= */
+
+const CV_AGS: { key: "penta1" | "penta3" | "rr1" | "rr2"; label: string }[] = [
+  { key: "penta1", label: "PENTA1" },
+  { key: "penta3", label: "PENTA3" },
+  { key: "rr1", label: "RR1" },
+  { key: "rr2", label: "RR2" },
+];
+
+/** Fond de cellule selon l'écart |RCM − SNIS| : ≥ 20 pts rouge clair, ≥ 10 pts orange. */
+function gapBg(rcm: number | null, snis: number | null): string | undefined {
+  if (rcm == null || snis == null) return undefined;
+  const gap = Math.abs(rcm - snis);
+  if (gap >= 20) return "#fde2e2";
+  if (gap >= 10) return "#ffe8cc";
+  return undefined;
+}
+
+function CvComparisonTable({ data }: { data: RcmBundle }) {
+  const { data: dhis2, error } = useDhis2Cv();
+  const moisLabel = dhis2 ? fmtMonth(dhis2.month) : "…";
+  // Jointure par nom d'AS normalisé (casse/accents) : lignes = AS couvertes par
+  // le RCM (suivent les filtres de l'onglet) ; à défaut de données RCM, les AS
+  // DHIS2 sont listées pour exposer au moins la couverture administrative.
+  const dhisByName = new Map((dhis2?.aires ?? []).map((a) => [norm(a.name), a]));
+  const rcmRows = data.cvParAire;
+  const rows = rcmRows.length
+    ? rcmRows.map((r) => ({ name: r.name, rcm: r.cv, snis: dhisByName.get(norm(r.name))?.cv ?? null }))
+    : (dhis2?.aires ?? []).map((a) => ({ name: a.name, rcm: null as RcmBundle["cvParAire"][number]["cv"] | null, snis: a.cv }));
+  const exportData = {
+    columns: ["Aire de santé", ...CV_AGS.flatMap((ag) => [`${ag.label} RCM`, `${ag.label} SNIS`])],
+    rows: rows.map((r) => [
+      r.name,
+      ...CV_AGS.flatMap((ag) => [r.rcm?.[ag.key] ?? null, r.snis?.[ag.key] ?? null] as (number | null)[]),
+    ]),
+  };
+  return (
+    <div className="card card-pad">
+      <CardTitle icon="syringe" tone="violet"
+        title={`Couverture vaccinale RCM vs couverture administrative (DHIS2) — ${moisLabel}`}
+        sub={`Mois de référence DHIS2 : ${moisLabel}${dhis2?.fallbackUsed ? ` (mois ${fmtMonth(dhis2.requestedMonth)} non encore publié — repli sur le dernier mois disponible)` : ""} · règle : M-2 avant le 20 du mois courant, M-1 à partir du 20 · écart ≥ 10 pts en orange, ≥ 20 pts en rouge`}
+        right={<TableExportButtons filename={`Couverture vaccinale RCM vs DHIS2 ${moisLabel}`} data={exportData} />} />
+      {error ? <Empty msg="Données administratives DHIS2 indisponibles (snis-vaccination-api)." /> : null}
+      {!error && rows.length ? (
+        <div className="overflow-x-auto">
+          <table className="dtable">
+            <thead>
+              <tr>
+                <th className="name" rowSpan={2}>Aire de santé</th>
+                {CV_AGS.map((ag) => <th key={ag.key} colSpan={2}>{ag.label}</th>)}
+              </tr>
+              <tr>
+                {CV_AGS.flatMap((ag) => [
+                  <th key={`${ag.key}-rcm`}>RCM</th>,
+                  <th key={`${ag.key}-snis`}>SNIS</th>,
+                ])}
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((r) => (
+                <tr key={r.name}>
+                  <td className="name">{r.name}</td>
+                  {CV_AGS.flatMap((ag) => {
+                    const rcm = r.rcm?.[ag.key] ?? null;
+                    const snis = r.snis?.[ag.key] ?? null;
+                    const bg = gapBg(rcm, snis);
+                    return [
+                      <td key={`${ag.key}-rcm`} style={{ background: bg }}>{pctTxt(rcm)}</td>,
+                      <td key={`${ag.key}-snis`} style={{ background: bg }}>{pctTxt(snis)}</td>,
+                    ];
+                  })}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : null}
+      {!error && !rows.length ? <Empty msg="En attente des données RCM et DHIS2." /> : null}
+      {!rcmRows.length && rows.length ? (
+        <div className="mt-2 text-[11px] text-surface-500">CV RCM en attente des premières soumissions du formulaire — couverture administrative (DHIS2/SNIS) affichée seule.</div>
+      ) : null}
+    </div>
+  );
+}
+
 /* ===================== 4. Tableaux ===================== */
 export function RcmTableaux() {
   const { data } = useRcm();
@@ -201,6 +289,7 @@ export function RcmTableaux() {
           <KpiTile icon="table" tone="navy" label="Tableaux détaillés" value={2} />
         </div>
       </section>
+      <CvComparisonTable data={data} />
       <div className="card card-pad">
         <CardTitle icon="table" tone="navy" title="Raisons de non-possession de carte par aire de santé" sub="% des enfants concernés" right={<TableExportButtons filename="Raisons de non-possession de carte par aire de santé" />} />
         {data.parAire.length && carteCats.length ? (

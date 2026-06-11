@@ -67,4 +67,15 @@ export interface RcmBundle {
   reasonsVacc: ReasonCount[];
   /** Détail par aire de santé pour les tableaux. */
   parAire: RcmAsRow[];
+  /**
+   * Couverture vaccinale RCM (enquête) par aire de santé pour les antigènes du
+   * tableau comparatif RCM vs DHIS2 : enfants vaccinés / enfants enquêtés
+   * éligibles × 100 (RR1/RR2 = VAR1/VAR2 dans certains exports).
+   */
+  cvParAire: {
+    name: string;
+    zone: string | null;
+    enfants: number;
+    cv: Record<"penta1" | "penta3" | "rr1" | "rr2", number | null>;
+  }[];
 }
