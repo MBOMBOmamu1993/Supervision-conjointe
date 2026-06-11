@@ -3,6 +3,7 @@
 /* Onglet « Qualité des données » — Centres de santé (5 pages) + Zones de santé
    (3 pages). Données LIVE via /api/cqd (hook useCqd) ; réagissent aux filtres.
    Antigènes : PENTA1 · PENTA3 · RR1 · RR2 — sources Pointage · Registre · SNIS · DHIS2. */
+import { useState } from "react";
 import { useCqd } from "@/lib/client/cqd-api";
 import type { CqdBundle, CqdConcordanceAS, CqdLevelBundle, ConcordanceClass } from "@/lib/cqd/types";
 import { SectionBar } from "@/components/ui/Card";
@@ -19,12 +20,14 @@ const concClass = (c: ConcordanceClass) => (c === "sous" ? "Sous-rapportage" : c
 /** Classe de concordance d'une valeur (95–105 normal, <95 sous, >105 sur). */
 const classOf = (v: number): ConcordanceClass => (v >= 95 && v <= 105 ? "normal" : v < 95 ? "sous" : "sur");
 /** Écart moyen rapporté au registre de vaccination (source de référence).
- *  = moyenne des écarts absolus de chaque source comparée (pointage, SNIS, DHIS2)
- *    par rapport au registre, divisée par la valeur du registre, en %. */
+ *  = moyenne des écarts absolus de chaque source comparée (pointage, SNIS)
+ *    par rapport au registre, divisée par la valeur du registre, en %.
+ *  DHIS2 est exclu au niveau CS (feedback TL : la chaîne des centres de santé
+ *  est Pointage · Registre · SNIS uniquement ; DHIS2 reste au niveau ZS). */
 const ecart = (a: { registre: number; pointage: number; snis: number; dhis2: number }) => {
   const ref = a.registre;
   if (!ref || ref <= 0) return null;
-  const sources = [a.pointage, a.snis, a.dhis2].filter((x) => x > 0);
+  const sources = [a.pointage, a.snis].filter((x) => x > 0);
   if (!sources.length) return null;
   const sumAbs = sources.reduce((acc, x) => acc + Math.abs(x - ref), 0);
   return round((sumAbs / sources.length / ref) * 100);
@@ -46,9 +49,9 @@ function useLevel(level: "as" | "zs"): { data: CqdBundle | undefined; b: CqdLeve
   const b = data?.levels[level];
   return { data, b, live: !!b && b.records > 0, months: data?.meta.months ?? [] };
 }
-const Interpretation = () => (
+const Interpretation = ({ label = "Taux de concordance" }: { label?: string }) => (
   <div className="card card-pad">
-    <CardTitle icon="legend" tone="blue" title="Interprétation" sub="Taux de concordance = valeur transcrite / référence × 100" />
+    <CardTitle icon="legend" tone="blue" title="Interprétation" sub={`${label} = valeur transcrite / référence × 100`} />
     <div className="space-y-2 pt-1 text-[12.5px] font-semibold text-surface-700">
       <div className="flex items-center gap-2"><span className="h-3.5 w-3.5 rounded" style={{ background: C.green }} />95–105 = pas de discordance</div>
       <div className="flex items-center gap-2"><span className="h-3.5 w-3.5 rounded" style={{ background: C.orange }} />&lt; 95 = sous-rapportage</div>
@@ -56,6 +59,80 @@ const Interpretation = () => (
     </div>
   </div>
 );
+
+/**
+ * « Indicateurs de contrôle de qualité des données — Définitions, formules et
+ * interprétation » (feedback TL — visuel pédagogique recréé en HTML/React).
+ * Affichée en tête des pages Comparaison sources (CS et ZS).
+ */
+function CqdDefinitions() {
+  const defs = [
+    {
+      n: 1,
+      titre: "Facteur de vérification (ou taux de concordance)",
+      definition: "Mesure le niveau de cohérence entre les données rapportées dans un outil contrôlé et les données retrouvées dans l'outil de référence. Il permet de vérifier si les chiffres déclarés dans un outil de gestion des données PEV correspondent aux chiffres réellement retrouvés dans l'outil primaire ou l'outil de référence.",
+      formule: "(valeur retrouvée dans l'outil vérifié / valeur de l'outil de référence) × 100",
+      interp: [
+        { txt: "95–105 % : bonne concordance", color: C.green },
+        { txt: "> 105 % : sur-rapportage", color: C.red },
+        { txt: "< 95 % : sous-rapportage", color: C.orange },
+      ],
+    },
+    {
+      n: 2,
+      titre: "Écart moyen",
+      definition: "Différence moyenne entre les chiffres retrouvés dans plusieurs outils et le chiffre de l'outil de référence (registre, fiche de pointage, rapport mensuel, DHIS2…).",
+      formule: "Σ |valeur outil comparé − valeur outil de référence| / nombre d'outils comparés",
+      interp: [
+        { txt: "Plus l'écart moyen est faible, plus les outils sont cohérents avec l'outil de référence.", color: C.green },
+      ],
+    },
+    {
+      n: 3,
+      titre: "Taux d'erreur",
+      definition: "Proportion d'écart entre une valeur rapportée et la valeur attendue/retrouvée dans l'outil de référence.",
+      formule: "(nombre de discordances entre l'outil contrôlé et l'outil de référence / total des comparaisons effectuées) × 100",
+      interp: [
+        { txt: "0 % : aucune différence entre les deux outils", color: C.green },
+        { txt: "> 50 % : erreurs systématiques", color: C.red },
+      ],
+    },
+  ];
+  return (
+    <section>
+      <SectionBar icon="legend">Indicateurs de contrôle de qualité des données — Définitions, formules et interprétation</SectionBar>
+      <details className="card card-pad">
+        <summary className="cursor-pointer select-none text-[12.5px] font-bold text-navy-700">
+          Facteur de vérification · Écart moyen · Taux d'erreur — afficher les définitions
+        </summary>
+        <div className="mt-3 grid grid-cols-1 lg:grid-cols-3 gap-3">
+          {defs.map((d) => (
+            <div key={d.n} className="rounded-xl border border-surface-200 bg-[#f6f8fb] p-3.5">
+              <div className="mb-1.5 flex items-center gap-2">
+                <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[12px] font-extrabold text-white" style={{ background: "#0a3a86" }}>{d.n}</span>
+                <div className="text-[12.5px] font-extrabold text-navy-700">{d.titre}</div>
+              </div>
+              <div className="text-[11.5px] leading-relaxed text-surface-700">{d.definition}</div>
+              <div className="mt-2 rounded-lg border border-surface-200 bg-white px-3 py-2 text-[11.5px] font-bold text-navy-700">
+                Formule : <span className="font-semibold text-surface-700">{d.formule}</span>
+              </div>
+              <ul className="mt-2 space-y-1">
+                {d.interp.map((it, i) => (
+                  <li key={i} className="flex items-start gap-1.5 text-[11.5px] font-semibold" style={{ color: it.color }}>
+                    <span className="mt-[5px] h-1.5 w-1.5 shrink-0 rounded-full" style={{ background: it.color }} />{it.txt}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
+        </div>
+        <div className="mt-3 rounded-lg px-3.5 py-2 text-[11.5px] font-semibold text-surface-700" style={{ background: "#eaf4fd" }}>
+          <b>Lecture rapide :</b> ① le taux de concordance évalue la cohérence · ② l'écart moyen mesure l'ampleur moyenne des différences · ③ le taux d'erreur indique la fréquence des discordances.
+        </div>
+      </details>
+    </section>
+  );
+}
 
 /** Cellule mensuelle colorée selon la classe de concordance. */
 function ConcCell({ v }: { v: number | null }) {
@@ -96,7 +173,15 @@ export function CqdCsComparaison() {
   const { b, live } = useLevel("as");
   return (
     <div className="space-y-4">
-      <Banner icon="chart" tone="blue" title="Centres de santé — Comparaison des sources de données" sub="Source de référence : registre de vaccination — comparé au pointage, SNIS et DHIS2, par antigène" />
+      <Banner icon="chart" tone="blue" title="Centres de santé — Comparaison des sources de données" sub="Source de référence : registre de vaccination — comparé au pointage et au SNIS, par antigène" />
+      <CqdDefinitions />
+      <div className="card card-pad" style={{ background: "#eaf4fd" }}>
+        <div className="text-[12px] leading-relaxed text-surface-700">
+          <b>Comment lire cette page :</b> l'outil de référence est le <b>registre de vaccination</b>. L'écart moyen mesure la
+          différence moyenne entre les chiffres retrouvés dans les autres outils (fiche de pointage, canevas SNIS) et le chiffre du
+          registre — plus l'écart moyen est faible, plus les outils sont cohérents avec l'outil de référence.
+        </div>
+      </div>
       <section>
         <SectionBar icon="bars">Écart moyen par rapport au registre de vaccination, par antigène</SectionBar>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -105,21 +190,20 @@ export function CqdCsComparaison() {
         </div>
       </section>
       <div className="card card-pad">
-        <CardTitle icon="component" tone="navy" title="Comparaison des sources (somme des CS)" sub="Pointage · Registre · SNIS · DHIS2" />
+        <CardTitle icon="component" tone="navy" title="Comparaison des sources (somme des CS)" sub="Pointage · Registre · SNIS" />
         {live && b ? (
-          <ProtoGroupedBar height={260} colors={[C.orange, C.green, C.blue, C.navy]} cats={ANT4}
+          <ProtoGroupedBar height={260} colors={[C.orange, C.green, C.blue]} cats={ANT4}
             series={[
               { name: "Pointage", data: ANT4.map((l) => antByLabel(b, l)?.pointage ?? 0) },
               { name: "Registre", data: ANT4.map((l) => antByLabel(b, l)?.registre ?? 0) },
               { name: "SNIS", data: ANT4.map((l) => antByLabel(b, l)?.snis ?? 0) },
-              { name: "DHIS2", data: ANT4.map((l) => antByLabel(b, l)?.dhis2 ?? 0) },
             ]} />
         ) : <Empty />}
       </div>
       <div className="card card-pad" style={{ background: "#eaf4fd" }}>
         <div className="text-[12.5px] font-semibold text-surface-700">
           <b>Méthodologie de calcul des écarts :</b> la source de référence est le <b>registre de vaccination</b>.
-          L'écart moyen correspond à la somme des écarts absolus de chaque source comparée (pointage, SNIS, DHIS2) par rapport au registre,
+          L'écart moyen correspond à la somme des écarts absolus de chaque source comparée (pointage, SNIS) par rapport au registre,
           divisée par le nombre de sources comparées, puis rapportée à la valeur du registre et exprimée en pourcentage.
         </div>
       </div>
@@ -140,26 +224,26 @@ export function CqdCsConcordance() {
     : [];
   return (
     <div className="space-y-4">
-      <Banner icon="concord" tone="green" title="Contrôle qualité des données des centres de santé" sub="Taux de concordance — chaîne Fiche de pointage → Registre → SNIS · seuils 95–105" />
+      <Banner icon="concord" tone="green" title="Contrôle qualité des données des centres de santé" sub="Facteur de vérification — chaîne Fiche de pointage → Registre → SNIS · seuils 95–105" />
       <section>
-        <SectionBar icon="bars">Indicateurs de concordance</SectionBar>
+        <SectionBar icon="bars">Facteurs de vérification par rapport à l'outil de référence</SectionBar>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          <KpiTile icon="concord" tone="green" label="Concordance globale SNIS / Registre" value={pctTxt(cc?.globalSnisRegistre ?? null)} sub={cc?.globalSnisRegistre == null ? "" : concClass(classOf(cc.globalSnisRegistre))} />
-          <KpiTile icon="concord" tone="orange" label="Concordance globale Registre / Pointage" value={pctTxt(cc?.globalRegistrePointage ?? null)} sub={cc?.globalRegistrePointage == null ? "" : concClass(classOf(cc.globalRegistrePointage))} />
+          <KpiTile icon="concord" tone="green" label="Facteur de vérification SNIS / Registre" value={pctTxt(cc?.globalSnisRegistre ?? null)} sub={cc?.globalSnisRegistre == null ? "" : concClass(classOf(cc.globalSnisRegistre))} />
+          <KpiTile icon="concord" tone="orange" label="Facteur de vérification Registre / Pointage" value={pctTxt(cc?.globalRegistrePointage ?? null)} sub={cc?.globalRegistrePointage == null ? "" : concClass(classOf(cc.globalRegistrePointage))} />
           <KpiTile icon="down" tone="orange" label="Sous-rapportage" value={cc ? `${cc.asSousRapportage} AS` : "—"} />
           <KpiTile icon="up" tone="red" label="Sur-rapportage" value={cc ? `${cc.asSurRapportage} AS` : "—"} />
         </div>
       </section>
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-3">
         <div className="card card-pad lg:col-span-7">
-          <CardTitle icon="bars" tone="blue" title="Concordance globale par antigène" sub="SNIS / Registre · Registre / Pointage — seuils 95–105" />
+          <CardTitle icon="bars" tone="blue" title="Facteur de vérification par antigène" sub="SNIS / Registre · Registre / Pointage — seuils 95–105" />
           {live && cc ? <ProtoConcHBar height={250} maxName={150} rows={chartRows} /> : <Empty />}
         </div>
-        <div className="lg:col-span-5"><Interpretation /></div>
+        <div className="lg:col-span-5"><Interpretation label="Facteur de vérification" /></div>
       </div>
-      <ConcTable title="Concordance SNIS / Registre par aire de santé" sub="Par antigène et par mois — SNIS transcrit du registre"
+      <ConcTable title="Facteur de vérification SNIS / Registre par aire de santé" sub="Par antigène et par mois — SNIS transcrit du registre"
         label="AS" data={cc?.snisRegistre ?? []} months={cc?.months ?? []} />
-      <ConcTable title="Concordance Registre / Pointage par aire de santé" sub="Par antigène et par mois — registre compilé depuis la feuille de pointage"
+      <ConcTable title="Facteur de vérification Registre / Pointage par aire de santé" sub="Par antigène et par mois — registre compilé depuis la feuille de pointage"
         label="AS" data={cc?.registrePointage ?? []} months={cc?.months ?? []} />
     </div>
   );
@@ -287,12 +371,13 @@ export function CqdCsEnfants() {
       <Banner icon="child" tone="blue" title="Contrôle qualité des données des centres de santé" sub="Identification des enfants manqués — identifiés · retrouvés par les relais · récupérés" />
       <section>
         <SectionBar icon="child">Enfants manqués / à récupérer</SectionBar>
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
           <KpiTile icon="child" tone="navy" label="Enfants identifiés précédemment" value={e.identifies} />
-          <KpiTile icon="clip" tone="violet" label="Identifiés récemment (supervision en cours)" value={e.aRecuperer} />
           <KpiTile icon="people" tone="orange" label="Retrouvés par les relais" value={e.retrouves} />
           <KpiTile icon="check" tone="green" label="Effectivement récupérés" value={e.recuperes} sub={`Taux : ${pctTxt(e.tauxRecuperes)}`} />
           <KpiTile icon="building" tone="teal" label="AS prioritaire" value={asPrioritaire} />
+          <KpiTile icon="form" tone="blue" label="Listes d'enfants manqués remises aux équipes CS" value={pctTxt(b?.listesRemisesPct ?? null)} sub="% des centres contrôlés" />
+          <KpiTile icon="clip" tone="violet" label="Identifiés récemment (supervision en cours)" value={e.aRecuperer} />
         </div>
       </section>
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-3">
@@ -322,12 +407,75 @@ export function CqdCsEnfants() {
         ) : <Empty />}
       </div>
       <div className="card card-pad">
+        <CardTitle icon="table" tone="navy" title="Enfants manqués par aire de santé et par antigène" sub="Tranches d'âge : 0–11 mois · 12–23 mois · 24–59 mois"
+          right={<TableExportButtons filename="Enfants manqués par aire de santé et par antigène" />} />
+        <MissedByAntigenTable b={b} />
+      </div>
+      <div className="card card-pad">
         <CardTitle icon="report" tone="blue" title="Messages clés" sub="Synthèse automatique" />
         <ul className="space-y-2 pt-1 text-[12.5px] font-semibold text-surface-700">
           {(messages.length ? messages : ["Aucune donnée disponible."]).map((m, i) => (
             <li key={i} className="flex items-start gap-2"><span className="mt-[6px] h-1.5 w-1.5 shrink-0 rounded-full" style={{ background: C.blue }} />{m}</li>
           ))}
         </ul>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Tableau « Enfants manqués par aire de santé et par antigène » (feedback TL) :
+ * lignes = antigènes, colonnes = tranches d'âge, sélecteur d'AS au-dessus
+ * (agrégat de la sélection par défaut). État vide propre si le formulaire CQD
+ * n'expose pas (encore) les champs antigène × âge.
+ */
+function MissedByAntigenTable({ b }: { b: CqdLevelBundle | undefined }) {
+  const [selAs, setSelAs] = useState<string>("");
+  const m = b?.manquesParAntigene;
+  if (!m || !m.available || !m.structures.length) {
+    return (
+      <Empty msg="Champs « enfants manqués par antigène × âge » non disponibles dans le formulaire CQD pour cette sélection — le tableau s'alimentera automatiquement dès que les colonnes existeront dans Kobo." />
+    );
+  }
+  const structures = selAs ? m.structures.filter((st) => st.name === selAs) : m.structures;
+  const sum = (label: string, key: "a0_11" | "a12_23" | "a24_59") =>
+    structures.reduce((a, st) => a + (st.values[label]?.[key] ?? 0), 0);
+  const rows = m.antigenes.map((label) => ({
+    label,
+    a0_11: sum(label, "a0_11"),
+    a12_23: sum(label, "a12_23"),
+    a24_59: sum(label, "a24_59"),
+  }));
+  const tot = (key: "a0_11" | "a12_23" | "a24_59") => rows.reduce((a, r) => a + r[key], 0);
+  return (
+    <div>
+      <div className="mb-2 flex items-center gap-2">
+        <label className="text-[10px] font-extrabold uppercase tracking-wide text-slate-500">Aire de santé</label>
+        <select
+          className="cursor-pointer rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-[12px] font-bold text-navy-700 outline-none hover:border-oms-500"
+          value={selAs}
+          onChange={(ev) => setSelAs(ev.target.value)}
+        >
+          <option value="">Toutes (agrégat de la sélection)</option>
+          {m.structures.map((st) => <option key={st.name} value={st.name}>{st.name}</option>)}
+        </select>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="dtable">
+          <thead><tr><th className="name">Antigène</th><th>0–11 mois</th><th>12–23 mois</th><th>24–59 mois</th><th>Total</th></tr></thead>
+          <tbody>
+            {rows.map((r) => (
+              <tr key={r.label}>
+                <td className="name">{r.label}</td>
+                <td>{r.a0_11}</td>
+                <td>{r.a12_23}</td>
+                <td>{r.a24_59}</td>
+                <td style={{ fontWeight: 800, color: C.navy }}>{r.a0_11 + r.a12_23 + r.a24_59}</td>
+              </tr>
+            ))}
+          </tbody>
+          <tfoot><tr><td className="name">Total</td><td>{tot("a0_11")}</td><td>{tot("a12_23")}</td><td>{tot("a24_59")}</td><td style={{ fontWeight: 800 }}>{tot("a0_11") + tot("a12_23") + tot("a24_59")}</td></tr></tfoot>
+        </table>
       </div>
     </div>
   );
@@ -349,6 +497,7 @@ export function CqdZsComparaison() {
   return (
     <div className="space-y-4">
       <Banner icon="chart" tone="navy" title="Zones de santé — Comparaison SNIS / DHIS2" sub="SNIS des AS – DHIS2 des mêmes AS (échantillon de 3 AS sur 3 mois)" />
+      <CqdDefinitions />
       <section>
         <SectionBar icon="bars">Écart moyen SNIS / DHIS2 par antigène</SectionBar>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">

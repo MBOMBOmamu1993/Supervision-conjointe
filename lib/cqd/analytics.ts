@@ -111,6 +111,71 @@ function col(columns: string[], candidates: string[]): string | null {
   return findColumn(columns, candidates);
 }
 
+/* ---------- Enfants manqués par antigène × tranche d'âge (feedback TL) ---------- */
+
+/** Antigènes du tableau « enfants manqués par antigène » (ordre du feedback). */
+export const MISSED_ANTIGENS: { label: string; tokens: string[] }[] = [
+  { label: "BCG", tokens: ["bcg"] },
+  { label: "VPO1", tokens: ["vpo1", "opv1"] },
+  { label: "VPO2", tokens: ["vpo2", "opv2"] },
+  { label: "VPO3", tokens: ["vpo3", "opv3"] },
+  { label: "PENTA1", tokens: ["penta1", "dtc1"] },
+  { label: "PENTA2", tokens: ["penta2", "dtc2"] },
+  { label: "PENTA3", tokens: ["penta3", "dtc3"] },
+  { label: "PCV1", tokens: ["pcv13_1", "pcv1"] },
+  { label: "PCV2", tokens: ["pcv13_2", "pcv2"] },
+  { label: "PCV3", tokens: ["pcv13_3", "pcv3"] },
+  { label: "ROTA1", tokens: ["rota1"] },
+  { label: "ROTA2", tokens: ["rota2"] },
+  { label: "ROTA3", tokens: ["rota3"] },
+  { label: "VPI1", tokens: ["vpi1", "ipv1"] },
+  { label: "VPI2", tokens: ["vpi2", "ipv2"] },
+  { label: "VAA", tokens: ["vaa", "yf"] },
+  { label: "RR1", tokens: ["rr1", "var1"] },
+  { label: "RR2", tokens: ["rr2", "var2"] },
+  { label: "VAP1", tokens: ["vap1", "hpv1"] },
+  { label: "VAP2", tokens: ["vap2", "hpv2"] },
+  { label: "VAP3", tokens: ["vap3", "hpv3"] },
+  { label: "VAP4", tokens: ["vap4", "hpv4"] },
+];
+const AGE_KEYS = ["a0_11", "a12_23", "a24_59"] as const;
+const AGE_TOKENS: Record<(typeof AGE_KEYS)[number], string[]> = {
+  a0_11: ["0_11", "0a11", "0 11"],
+  a12_23: ["12_23", "12a23", "12 23"],
+  a24_59: ["24_59", "24a59", "24 59"],
+};
+
+/**
+ * Détecte les colonnes « enfants manqués » antigène × âge du formulaire CQD :
+ * la feuille du nom doit contenir un jeton d'antigène ET un jeton d'âge ; les
+ * colonnes contenant « manq »/« enfant » sont prioritaires en cas d'ambiguïté.
+ * Renvoie null si AUCUNE paire n'est trouvée (champs pas encore au formulaire).
+ */
+function detectMissedAntigenColumns(columns: string[]): Map<string, Partial<Record<(typeof AGE_KEYS)[number], string>>> | null {
+  const leafN = (c: string) => norm(c.slice(c.lastIndexOf("/") + 1)).replace(/ /g, "_");
+  const out = new Map<string, Partial<Record<(typeof AGE_KEYS)[number], string>>>();
+  let found = 0;
+  for (const ag of MISSED_ANTIGENS) {
+    for (const ageKey of AGE_KEYS) {
+      let best: string | null = null;
+      let bestScore = -1;
+      for (const c of columns) {
+        const n = leafN(c);
+        if (!ag.tokens.some((t) => n.includes(t))) continue;
+        if (!AGE_TOKENS[ageKey].some((t) => n.includes(t.replace(/ /g, "_")))) continue;
+        const score = (n.includes("manq") ? 2 : 0) + (n.includes("enfant") ? 1 : 0);
+        if (score > bestScore) { bestScore = score; best = c; }
+      }
+      if (best) {
+        if (!out.has(ag.label)) out.set(ag.label, {});
+        out.get(ag.label)![ageKey] = best;
+        found++;
+      }
+    }
+  }
+  return found > 0 ? out : null;
+}
+
 function buildRecords(src: CqdFetch): CqdRecord[] {
   const rows = src.rows;
   const columns = getColumns(rows);
@@ -146,6 +211,12 @@ function buildRecords(src: CqdFetch): CqdRecord[] {
   const eIdent = c(["nb_enfants_identifies_precedemment", "enfants_identifies_precedemment"]);
   const eRetr = c(["nb_enfants_retrouves_relais", "enfants_retrouves_relais"]);
   const eRecup = c(["nb_enfants_effectivement_recuperes", "enfants_effectivement_recuperes"]);
+  // Enfants manqués par antigène × âge + remise des listes aux équipes CS.
+  const missedCols = detectMissedAntigenColumns(columns);
+  const listeRemiseCol = columns.find((cc) => {
+    const n = norm(cc.slice(cc.lastIndexOf("/") + 1));
+    return n.includes("liste") && (n.includes("remis") || n.includes("transmis"));
+  }) ?? null;
 
   const grab = (row: RawRow, cc: { p1: string | null; p3: string | null; rr1: string | null; rr2: string | null }) => ({
     p1: cc.p1 ? num(row[cc.p1]) : 0,
@@ -194,6 +265,20 @@ function buildRecords(src: CqdFetch): CqdRecord[] {
       enfantsIdentifies: eIdent ? num(row[eIdent]) : 0,
       enfantsRetrouves: eRetr ? num(row[eRetr]) : 0,
       enfantsRecuperes: eRecup ? num(row[eRecup]) : 0,
+      manquesAntigene: missedCols
+        ? (() => {
+            const m: Record<string, { a0_11: number; a12_23: number; a24_59: number }> = {};
+            for (const [label, cols] of missedCols.entries()) {
+              m[label] = {
+                a0_11: cols.a0_11 ? num(row[cols.a0_11]) : 0,
+                a12_23: cols.a12_23 ? num(row[cols.a12_23]) : 0,
+                a24_59: cols.a24_59 ? num(row[cols.a24_59]) : 0,
+              };
+            }
+            return m;
+          })()
+        : null,
+      listeRemise: listeRemiseCol ? boolFr(row[listeRemiseCol]) : null,
     };
   });
 }
@@ -403,6 +488,32 @@ function buildLevel(level: "zs" | "as", records: CqdRecord[]): CqdLevelBundle {
     dhis2Snis: buildConcTable((r) => r.dhis2, (r) => r.snis),
   };
 
+  // Enfants manqués par antigène × âge, par structure (si champs présents).
+  const withMissed = records.filter((r) => r.manquesAntigene !== null);
+  const missedAntigenes = MISSED_ANTIGENS.map((a) => a.label);
+  const manquesParAntigene = {
+    available: withMissed.length > 0,
+    antigenes: missedAntigenes,
+    structures: withMissed.length
+      ? Array.from(byStruct.entries())
+          .map(([name, recs]) => {
+            const values: Record<string, { a0_11: number; a12_23: number; a24_59: number }> = {};
+            for (const label of missedAntigenes) {
+              const acc = { a0_11: 0, a12_23: 0, a24_59: 0 };
+              for (const r of recs) {
+                const v = r.manquesAntigene?.[label];
+                if (v) { acc.a0_11 += v.a0_11; acc.a12_23 += v.a12_23; acc.a24_59 += v.a24_59; }
+              }
+              values[label] = acc;
+            }
+            return { name, values };
+          })
+          .sort((a, b) => a.name.localeCompare(b.name))
+      : [],
+  };
+  const listesVals = records.map((r) => r.listeRemise).filter((v): v is boolean => v !== null);
+  const listesRemisesPct = listesVals.length ? r1((listesVals.filter(Boolean).length / listesVals.length) * 100) : null;
+
   return {
     level,
     records: records.length,
@@ -424,6 +535,8 @@ function buildLevel(level: "zs" | "as", records: CqdRecord[]): CqdLevelBundle {
       recuperes: eRecup,
       tauxRecuperes: eIdent > 0 ? r1((eRecup / eIdent) * 100) : null,
     },
+    manquesParAntigene,
+    listesRemisesPct,
     antigenes: [
       { antigene: "PENTA1", registre: sumOf((r) => r.registre.p1), pointage: sumOf((r) => r.pointage.p1), snis: sumOf((r) => r.snis.p1), dhis2: sumOf((r) => r.dhis2.p1) },
       { antigene: "PENTA3", registre: regP3, pointage: sumOf((r) => r.pointage.p3), snis: snisP3, dhis2: dhis2P3 },
