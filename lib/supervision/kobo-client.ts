@@ -172,7 +172,39 @@ export async function fetchSource(src: KoboSource, opts: { force?: boolean } = {
       },
       { retries: MAX_ATTEMPTS - 1, minTimeout: 1000, maxTimeout: 4000 }
     );
-    const result: SourceFetch = { level: src.key, label: src.label, rows: mergeCsSeed(src.key, rows), ok: true };
+    // ANCIEN formulaire du même niveau (asset legacy) : ses soumissions sont
+    // récupérées via l'API et ajoutées si absentes (dédoublonnage par _uuid).
+    // Un échec sur le legacy ne casse jamais la source principale.
+    let merged = rows;
+    if (src.legacy) {
+      try {
+        const legacySrc: KoboSource = {
+          key: src.key,
+          label: `${src.label} (ancien formulaire)`,
+          assetUid: src.legacy.assetUid,
+          exportUid: src.legacy.exportUid ?? "",
+        };
+        const [lx, lj] = await Promise.allSettled([
+          src.legacy.exportUid ? fetchSourceXlsx(legacySrc) : Promise.reject(new Error("pas d'export XLSX legacy")),
+          fetchSourceJson(legacySrc),
+        ]);
+        const legacyRows = mergeSourceRows(
+          lx.status === "fulfilled" ? lx.value : null,
+          lj.status === "fulfilled" ? lj.value : null
+        );
+        if (legacyRows.length) {
+          const present = new Set(merged.map((r) => String(r["_uuid"] ?? "")).filter(Boolean));
+          const extra = legacyRows.filter((r) => {
+            const u = String(r["_uuid"] ?? "");
+            return u !== "" && !present.has(u);
+          });
+          if (extra.length) merged = merged.concat(extra);
+        }
+      } catch {
+        /* legacy indisponible : on garde la source principale + le seed local */
+      }
+    }
+    const result: SourceFetch = { level: src.key, label: src.label, rows: mergeCsSeed(src.key, merged), ok: true };
     cacheSet(cacheKey, result);
     return result;
   } catch (err) {
@@ -216,21 +248,37 @@ export async function fetchCqdSource(src: CqdSource, opts: { force?: boolean } =
   try {
     const rows = await pRetry(
       async () => {
-        // Données LIVE (data.json) prioritaires : l'export XLSX figé d'une
-        // export-setting Kobo n'est pas régénéré à chaque soumission et peut
-        // donc ne refléter qu'une partie des contrôles (ex. 1 CS au lieu de 3).
-        // Le JSON expose les noms techniques attendus par l'analytique CQD.
-        try {
-          const buf = await fetchBuffer(dataUrl, "application/json");
-          const json = JSON.parse(new TextDecoder().decode(buf));
-          const live = (Array.isArray(json) ? json : json.results ?? []) as RawRow[];
-          if (live.length) return live;
-          throw new Error("data.json vide → repli sur l'export XLSX");
-        } catch (e) {
-          if (e instanceof AbortError) throw e;
-          const buf = await fetchBuffer(exportUrl, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
-          return parseXlsx(buf);
+        // FUSION data.json live + export XLSX figé (dédoublonnage par _uuid) :
+        // le live (noms techniques) est complet et prioritaire, mais l'export
+        // XLSX « toutes versions » peut contenir d'anciennes soumissions
+        // (anciennes versions du formulaire) absentes d'un côté — on ne perd
+        // aucun contrôle qualité.
+        const [liveRes, xlsxRes] = await Promise.allSettled([
+          (async () => {
+            const buf = await fetchBuffer(dataUrl, "application/json");
+            const json = JSON.parse(new TextDecoder().decode(buf));
+            return (Array.isArray(json) ? json : json.results ?? []) as RawRow[];
+          })(),
+          (async () => {
+            const buf = await fetchBuffer(exportUrl, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+            return parseXlsx(buf);
+          })(),
+        ]);
+        if (liveRes.status === "rejected" && liveRes.reason instanceof AbortError) throw liveRes.reason;
+        if (xlsxRes.status === "rejected" && xlsxRes.reason instanceof AbortError) throw xlsxRes.reason;
+        const live = liveRes.status === "fulfilled" ? liveRes.value : null;
+        const xlsx = xlsxRes.status === "fulfilled" ? xlsxRes.value : null;
+        if (!live && !xlsx) {
+          throw (liveRes.status === "rejected" ? liveRes.reason : (xlsxRes as PromiseRejectedResult).reason);
         }
+        if (!live || live.length === 0) return xlsx ?? [];
+        if (!xlsx || xlsx.length === 0) return live;
+        const present = new Set(live.map((r) => String(r["_uuid"] ?? "")).filter(Boolean));
+        const extra = xlsx.filter((r) => {
+          const u = String(r["_uuid"] ?? "");
+          return u !== "" && !present.has(u);
+        });
+        return extra.length ? live.concat(extra) : live;
       },
       { retries: MAX_ATTEMPTS - 1, minTimeout: 1000, maxTimeout: 4000 }
     );

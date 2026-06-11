@@ -22,6 +22,13 @@ export interface KoboSource {
   label: string;
   assetUid: string;
   exportUid: string;
+  /**
+   * ANCIEN formulaire Kobo du même niveau (avant création du nouvel asset).
+   * Ses soumissions sont récupérées via l'API et fusionnées (dédoublonnage par
+   * _uuid) avec celles du nouvel asset — les anciennes données restent ainsi
+   * visibles dans le dashboard.
+   */
+  legacy?: { assetUid: string; exportUid?: string };
 }
 
 export const KOBO_BASE_URL = "https://eu.kobotoolbox.org";
@@ -33,7 +40,14 @@ export const KOBO_SOURCES: KoboSource[] = [
   { key: "antenne", label: "Checklist supervision Antenne PEV", assetUid: "axvaHRq3XGozr8o3z4wr5u", exportUid: "esTwbAKe5dn2FTAcbbagXL8" },
   { key: "zs", label: "Checklist supervision PEV — Zone de santé", assetUid: "axsB6RwiENF3FC2eZzsH3m", exportUid: "esTZSfTTAYYvcLtRbJdr6Jh" },
   // Centre de santé : NOUVEL asset (formulaire avec « Type de supervision »).
-  { key: "as", label: "Checklist supervision — Centre de santé", assetUid: "af5W55HqW8nPgqyC5jgALc", exportUid: "esiVtGnbm8cm2VKD2AR672n" },
+  // L'ANCIEN formulaire « Checklist supervision PEV — Centre de Santé — Tshuapa »
+  // (asset d'origine) est conservé en source legacy : ses soumissions sont
+  // récupérées via l'API et fusionnées avec celles du nouvel asset.
+  {
+    key: "as", label: "Checklist supervision — Centre de santé",
+    assetUid: "af5W55HqW8nPgqyC5jgALc", exportUid: "esiVtGnbm8cm2VKD2AR672n",
+    legacy: { assetUid: "ac8zZ9oE8VWoHXS3iSKRTQ", exportUid: "esNgSLpkCsawjAQXWtSgL6b" },
+  },
 ];
 
 /** Formulaires CQD (Contrôle Qualité des Données). */

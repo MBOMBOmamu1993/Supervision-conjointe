@@ -177,9 +177,10 @@ export function CqdCsComparaison() {
       <CqdDefinitions />
       <div className="card card-pad" style={{ background: "#eaf4fd" }}>
         <div className="text-[12px] leading-relaxed text-surface-700">
-          <b>Comment lire cette page :</b> l'outil de référence est le <b>registre de vaccination</b>. L'écart moyen mesure la
-          différence moyenne entre les chiffres retrouvés dans les autres outils (fiche de pointage, canevas SNIS) et le chiffre du
-          registre — plus l'écart moyen est faible, plus les outils sont cohérents avec l'outil de référence.
+          <b>Écart moyen :</b> différence moyenne entre les chiffres retrouvés dans les outils comparés (fiche de pointage,
+          canevas SNIS) et le chiffre de l'outil de référence — ici le <b>registre de vaccination</b>. Formule :
+          Σ |valeur outil comparé − valeur du registre| ÷ nombre d'outils comparés, rapportée à la valeur du registre (%).
+          Plus l'écart moyen est faible, plus les outils sont cohérents avec l'outil de référence.
         </div>
       </div>
       <section>
@@ -200,13 +201,6 @@ export function CqdCsComparaison() {
             ]} />
         ) : <Empty />}
       </div>
-      <div className="card card-pad" style={{ background: "#eaf4fd" }}>
-        <div className="text-[12.5px] font-semibold text-surface-700">
-          <b>Méthodologie de calcul des écarts :</b> la source de référence est le <b>registre de vaccination</b>.
-          L'écart moyen correspond à la somme des écarts absolus de chaque source comparée (pointage, SNIS) par rapport au registre,
-          divisée par le nombre de sources comparées, puis rapportée à la valeur du registre et exprimée en pourcentage.
-        </div>
-      </div>
     </div>
   );
 }
@@ -225,6 +219,14 @@ export function CqdCsConcordance() {
   return (
     <div className="space-y-4">
       <Banner icon="concord" tone="green" title="Contrôle qualité des données des centres de santé" sub="Facteur de vérification — chaîne Fiche de pointage → Registre → SNIS · seuils 95–105" />
+      <div className="card card-pad" style={{ background: "#eaf4fd" }}>
+        <div className="text-[12px] leading-relaxed text-surface-700">
+          <b>Facteur de vérification (ou taux de concordance) :</b> mesure le niveau de cohérence entre les données rapportées
+          dans un outil contrôlé et les données retrouvées dans l'outil de référence. Formule : (valeur retrouvée dans l'outil
+          vérifié ÷ valeur de l'outil de référence) × 100. Interprétation : <b>95–105 %</b> = bonne concordance ·
+          <b> &lt; 95 %</b> = sous-rapportage · <b>&gt; 105 %</b> = sur-rapportage.
+        </div>
+      </div>
       <section>
         <SectionBar icon="bars">Facteurs de vérification par rapport à l'outil de référence</SectionBar>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -434,7 +436,7 @@ function MissedByAntigenTable({ b }: { b: CqdLevelBundle | undefined }) {
   const m = b?.manquesParAntigene;
   if (!m || !m.available || !m.structures.length) {
     return (
-      <Empty msg="Champs « enfants manqués par antigène × âge » non disponibles dans le formulaire CQD pour cette sélection — le tableau s'alimentera automatiquement dès que les colonnes existeront dans Kobo." />
+      <Empty msg="Le champ « enfants manqués par antigène × âge » existe dans le formulaire CQD, mais aucune donnée n'a encore été renseignée pour cette sélection / cette période — le tableau s'alimentera automatiquement dès les premières saisies dans Kobo." />
     );
   }
   const structures = selAs ? m.structures.filter((st) => st.name === selAs) : m.structures;
@@ -527,11 +529,18 @@ export function CqdZsConcordance() {
     : [];
   return (
     <div className="space-y-4">
-      <Banner icon="concord" tone="blue" title="Contrôle qualité des données des zones de santé" sub="Taux de concordance DHIS2 / SNIS — DHIS2 transcrit du SNIS · seuils 95–105" />
+      <Banner icon="concord" tone="blue" title="Contrôle qualité des données des zones de santé" sub="Facteur de vérification DHIS2 / SNIS — DHIS2 transcrit du SNIS · seuils 95–105" />
+      <div className="card card-pad" style={{ background: "#eaf4fd" }}>
+        <div className="text-[12px] leading-relaxed text-surface-700">
+          <b>Facteur de vérification (ou taux de concordance) :</b> (valeur retrouvée dans l'outil vérifié — DHIS2 ÷ valeur de
+          l'outil de référence — SNIS) × 100. Le facteur de vérification permet de déterminer la concordance des données :
+          <b> 95–105 %</b> = bonne concordance · <b>&lt; 95 %</b> = sous-rapportage · <b>&gt; 105 %</b> = sur-rapportage.
+        </div>
+      </div>
       <section>
-        <SectionBar icon="bars">Indicateurs de concordance</SectionBar>
+        <SectionBar icon="bars">Facteurs de vérification</SectionBar>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          <KpiTile icon="concord" tone="teal" label="Concordance globale DHIS2 / SNIS" value={pctTxt(g)} sub={g == null ? "" : concClass(classOf(g))} />
+          <KpiTile icon="concord" tone="teal" label="Facteur de vérification DHIS2 / SNIS" value={pctTxt(g)} sub={g == null ? "" : concClass(classOf(g))} />
           <KpiTile icon="down" tone="orange" label="ZS en sous-rapportage" value={cc ? `${cc.zsSousRapportage} ZS` : "—"} />
           <KpiTile icon="up" tone="red" label="ZS en sur-rapportage" value={cc ? `${cc.zsSurRapportage} ZS` : "—"} />
           <KpiTile icon="calendar" tone="blue" label="Mois analysés" value={cc ? cc.months.length : "—"} />
@@ -539,17 +548,17 @@ export function CqdZsConcordance() {
       </section>
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-3">
         <div className="card card-pad lg:col-span-5">
-          <CardTitle icon="bars" tone="blue" title="Concordance globale par antigène" sub="DHIS2 / SNIS — seuils 95–105" />
+          <CardTitle icon="bars" tone="blue" title="Facteur de vérification par antigène" sub="DHIS2 / SNIS — seuils 95–105" />
           {live && cc ? <ProtoConcHBar height={210} maxName={140} rows={chartRows} /> : <Empty />}
         </div>
         <div className="lg:col-span-7">
-          <ConcTable title="Concordance DHIS2 / SNIS par zone de santé" sub="Par antigène et par mois"
+          <ConcTable title="Facteur de vérification DHIS2 / SNIS par zone de santé" sub="Par antigène et par mois"
             label="ZS" data={cc?.dhis2Snis ?? []} months={cc?.months ?? []} />
         </div>
       </div>
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
         <LectureRapideZs g={g} sous={cc?.zsSousRapportage ?? 0} sur={cc?.zsSurRapportage ?? 0} parAntigene={cc?.parAntigene} />
-        <Interpretation />
+        <Interpretation label="Facteur de vérification" />
       </div>
     </div>
   );
@@ -561,7 +570,7 @@ function LectureRapideZs({ g, sous, sur, parAntigene }: {
   parAntigene?: { antigene: string; dhis2Snis: number | null }[];
 }) {
   const points: string[] = [];
-  if (g != null) points.push(g >= 95 && g <= 105 ? "Concordance globale satisfaisante (dans les seuils 95–105)." : g < 95 ? "Concordance globale en sous-rapportage (< 95 %)." : "Concordance globale en sur-rapportage (> 105 %).");
+  if (g != null) points.push(g >= 95 && g <= 105 ? "Facteur de vérification global satisfaisant (dans les seuils 95–105)." : g < 95 ? "Facteur de vérification global en sous-rapportage (< 95 %)." : "Facteur de vérification global en sur-rapportage (> 105 %).");
   const hors = (parAntigene ?? []).filter((a) => a.dhis2Snis != null && (a.dhis2Snis < 95 || a.dhis2Snis > 105)).map((a) => a.antigene);
   if (hors.length) points.push(`Discordances ponctuelles sur ${hors.join(", ")}.`);
   if (sous || sur) points.push(`${sous} ZS en sous-rapportage · ${sur} ZS en sur-rapportage.`);
@@ -580,9 +589,14 @@ function LectureRapideZs({ g, sous, sur, parAntigene }: {
 
 /* ===================== ZS — 3. Erreurs ===================== */
 export function CqdZsErreurs() {
-  const { b, live } = useLevel("zs");
+  const { b, live, months } = useLevel("zs");
   const rows = b?.parStructure ?? [];
   const systematiques = rows.filter((r) => (r.erreurSnisDhis2 ?? 0) >= 50).length;
+  // Comparaisons : réalisées = ZS contrôlées × 4 antigènes × mois contrôlés ;
+  // attendues = dénominateur FIXE du protocole CQD (feedback Dr Léandre) :
+  // 4 antigènes × 3 zones de santé × 3 mois = 36 — il ne change pas avec les filtres.
+  const COMPARAISONS_ATTENDUES = 4 * 3 * 3;
+  const realisees = rows.length * 4 * Math.max(1, months.length);
   const top5 = [...rows].sort((a, c) => (c.erreurSnisDhis2 ?? 0) - (a.erreurSnisDhis2 ?? 0)).slice(0, 5);
   return (
     <div className="space-y-4">
@@ -592,7 +606,7 @@ export function CqdZsErreurs() {
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           <KpiTile icon="erreurs" tone="red" label="Taux d'erreur moyen" value={pctTxt(b?.erreurSnisDhis2 ?? null)} sub="SNIS / DHIS2" />
           <KpiTile icon="alert" tone="orange" label="ZS erreurs systématiques" value={systematiques} sub="≥ 50 %" />
-          <KpiTile icon="concord" tone="navy" label="Comparaisons réalisées" value={rows.length * 4} sub={`${rows.length} ZS × 4 antigènes`} />
+          <KpiTile icon="concord" tone="navy" label="Comparaisons réalisées" value={`${realisees} / ${COMPARAISONS_ATTENDUES}`} sub="Attendues : 4 antigènes × 3 ZS × 3 mois (dénominateur fixe)" />
           <KpiTile icon="syringe" tone="blue" label="Antigènes suivis" value={4} sub="PENTA1·3 · RR1·2" />
         </div>
       </section>

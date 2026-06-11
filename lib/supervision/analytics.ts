@@ -23,11 +23,14 @@ import {
   detectScoreQuestions,
   getColumns,
   norm,
-  resolveGeoColumns,
+  resolveGeoColumnCandidates,
   resolveTypeLabel,
   type ScoreQuestion,
 } from "./schema";
-import { antenneOfZone, canonAntenne, zoneOfAire } from "@/lib/geo";
+import {
+  antenneOfZone, canonAntenne, zoneOfAire,
+  prettifyName, cleanZoneLabel, cleanAireLabel,
+} from "@/lib/geo";
 import type { SourceFetch } from "./kobo-client";
 import type {
   ComposanteAnswerDist,
@@ -127,7 +130,21 @@ const r1 = (n: number | null): number | null => (n === null ? null : Math.round(
 function buildRecords(source: SourceFetch): { records: SupervisionRecord[]; rows: RawRow[]; scoreQs: ScoreQuestion[] } {
   const rows = source.rows;
   const columns = getColumns(rows);
-  const geo = resolveGeoColumns(columns);
+  // TOUTES les colonnes candidates par champ géo : un même jeu de lignes mêle
+  // l'export XLSX (libellés français), le data.json live (noms techniques
+  // préfixés par groupe) et d'anciennes versions du formulaire. La valeur est
+  // lue LIGNE PAR LIGNE sur la première colonne renseignée — sans cela, les
+  // soumissions du format minoritaire perdaient leur zone/aire et ressortaient
+  // comme des structures fictives (« Aire de santé 1 », « Aire de santé 2 »…)
+  // qui passaient en plus tous les filtres géographiques.
+  const geo = resolveGeoColumnCandidates(columns);
+  const pickVal = (row: RawRow, cands: string[]): unknown => {
+    for (const c of cands) {
+      const v = row[c];
+      if (v !== null && v !== undefined && String(v).trim() !== "") return v;
+    }
+    return null;
+  };
   const scoreQs = detectScoreQuestions(columns);
   const recoCols = detectRecommendationColumns(columns);
   // Champs texte libres « Constats majeurs » (ajoutés aux checklists CS et ZS
@@ -188,7 +205,7 @@ function buildRecords(source: SourceFetch): { records: SupervisionRecord[]; rows
     }
     const scorePct = globalMax > 0 ? r1((globalScore / globalMax) * 100) : null;
 
-    let date = geo.date ? parseDate(row[geo.date]) : null;
+    let date = parseDate(pickVal(row, geo.date));
     if (!date) {
       // Repli sur les métadonnées de saisie pour ne pas perdre le mois des
       // soumissions sans « Date de la supervision » renseignée (cf. KPI vs tableau).
@@ -200,10 +217,17 @@ function buildRecords(source: SourceFetch): { records: SupervisionRecord[]; rows
       }
     }
     date = normalizeSupervisionDate(date);
-    let antenne = geo.antenne ? cleanStr(row[geo.antenne]) : null;
-    let zone = geo.zone ? cleanStr(row[geo.zone]) : null;
-    const aire = geo.aire ? cleanStr(row[geo.aire]) : null;
-    const etab = geo.etablissement ? cleanStr(row[geo.etablissement]) : null;
+    // Libellés nettoyés : les valeurs du data.json sont des codes XML Kobo
+    // (« lofima_2_bokungu_bokungu ») — retrait des suffixes parents encodés,
+    // mise en forme, rabattement sur la hiérarchie provinciale connue.
+    const antenneRaw = cleanStr(pickVal(row, geo.antenne));
+    const zoneRaw = cleanStr(pickVal(row, geo.zone));
+    const aireRaw = cleanStr(pickVal(row, geo.aire));
+    const etabRaw = cleanStr(pickVal(row, geo.etablissement));
+    let antenne = antenneRaw ? prettifyName(canonAntenne(antenneRaw) ?? antenneRaw) : null;
+    let zone = cleanZoneLabel(zoneRaw, antenneRaw);
+    const aire = cleanAireLabel(aireRaw, zoneRaw, antenneRaw);
+    const etab = etabRaw;
 
     // Rattachement hiérarchique : complète les niveaux parents manquants via la
     // hiérarchie provinciale statique (ZS → antenne, AS → ZS). Indispensable au
@@ -228,22 +252,24 @@ function buildRecords(source: SourceFetch): { records: SupervisionRecord[]; rows
     // Type de supervision : on lit le champ réel ("Type_de_supervision") s'il
     // existe ; sinon on retombe sur la classification par fonction (anciennes
     // données). Le libellé brut est conservé pour le filtre.
-    const typeLabel = geo.typeSupervision ? resolveTypeLabel(row[geo.typeSupervision]) : resolveTypeLabel(null);
-    const typeFromLabel = geo.typeSupervision ? classifyTypeFromLabel(typeLabel) : null;
+    const typeLabel = resolveTypeLabel(pickVal(row, geo.typeSupervision));
+    const typeFromLabel = geo.typeSupervision.length ? classifyTypeFromLabel(typeLabel) : null;
     const type =
       typeFromLabel ??
-      classifySupervisionType(source.level, geo.fonction ? row[geo.fonction] : null, geo.personne ? row[geo.personne] : null);
+      classifySupervisionType(source.level, pickVal(row, geo.fonction), pickVal(row, geo.personne));
 
     return {
       id: `${source.level}-${i}`,
       level: source.level,
       type,
       typeLabel,
-      province: geo.province ? cleanStr(row[geo.province]) : null,
+      province: cleanStr(pickVal(row, geo.province)),
       antenne,
       zone,
       aire,
-      structure: structure ?? `${LEVEL_LABEL[source.level].short} ${i + 1}`,
+      // PAS de nom fabriqué (« Aire de santé N ») : une soumission sans nom de
+      // structure lisible reste sans nom et est écartée des listes par structure.
+      structure: structure ?? null,
       date,
       month: toMonth(date),
       scorePct,
@@ -274,10 +300,17 @@ const TYPE_GROUP_TYPES: Record<string, string[]> = {
 };
 
 function passFilters(r: SupervisionRecord, f: Filters): boolean {
+  // STRICT sur antenne / zone / aire : un enregistrement dont le niveau filtré
+  // est illisible (null) ne doit PAS passer le filtre — sinon il est compté
+  // dans TOUTES les sélections (Monkoto, Boende…) et fausse tous les calculs.
+  // Exception : le filtre d'un niveau INFÉRIEUR au niveau de l'enregistrement
+  // ne s'applique pas à lui (ex. filtre « aire » sur une soumission ZS).
+  const LVL: Record<string, number> = { antenne: 1, zs: 2, as: 3 };
+  const rl = LVL[r.level] ?? 3;
   if (f.province && r.province && norm(r.province) !== norm(f.province)) return false;
-  if (f.antenne && r.antenne && norm(canonAntenne(r.antenne) ?? "") !== norm(canonAntenne(f.antenne) ?? "")) return false;
-  if (f.zone && r.zone && norm(r.zone) !== norm(f.zone)) return false;
-  if (f.aire && r.aire && norm(r.aire) !== norm(f.aire)) return false;
+  if (f.antenne && norm(canonAntenne(r.antenne) ?? "") !== norm(canonAntenne(f.antenne) ?? "")) return false;
+  if (f.zone && rl >= LVL.zs && norm(r.zone ?? "") !== norm(f.zone)) return false;
+  if (f.aire && rl >= LVL.as && norm(r.aire ?? "") !== norm(f.aire)) return false;
   if (f.months && f.months.length) {
     if (!r.month || !f.months.includes(r.month)) return false;
   }
@@ -318,7 +351,8 @@ function cotationDist(records: SupervisionRecord[]): CotationDist[] {
 function perStructure(records: SupervisionRecord[]): NamedScore[] {
   const map = new Map<string, number[]>();
   for (const r of records) {
-    const name = r.structure ?? "—";
+    if (!r.structure) continue; // pas de fausse ligne pour les soumissions sans nom
+    const name = r.structure;
     if (!map.has(name)) map.set(name, []);
     if (r.scorePct !== null) map.get(name)!.push(r.scorePct);
   }
@@ -373,8 +407,8 @@ function trend(records: SupervisionRecord[]): TrendPoint[] {
 function monthlyMatrix(records: SupervisionRecord[], months: string[]): MonthlyMatrixRow[] {
   const byStruct = new Map<string, Map<string, number[]>>();
   for (const r of records) {
-    if (!r.month) continue;
-    const name = r.structure ?? "—";
+    if (!r.month || !r.structure) continue;
+    const name = r.structure;
     if (!byStruct.has(name)) byStruct.set(name, new Map());
     const m = byStruct.get(name)!;
     if (!m.has(r.month)) m.set(r.month, []);
@@ -404,8 +438,8 @@ function monthlyMatrix(records: SupervisionRecord[], months: string[]): MonthlyM
 function ouiMonthlyMatrix(records: SupervisionRecord[], months: string[]): { name: string; scores: Record<string, number | null> }[] {
   const byStruct = new Map<string, Map<string, { oui: number; all: number }>>();
   for (const r of records) {
-    if (!r.month) continue;
-    const name = r.structure ?? "—";
+    if (!r.month || !r.structure) continue;
+    const name = r.structure;
     if (!byStruct.has(name)) byStruct.set(name, new Map());
     const m = byStruct.get(name)!;
     if (!m.has(r.month)) m.set(r.month, { oui: 0, all: 0 });
@@ -433,9 +467,9 @@ function constatsByStructure(records: SupervisionRecord[]): {
 }[] {
   const byStruct = new Map<string, SupervisionRecord[]>();
   for (const r of records) {
-    const name = r.structure ?? "—";
-    if (!byStruct.has(name)) byStruct.set(name, []);
-    byStruct.get(name)!.push(r);
+    if (!r.structure) continue;
+    if (!byStruct.has(r.structure)) byStruct.set(r.structure, []);
+    byStruct.get(r.structure)!.push(r);
   }
   return Array.from(byStruct.entries())
     .map(([name, recs]) => {
@@ -467,9 +501,9 @@ function radar(records: SupervisionRecord[]): { entities: { name: string; values
   const indicators = COMPOSANTES.map((c) => c.short);
   const byStruct = new Map<string, SupervisionRecord[]>();
   for (const r of records) {
-    const name = r.structure ?? "—";
-    if (!byStruct.has(name)) byStruct.set(name, []);
-    byStruct.get(name)!.push(r);
+    if (!r.structure) continue;
+    if (!byStruct.has(r.structure)) byStruct.set(r.structure, []);
+    byStruct.get(r.structure)!.push(r);
   }
   const entities = Array.from(byStruct.entries())
     .slice(0, 8)
@@ -524,10 +558,18 @@ export function buildBundle(sources: SourceFetch[], filters: Filters, targets: S
   // enregistrements du bundle. Une perte signale un problème de source/schéma.
   const zsParsed = parsed.find((p) => p.source.level === "zs");
   if (zsParsed) {
-    const geoCols = resolveGeoColumns(getColumns(zsParsed.rows));
-    if (geoCols.zone) {
+    const zoneCands = resolveGeoColumnCandidates(getColumns(zsParsed.rows)).zone;
+    if (zoneCands.length) {
       const rawZones = new Set(
-        zsParsed.rows.map((r) => norm(cleanStr(r[geoCols.zone!]) ?? "")).filter(Boolean)
+        zsParsed.rows
+          .map((r) => {
+            for (const c of zoneCands) {
+              const v = cleanStr(r[c]);
+              if (v) return norm(cleanZoneLabel(v, null) ?? v);
+            }
+            return "";
+          })
+          .filter(Boolean)
       );
       const recZones = new Set(zsParsed.records.map((r) => norm(r.zone ?? r.structure ?? "")).filter(Boolean));
       for (const z of rawZones) {
