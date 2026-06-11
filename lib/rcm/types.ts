@@ -33,6 +33,8 @@ export interface RcmBundle {
   meta: {
     generatedAt: string;
     months: string[];
+    /** Date de réalisation RCM la plus récente de la sélection (ISO "YYYY-MM-DD"). */
+    lastRcmDate: string | null;
     source: { label: string; rows: number; enfants: number; ok: boolean; error?: string };
     hasData: boolean;
   };

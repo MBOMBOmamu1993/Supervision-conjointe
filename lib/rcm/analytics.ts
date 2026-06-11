@@ -123,6 +123,8 @@ const CV_FIELDS: Record<CvAntigen, string[]> = {
 interface Child {
   province: string | null; antenne: string | null; zone: string | null; aire: string | null;
   month: string | null; distance: string; carte: string; ageGroup: string;
+  /** Date de réalisation du RCM (date_enquete, ISO "YYYY-MM-DD"). */
+  date: string | null;
   vacc: Record<RcmAntigene, string>;
   /** Statut vaccinal des 4 antigènes du comparatif CV RCM vs DHIS2. */
   cvVacc: Record<CvAntigen, string>;
@@ -133,6 +135,12 @@ function toMonth(v: unknown): string | null {
   const s = str(v);
   const m = s.match(/(\d{4})-(\d{2})/);
   return m ? `${m[1]}-${m[2]}` : null;
+}
+
+function toDate(v: unknown): string | null {
+  const s = str(v);
+  const m = s.match(/(\d{4})-(\d{2})-(\d{2})/);
+  return m ? `${m[1]}-${m[2]}-${m[3]}` : null;
 }
 
 function normalize(rows: RawRow[]): Child[] {
@@ -163,6 +171,7 @@ function normalize(rows: RawRow[]): Child[] {
       zone,
       aire,
       month: toMonth(pick(m, "date_enquete")) ?? toMonth(pick(m, "today")) ?? toMonth(pick(m, "_submission_time")),
+      date: toDate(pick(m, "date_enquete")) ?? toDate(pick(m, "today")) ?? toDate(pick(m, "_submission_time")),
       distance: str(pick(m, "distance_cs")).toLowerCase(),
       carte: str(pick(m, "carte_vaccination")).toLowerCase(),
       ageGroup: str(pick(m, "age_group")).toLowerCase(),
@@ -313,10 +322,15 @@ export function buildRcmBundle(
 
   const sansCartePct = cartePct == null ? null : Math.round((100 - cartePct) * 10) / 10;
 
+  // Date de réalisation RCM la plus récente de la sélection : sert de référence
+  // au mois DHIS2 du comparatif CV RCM vs CV administrative.
+  const lastRcmDate = children.reduce<string | null>((acc, c) => (c.date && (!acc || c.date > acc) ? c.date : acc), null);
+
   return {
     meta: {
       generatedAt: new Date().toISOString(),
       months: filterOptions.months,
+      lastRcmDate,
       source: { label: fetched.label, rows: fetched.rows.length, enfants: all.length, ok: fetched.ok, error: fetched.error },
       hasData: all.length > 0,
     },

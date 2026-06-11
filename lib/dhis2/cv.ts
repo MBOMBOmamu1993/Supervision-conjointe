@@ -53,15 +53,16 @@ export interface Dhis2CvBundle {
 }
 
 type CacheEntry = { at: number; value: Dhis2CvBundle };
-let cache: CacheEntry | null = null;
+const cache = new Map<string, CacheEntry>();
 
 /**
- * Règle du mois de référence (feedback TL) : avant le 20 du mois courant →
- * M-2 ; à partir du 20 → M-1. Renvoie "YYYY-MM".
+ * Règle du mois de référence (feedback TL) : avant le 20 du mois de référence →
+ * M-2 ; à partir du 20 → M-1. Renvoie "YYYY-MM". La date de référence est la
+ * date de réalisation du RCM quand elle est connue (sinon la date du jour).
  */
-export function referenceMonth(today = new Date()): string {
-  const back = today.getDate() < 20 ? 2 : 1;
-  const d = new Date(today.getFullYear(), today.getMonth() - back, 1);
+export function referenceMonth(refDate = new Date()): string {
+  const back = refDate.getDate() < 20 ? 2 : 1;
+  const d = new Date(refDate.getFullYear(), refDate.getMonth() - back, 1);
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
 }
 
@@ -178,20 +179,26 @@ function buildBundle(recs: RawDashRec[], requestedIso: string): Dhis2CvBundle {
   };
 }
 
-/** Récupère (avec cache TTL) les CV administratives Tshuapa du mois de référence. */
-export async function fetchDhis2Cv(opts: { force?: boolean } = {}): Promise<Dhis2CvBundle> {
-  if (!opts.force && cache && (Date.now() - cache.at) / 1000 < ENV.CACHE_TTL_SECONDS) return cache.value;
-  const requested = referenceMonth();
+/**
+ * Récupère (avec cache TTL par mois demandé) les CV administratives Tshuapa du
+ * mois de référence. `refDate` (ISO "YYYY-MM-DD") = date de réalisation du RCM ;
+ * à défaut, la date du jour.
+ */
+export async function fetchDhis2Cv(opts: { force?: boolean; refDate?: string } = {}): Promise<Dhis2CvBundle> {
+  const parsed = opts.refDate ? new Date(`${opts.refDate}T12:00:00`) : new Date();
+  const requested = referenceMonth(Number.isNaN(parsed.getTime()) ? new Date() : parsed);
+  const hit = cache.get(requested);
+  if (!opts.force && hit && (Date.now() - hit.at) / 1000 < ENV.CACHE_TTL_SECONDS) return hit.value;
   try {
     const manifest = await fetchGzJson<Record<string, string>>("data_as/dashboard/by_as/manifest.json.gz");
     const file = manifest[PROVINCE_KEY];
     if (!file) throw new Error(`Province « ${PROVINCE_KEY} » absente du manifest by_as`);
     const recs = await fetchGzJson<RawDashRec[]>(`data_as/dashboard/by_as/${file}`);
     const bundle = buildBundle(recs, requested);
-    cache = { at: Date.now(), value: bundle };
+    cache.set(requested, { at: Date.now(), value: bundle });
     return bundle;
   } catch (err) {
-    if (cache) return cache.value; // données périmées plutôt que rien
+    if (hit) return hit.value; // données périmées plutôt que rien
     return {
       month: requested,
       requestedMonth: requested,
