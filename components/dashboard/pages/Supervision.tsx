@@ -159,13 +159,6 @@ export function SupervisionResultats() {
               <div className="card card-pad"><OuiMatrixTable b={b} months={months} label={labels.sing} /></div>
             </section>
 
-            <section>
-              <SectionBar icon="bars">Vue d'ensemble et benchmarking</SectionBar>
-              <div className="card card-pad">
-                <CardTitle icon="bars" tone={meta.tone} title={`Score global par ${labels.plur.toLowerCase()}`} sub="Score moyen de conformité (%) par structure" />
-                {b.perStructure.length ? <HBar exportTitle={`Score global par ${labels.plur.toLowerCase()}`} data={b.perStructure.map((s) => ({ name: s.name, value: s.score }))} /> : <div className="py-8 text-center text-[12px] text-surface-500">Aucune structure supervisée.</div>}
-              </div>
-            </section>
           </div>
         );
       }}
@@ -287,6 +280,14 @@ export function SupervisionScore() {
         const worstComp = compSorted.length ? compSorted[compSorted.length - 1] : null;
         const compAvg = compValid.length ? Math.round(compValid.reduce((a, c) => a + (c.score ?? 0), 0) / compValid.length) : null;
         const confColor = (v: number) => conformiteFor(v).color;
+        // Cartes « Messages clés » / « Résumé » en vocabulaire de conformité (cf.
+        // feedback TL) : « partiellement conforme » = score 60–79 % · « non
+        // conforme » = score < 60 % (faible conformité incluse). On retient
+        // l'élément au score le plus bas de la classe.
+        const partielComp = compValid.filter((c) => c !== bestComp && (c.score ?? 0) >= 60 && (c.score ?? 0) < 80).sort((a, x) => (a.score ?? 0) - (x.score ?? 0))[0] ?? null;
+        const nonConfComp = compValid.filter((c) => (c.score ?? 0) < 60).sort((a, x) => (a.score ?? 0) - (x.score ?? 0))[0] ?? null;
+        const partielStruct = valid.filter((s) => s !== best && (s.score ?? 0) >= 60 && (s.score ?? 0) < 80).sort((a, x) => (a.score ?? 0) - (x.score ?? 0))[0] ?? null;
+        const nonConfStruct = valid.filter((s) => (s.score ?? 0) < 60).sort((a, x) => (a.score ?? 0) - (x.score ?? 0))[0] ?? null;
         return (
           <div className="space-y-4">
             <Banner icon="cotation" tone={meta.tone} title={`Score de conformité — ${labels.plur}`}
@@ -405,21 +406,22 @@ export function SupervisionScore() {
               </div>
             </section>
 
-            {/* 6. Messages clés + résumé (une seule paire selon le niveau) */}
+            {/* 6. Messages clés + résumé — libellés de conformité (cf. feedback TL) */}
             <section>
               <SectionBar icon="message">Messages clés</SectionBar>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                <HlCard icon="check" tone="green" label="Composante la plus performante" big={bestComp?.short ?? "—"} sub={`Score moyen : ${fmtPct(bestComp?.score ?? null)}`} />
-                <HlCard icon="alert" tone="red" label="Composante la plus faible" big={worstComp?.short ?? "—"} sub={`Score moyen : ${fmtPct(worstComp?.score ?? null)}`} />
-                <HlCard icon="flag" tone="orange" label="Alerte principale" big={d.highlights.alert ?? "Aucune alerte majeure"} />
+                <HlCard icon="check" tone="green" label="Composante la plus conforme" big={bestComp?.short ?? "—"} sub={`Score moyen : ${fmtPct(bestComp?.score ?? null)}`} />
+                <HlCard icon="component" tone="orange" label="Composante partiellement conforme" big={partielComp?.short ?? "Aucune"} sub={partielComp ? `Score moyen : ${fmtPct(partielComp.score)}` : "Aucune composante entre 60 et 79 %"} />
+                <HlCard icon="alert" tone="red" label="Composante non conforme" big={nonConfComp?.short ?? "Aucune"} sub={nonConfComp ? `Score moyen : ${fmtPct(nonConfComp.score)}` : "Aucune composante sous 60 %"} />
               </div>
             </section>
 
             <section>
-              <SectionBar icon="trophy">Résumé Score Global — {labels.plur}</SectionBar>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                <HlCard icon="trophy" tone="green" label={`${labels.sing} avec le score le plus performant`} big={best?.name ?? "—"} sub={`Score moyen : ${fmtPct(best?.score ?? null)}`} />
-                <HlCard icon="alert" tone="red" label={`${labels.sing} avec le score le plus faible`} big={worst?.name ?? "—"} sub={`Score moyen : ${fmtPct(worst?.score ?? null)}`} />
+              <SectionBar icon="trophy">Résumé score global de conformité</SectionBar>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <HlCard icon="trophy" tone="green" label={`${labels.sing} la plus conforme`} big={best?.name ?? "—"} sub={`Score moyen : ${fmtPct(best?.score ?? null)}`} />
+                <HlCard icon="component" tone="orange" label={`${labels.sing} partiellement conforme`} big={partielStruct?.name ?? "Aucune"} sub={partielStruct ? `Score moyen : ${fmtPct(partielStruct.score)}` : "Aucune structure entre 60 et 79 %"} />
+                <HlCard icon="alert" tone="red" label={`${labels.sing} non conforme`} big={nonConfStruct?.name ?? "Aucune"} sub={nonConfStruct ? `Score moyen : ${fmtPct(nonConfStruct.score)}` : "Aucune structure sous 60 %"} />
               </div>
             </section>
           </div>

@@ -236,7 +236,7 @@ export function Edl2() {
           </div>
           <div className="card card-pad">
             <CardTitle icon="scale" tone="orange" title="Ratio stratégie fixe et nombre des ESS qui vaccinent" sub="Sessions fixes planifiées rapportées aux ESS qui vaccinent"
-              right={<TableExportButtons filename="Ratio stratégie fixe et nombre des ESS qui vaccinent" />} />
+              rightBelow right={<TableExportButtons filename="Ratio stratégie fixe et nombre des ESS qui vaccinent" />} />
             <div className="overflow-auto" style={{ maxHeight: 300 }}>
               <table className="dtable">
                 <thead><tr><th className="name">Zone de santé</th><th>Sessions fixes planifiées</th><th>Nbr ESS qui vaccinent</th><th>Ratio fixe / ESS qui vacc.</th></tr></thead>
@@ -307,7 +307,7 @@ export function Edl2() {
           <div className="card card-pad flex flex-col gap-3">
             <StatTile icon="pin" tone="red" label="Nombre d'AS avec dernier village > 20 km" big={fmt(sumN(acc.map((a) => a.vil20)))} sub="Total de la sélection" />
             <div>
-              <CardTitle icon="road" tone="orange" title="% des AS à plus de 50 km par ZS" sub="Distance AS → BCZ" right={<TableExportButtons filename="% des AS à plus de 50 km par ZS" />} />
+              <CardTitle icon="road" tone="orange" title="% des AS à plus de 50 km par ZS" sub="Distance AS → BCZ" rightBelow right={<TableExportButtons filename="% des AS à plus de 50 km par ZS" />} />
               <div className="overflow-auto" style={{ maxHeight: 150 }}>
                 <table className="dtable">
                   <thead><tr><th className="name">Zone de santé</th><th>AS &gt; 50 km</th><th>%</th></tr></thead>
@@ -320,7 +320,7 @@ export function Edl2() {
               </div>
             </div>
             <div>
-              <CardTitle icon="map" tone="red" title="Top 5 ZS avec plus d'AS avec dernier village &gt; 20 km" sub="Nombre d'AS concernées" right={<TableExportButtons filename="Top 5 ZS avec plus d'AS avec dernier village sup 20 km" />} />
+              <CardTitle icon="map" tone="red" title="Top 5 ZS avec plus d'AS avec dernier village &gt; 20 km" sub="Nombre d'AS concernées" rightBelow right={<TableExportButtons filename="Top 5 ZS avec plus d'AS avec dernier village sup 20 km" />} />
               <table className="dtable">
                 <thead><tr><th>#</th><th className="name">Zone de santé</th><th>AS &gt; 20 km</th></tr></thead>
                 <tbody>
@@ -350,7 +350,7 @@ export function Edl2() {
             </table>
           </div>
           <div className="card card-pad">
-            <CardTitle icon="map" tone="violet" title="Top 6 ZS — îlots & campements" sub="Total îlots + campements (pêcheurs, éleveurs, miniers)" right={<TableExportButtons filename="Top 6 ZS — îlots & campements" />} />
+            <CardTitle icon="map" tone="violet" title="Top 6 ZS — îlots & campements" sub="Total îlots + campements (pêcheurs, éleveurs, miniers)" rightBelow right={<TableExportButtons filename="Top 6 ZS — îlots & campements" />} />
             <table className="dtable">
               <thead><tr><th>#</th><th className="name">Zone de santé</th><th>Total</th></tr></thead>
               <tbody>
