@@ -113,8 +113,13 @@ function asToZsMap(): Map<string, { zone: string; antenne: string }> {
     _asToZs = new Map();
     for (const a of EDL.asPop) {
       const key = norm(a.as);
+      const parent = { zone: a.zs, antenne: canonAntenne(a.antenne) ?? a.antenne };
       // En cas d'homonymie d'AS entre ZS, on garde la première occurrence.
-      if (!_asToZs.has(key)) _asToZs.set(key, { zone: a.zs, antenne: canonAntenne(a.antenne) ?? a.antenne });
+      if (!_asToZs.has(key)) _asToZs.set(key, parent);
+      // La base État de lieux préfixe les aires « AS Iyongo » alors que les
+      // formulaires Kobo utilisent le nom nu (« Iyongo ») : on indexe les deux.
+      const bare = key.replace(/^as /, "");
+      if (bare && !_asToZs.has(bare)) _asToZs.set(bare, parent);
     }
   }
   return _asToZs;

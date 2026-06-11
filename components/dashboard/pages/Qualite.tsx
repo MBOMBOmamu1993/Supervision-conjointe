@@ -586,7 +586,7 @@ export function CqdZsErreurs() {
   const top5 = [...rows].sort((a, c) => (c.erreurSnisDhis2 ?? 0) - (a.erreurSnisDhis2 ?? 0)).slice(0, 5);
   return (
     <div className="space-y-4">
-      <Banner icon="erreurs" tone="red" title="Zones de santé — Taux d'erreur SNIS / DHIS2" sub="36 comparaisons pour 3 AS sur 3 mois × 4 antigènes" />
+      <Banner icon="erreurs" tone="red" title="Zones de santé — Taux d'erreur SNIS / DHIS2" />
       <section>
         <SectionBar icon="bars">Indicateurs d'erreur</SectionBar>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">

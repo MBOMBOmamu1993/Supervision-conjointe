@@ -289,6 +289,19 @@ export function buildRcmBundle(
     return { zone, values };
   });
 
+  // Heatmap AS × antigène (% manqués) — niveau affiché quand une ZS/AS est
+  // filtrée dans l'onglet (tableau « % enfants manqués » dynamique).
+  const airesMiss = uniq(children.map((c) => c.aire));
+  const missByAire = airesMiss.map((aire) => {
+    const ac = children.filter((c) => c.aire === aire);
+    const values: Record<string, number | null> = {};
+    for (const ag of RCM_ANTIGENES) {
+      const considered = ac.filter((c) => c.vacc[ag] && c.vacc[ag] !== "non_applicable");
+      values[RCM_ANTIGENE_LABEL[ag]] = pct(considered.filter((c) => isMissed(c.vacc[ag])).length, considered.length);
+    }
+    return { aire, zone: ac[0]?.zone ?? null, values };
+  });
+
   // Raisons.
   const carteMap = new Map<string, number>();
   const vaccMap = new Map<string, number>();
@@ -339,6 +352,6 @@ export function buildRcmBundle(
       asBeneficiaires: asSet.size, asTotal, localites: distTotal || totalEnfants, totalEnfants,
       distance, distancePct, missAnyPct, cartePct, sansCartePct, vaccinePct, nonVaccinePct, antigenesPrioritaires,
     },
-    missByAntigene, byAge, missByZs, reasonsCarte, reasonsVacc, parAire, cvParAire,
+    missByAntigene, byAge, missByZs, missByAire, reasonsCarte, reasonsVacc, parAire, cvParAire,
   };
 }

@@ -5,6 +5,7 @@
    et les visuels s'alimentent automatiquement dès les premières données. */
 import { useRcm } from "@/lib/client/rcm-api";
 import { useDhis2Cv } from "@/lib/client/dhis2-api";
+import { useTabFilters } from "@/lib/state/filters";
 import { norm } from "@/lib/geo";
 import { fmtMonth } from "@/lib/client/format";
 import type { RcmBundle } from "@/lib/rcm/types";
@@ -92,9 +93,17 @@ export function RcmVue() {
 /* ===================== 2. Vaccination ===================== */
 export function RcmVaccination() {
   const { data } = useRcm();
+  const f = useTabFilters("rcm");
   if (!data) return <Empty msg="Synchronisation…" />;
   const k = data.kpi;
   const ANT = data.missByAntigene.map((m) => m.antigene);
+  // Tableau « % enfants manqués » DYNAMIQUE : par ZS par défaut ; dès qu'une
+  // ZS (ou une AS) est filtrée, le détail s'affiche par aire de santé.
+  const showAires = !!(f.zone || f.aire);
+  const missRows = showAires
+    ? data.missByAire.map((r) => ({ name: r.aire, values: r.values }))
+    : data.missByZs.map((r) => ({ name: r.zone, values: r.values }));
+  const missLevel = showAires ? "aire de santé" : "zone de santé";
   return (
     <div className="space-y-4">
       {!data.meta.hasData && <Pending />}
@@ -121,12 +130,12 @@ export function RcmVaccination() {
         </div>
       </section>
       <div className="card card-pad">
-        <CardTitle icon="table" tone="navy" title="% enfants manqués par zone de santé et antigène" right={<TableExportButtons filename="% enfants manqués par zone de santé et antigène" />} />
-        {data.missByZs.length ? (
+        <CardTitle icon="table" tone="navy" title={`% enfants manqués par ${missLevel} et antigène`} right={<TableExportButtons filename={`% enfants manqués par ${missLevel} et antigène`} />} />
+        {missRows.length ? (
           <div className="overflow-x-auto"><table className="dtable">
-            <thead><tr><th className="name">Zone de santé</th>{ANT.map((a) => <th key={a}>{a}</th>)}</tr></thead>
-            <tbody>{data.missByZs.map((r) => (
-              <tr key={r.zone}><td className="name">{r.zone}</td>{ANT.map((a) => { const v = r.values[a]; return <td key={a} style={{ background: heat(v) }}>{pctTxt(v)}</td>; })}</tr>
+            <thead><tr><th className="name">{showAires ? "Aire de santé" : "Zone de santé"}</th>{ANT.map((a) => <th key={a}>{a}</th>)}</tr></thead>
+            <tbody>{missRows.map((r) => (
+              <tr key={r.name}><td className="name">{r.name}</td>{ANT.map((a) => { const v = r.values[a]; return <td key={a} style={{ background: heat(v) }}>{pctTxt(v)}</td>; })}</tr>
             ))}</tbody>
           </table></div>
         ) : <Empty />}

@@ -18,6 +18,7 @@ import Radar from "@/components/charts/Radar";
 import { TableExportButtons } from "@/components/ui/TableExport";
 import { fmtPct, fmtMonth } from "@/lib/client/format";
 import { useTabFilters, orgLevelOf, ORG_LABEL, type OrgLevel } from "@/lib/state/filters";
+import { cascadeOptions, type GeoTuple } from "@/lib/geo";
 import {
   cotationFor, COTATION_COLOR, conformiteFor, CONFORMITE_CLASSES,
   type StructureLevel, type AnswerValue,
@@ -46,6 +47,36 @@ function useOrgLevel() {
   const f = useTabFilters("supervision");
   const lvl = orgLevelOf(f);
   return { lvl, labels: ORG_LABEL[lvl], meta: LEVEL_META[lvl], aire: f.aire };
+}
+
+/**
+ * Filtre d'org unit DYNAMIQUE affiché sous le titre de chaque page de l'onglet
+ * Supervision conjointe : sélectionne UNE entité du niveau d'affichage courant
+ * (Antenne par défaut ; ZS si une antenne est filtrée ; AS si une ZS est
+ * filtrée) pour visualiser sa situation spécifique, sans changer le niveau.
+ */
+function OrgUnitFilter({ d }: { d: SupervisionBundle }) {
+  const f = useTabFilters("supervision");
+  const lvl = orgLevelOf(f);
+  const labels = ORG_LABEL[lvl];
+  const geo = cascadeOptions((d.filters.geo as GeoTuple[]) ?? [], { province: f.province, antenne: f.antenne, zone: f.zone });
+  const options = lvl === "antenne" ? geo.antennes : lvl === "zs" ? geo.zones : geo.aires;
+  return (
+    <div className="card flex flex-wrap items-center gap-2.5 px-4 py-2.5">
+      <label className="text-[10px] font-extrabold uppercase tracking-[0.09em] text-slate-500">{labels.sing}</label>
+      <select
+        className="cursor-pointer rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-[12.5px] font-bold text-navy-700 outline-none hover:border-oms-500"
+        value={f.org ?? ""}
+        onChange={(ev) => f.set({ org: ev.target.value || null })}
+      >
+        <option value="">{`Toutes les ${labels.plur.toLowerCase()}`}</option>
+        {options.map((o) => <option key={o} value={o}>{o}</option>)}
+      </select>
+      <span className="text-[11px] text-surface-500">
+        Sélectionnez une {labels.sing.toLowerCase()} pour visualiser sa situation spécifique.
+      </span>
+    </div>
+  );
 }
 
 /* ============== Tableau « OUI par mois et par composante » ============== */
@@ -115,6 +146,7 @@ export function SupervisionResultats() {
           <div className="space-y-4">
             <Banner icon={meta.icon} tone={meta.tone} title={`Supervision conjointe — ${labels.plur}`}
               sub={<>Réalisation, qualité et scores au niveau {labels.plur.toLowerCase()} · {b.records} supervision{b.records > 1 ? "s" : ""}{lvl === "antenne" ? " · cible : 2 antennes / trimestre" : ""}</>} />
+            <OrgUnitFilter d={d} />
 
             <section>
               <SectionBar icon="bars">Indicateurs clés</SectionBar>
@@ -292,6 +324,7 @@ export function SupervisionScore() {
           <div className="space-y-4">
             <Banner icon="cotation" tone={meta.tone} title={`Score de conformité — ${labels.plur}`}
               sub={<>Conformité aux standards du PEV · niveau {labels.plur.toLowerCase()} · {b.score.count} supervision{b.score.count > 1 ? "s" : ""} notée{b.score.count > 1 ? "s" : ""}</>} />
+            <OrgUnitFilter d={d} />
 
             {/* 1. Note explicative — système de scorage */}
             <NoteScorage />
@@ -452,6 +485,7 @@ export function SupervisionConstats() {
           <div className="space-y-4">
             <Banner icon="reco" tone={meta.tone} title={`Constats & recommandations — ${labels.plur}`}
               sub={<>Synthèse par {labels.sing.toLowerCase()} · constats et recommandations issus de la checklist de supervision</>} />
+            <OrgUnitFilter d={d} />
 
             <section>
               <SectionBar icon="bars">Indicateurs clés</SectionBar>

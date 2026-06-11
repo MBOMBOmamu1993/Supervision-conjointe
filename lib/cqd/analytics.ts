@@ -14,7 +14,7 @@
  */
 import { norm, findColumn, getColumns } from "@/lib/supervision/schema";
 import { resolveTypeLabel } from "@/lib/supervision/schema";
-import { canonAntenne } from "@/lib/geo";
+import { antenneOfZone, canonAntenne, zoneOfAire } from "@/lib/geo";
 import type { CqdFetch } from "@/lib/supervision/kobo-client";
 import type { RawRow } from "@/lib/supervision/types";
 import type {
@@ -86,17 +86,51 @@ function prettifyName(s: string): string {
 
 /**
  * Nettoie un nom de centre/aire encodé « aire_zs_antenne » (valeurs XML Kobo)
- * en retirant les segments terminaux correspondant à la ZS et à l'antenne, puis
- * met le résultat en forme. Ex. « lofima_2_bokungu_bokungu » → « Lofima 2 ».
+ * en retirant les SÉQUENCES terminales de segments correspondant à la ZS puis à
+ * l'antenne, puis met le résultat en forme. La ZS est elle-même encodée
+ * « zs_antenne » (plusieurs segments) : on compare donc des séquences, pas des
+ * segments isolés. Ex. « iyongo_monkoto_boende » (ZS « monkoto_boende »,
+ * antenne « boende ») → « Iyongo » ; « lofima_2_bokungu_bokungu » → « Lofima 2 ».
  */
 function cleanStructureName(raw: string | null, zone: string | null, antenne: string | null): string | null {
   if (!raw) return raw;
-  const suffixes = new Set([zone, antenne].filter((x): x is string => !!x).map((x) => norm(x)));
-  const parts = raw.split("_").filter(Boolean);
-  while (parts.length > 1 && suffixes.has(norm(parts[parts.length - 1]))) parts.pop();
+  let parts = raw.split("_").filter(Boolean);
+  const parentSeqs = [zone, antenne]
+    .filter((p): p is string => !!p)
+    .map((p) => norm(p).split(" ").filter(Boolean))
+    .filter((seq) => seq.length > 0);
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (const seq of parentSeqs) {
+      if (parts.length > seq.length && seq.every((tok, k) => norm(parts[parts.length - seq.length + k]) === tok)) {
+        parts = parts.slice(0, parts.length - seq.length);
+        changed = true;
+      }
+    }
+  }
   const cleaned = prettifyName(parts.join("_"));
   return cleaned || prettifyName(raw);
 }
+
+/**
+ * Rabat un libellé nettoyé sur une entité CONNUE de la hiérarchie provinciale
+ * (base État de lieux) en retirant d'éventuels mots terminaux résiduels —
+ * segments parents d'un code Kobo qui n'ont pas pu être identifiés (parent
+ * absent de la ligne, encodage hérité d'une ancienne version du formulaire).
+ * Ex. « Iyongo Monkoto » → « Iyongo » ; « Boende Boende » → « Boende ».
+ */
+function snapToKnown(name: string | null, isKnown: (s: string) => boolean): string | null {
+  if (!name || isKnown(name)) return name;
+  const words = name.split(" ");
+  for (let n = words.length - 1; n >= 1; n--) {
+    const cand = words.slice(0, n).join(" ");
+    if (isKnown(cand)) return cand;
+  }
+  return name;
+}
+const isKnownZone = (s: string) => antenneOfZone(s) !== null;
+const isKnownAire = (s: string) => zoneOfAire(s) !== null;
 
 function classify(taux: number | null): ConcordanceClass {
   if (taux === null) return "na";
@@ -128,8 +162,8 @@ export const MISSED_ANTIGENS: { label: string; tokens: string[] }[] = [
   { label: "ROTA1", tokens: ["rota1"] },
   { label: "ROTA2", tokens: ["rota2"] },
   { label: "ROTA3", tokens: ["rota3"] },
-  { label: "VPI1", tokens: ["vpi1", "ipv1"] },
-  { label: "VPI2", tokens: ["vpi2", "ipv2"] },
+  { label: "VPI1", tokens: ["vpi1", "vpi_1", "ipv1"] },
+  { label: "VPI2", tokens: ["vpi2", "vpi_2", "ipv2"] },
   { label: "VAA", tokens: ["vaa", "yf"] },
   { label: "RR1", tokens: ["rr1", "var1"] },
   { label: "RR2", tokens: ["rr2", "var2"] },
@@ -141,7 +175,8 @@ export const MISSED_ANTIGENS: { label: string; tokens: string[] }[] = [
 const AGE_KEYS = ["a0_11", "a12_23", "a24_59"] as const;
 const AGE_TOKENS: Record<(typeof AGE_KEYS)[number], string[]> = {
   a0_11: ["0_11", "0a11", "0 11"],
-  a12_23: ["12_23", "12a23", "12 23"],
+  // « 12_24 » : coquille du formulaire CQD CS (VPO3_12_24_mois) pour 12–23 mois.
+  a12_23: ["12_23", "12a23", "12 23", "12_24"],
   a24_59: ["24_59", "24a59", "24 59"],
 };
 
@@ -185,6 +220,7 @@ function buildRecords(src: CqdFetch): CqdRecord[] {
   const antenne = c(["antenne", "liste_antenne"]);
   const zone = c(["zone_sante", "zone de sante", "zone"]);
   const aire = c(["aire_sante", "aire de sante", "aire"]);
+  const aireAutre = c(["aire_sante_autre", "preciser l autre aire"]);
   const ess = c(["ess", "nom_ess", "etablissement"]);
   const dateCol = c(["date_supervision", "date de supervision", "date", "today", "end"]);
   const typeCol = c(["Type_de_supervision", "type de supervision", "type_supervision"]);
@@ -227,20 +263,32 @@ function buildRecords(src: CqdFetch): CqdRecord[] {
 
   return rows.map((row, i) => {
     const z = zone ? str(row[zone]) : null;
-    const a = aire ? str(row[aire]) : null;
+    // AS « Autre à préciser » : le nom réel est dans le champ texte dédié.
+    const aSel = aire ? str(row[aire]) : null;
+    const a = aSel && norm(aSel).startsWith("autre") && aireAutre && str(row[aireAutre]) ? str(row[aireAutre]) : aSel;
     const e = ess ? str(row[ess]) : null;
     const an = antenne ? str(row[antenne]) : null;
-    const rawStruct = src.key === "zs" ? z : (a ?? e);
-    const structure = cleanStructureName(rawStruct, z, an);
     // Libellés géographiques nettoyés (retrait des suffixes parents encodés
     // « aire_zs_antenne », mise en forme) → filtres sans doublon ni nom collé
     // au parent par underscore/tiret. Les filtres et le prédicat pass()
     // s'appuient sur ces mêmes valeurs : la concordance reste garantie.
     const provRaw = province ? str(row[province]) : null;
     const provClean = provRaw ? prettifyName(provRaw) : null;
-    const anClean = an ? prettifyName(canonAntenne(an) ?? an) : null;
-    const zoneClean = cleanStructureName(z, null, an);
-    const aireClean = cleanStructureName(a, z, an);
+    let anClean = an ? prettifyName(canonAntenne(an) ?? an) : null;
+    let zoneClean = snapToKnown(cleanStructureName(z, null, an), isKnownZone);
+    const aireClean = snapToKnown(cleanStructureName(a, z, an), isKnownAire);
+    // Rattachement hiérarchique statique (AS → ZS → antenne, base État de
+    // lieux) : corrige les ZS dont l'encodage n'a pas pu être résolu et
+    // complète les parents manquants — garantit le matching des filtres
+    // (ex. ZS Boende et ses aires de santé au contrôle qualité CS). Au niveau
+    // ZS, le champ « aire » agrège plusieurs aires : pas de rattachement par aire.
+    const parent = src.key === "as" ? zoneOfAire(aireClean) : null;
+    if (parent) {
+      if (!zoneClean || !isKnownZone(zoneClean)) zoneClean = parent.zone;
+      if (!anClean) anClean = parent.antenne;
+    }
+    if (zoneClean && !anClean) anClean = antenneOfZone(zoneClean);
+    const structure = src.key === "zs" ? zoneClean : (aireClean ?? cleanStructureName(e, z, an));
     return {
       id: `cqd-${src.key}-${i}`,
       level: src.key,
@@ -286,7 +334,12 @@ function buildRecords(src: CqdFetch): CqdRecord[] {
 function pass(r: CqdRecord, f: CqdFilters): boolean {
   if (f.province && r.province && norm(r.province) !== norm(f.province)) return false;
   if (f.antenne && r.antenne && norm(canonAntenne(r.antenne) ?? "") !== norm(canonAntenne(f.antenne) ?? "")) return false;
-  if (f.zone && r.zone && norm(r.zone) !== norm(f.zone)) return false;
+  if (f.zone && r.zone && norm(r.zone) !== norm(f.zone)) {
+    // Repli hiérarchique : une AS dont la ZS encodée n'a pas pu être résolue
+    // reste rattachée à sa ZS canonique via la hiérarchie provinciale.
+    const p = zoneOfAire(r.aire);
+    if (!p || norm(p.zone) !== norm(f.zone)) return false;
+  }
   if (f.aire && r.aire && norm(r.aire) !== norm(f.aire)) return false;
   if (f.months && f.months.length && (!r.month || !f.months.includes(r.month))) return false;
   if (f.types && f.types.length && (!r.typeLabel || !f.types.some((t) => norm(t) === norm(r.typeLabel)))) return false;

@@ -63,6 +63,8 @@ export interface RcmBundle {
   byAge: { group: AgeGroup; label: string; antigenes: { antigene: string; vaccines: number; nonVaccines: number }[] }[];
   /** Heatmap % enfants manqués ZS × antigène (dernier découpage mensuel agrégé). */
   missByZs: { zone: string; values: Record<string, number | null> }[];
+  /** Heatmap % enfants manqués AS × antigène (affichée quand une ZS/AS est filtrée). */
+  missByAire: { aire: string; zone: string | null; values: Record<string, number | null> }[];
   /** Raisons de non-possession de carte (triées). */
   reasonsCarte: ReasonCount[];
   /** Raisons de non vaccination (triées). */

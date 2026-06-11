@@ -130,6 +130,13 @@ function buildRecords(source: SourceFetch): { records: SupervisionRecord[]; rows
   const geo = resolveGeoColumns(columns);
   const scoreQs = detectScoreQuestions(columns);
   const recoCols = detectRecommendationColumns(columns);
+  // Champs texte libres « Constats majeurs » (ajoutés aux checklists CS et ZS
+  // en 2026) : alimentent la colonne « A. Constats majeurs » de la page
+  // « Constats & recommandations », en tête de liste.
+  const constatsMajeursCols = columns.filter((c) => {
+    const n = norm(c.slice(c.lastIndexOf("/") + 1));
+    return n.startsWith("constats majeurs") || n === "constat majeur";
+  });
 
   const records: SupervisionRecord[] = rows.map((row, i) => {
     const answers = EMPTY_ANSWERS();
@@ -163,6 +170,13 @@ function buildRecords(source: SourceFetch): { records: SupervisionRecord[]; rows
         if (text && text.length > 1) constats.push({ question: q.label, composante: ck, answer: av, text });
       }
     }
+
+    // Constats majeurs saisis librement par le superviseur (champ dédié du
+    // formulaire) — placés en tête des constats de la structure.
+    const majeurs = constatsMajeursCols
+      .map((c) => cleanStr(row[c]))
+      .filter((t): t is string => !!t && t.length > 1);
+    constats.unshift(...majeurs.map((text) => ({ question: "", composante: null, answer: "partiel" as AnswerValue, text })));
 
     const recommandations = recoCols
       .map((c) => cleanStr(row[c]))
