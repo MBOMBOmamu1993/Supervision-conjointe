@@ -153,7 +153,7 @@ export const COMPOSANTES: Composante[] = [
     key: "planification",
     label: "Planification & gestion des ressources",
     short: "Planification & ressources",
-    tokens: ["planification", "plan", "docs", "document", "cdf", "chaine_froid", "froid", "gestion_vaccins", "vaccins", "gestion_dechets", "dechets", "securite_injections", "securite", "injection", "intrant", "logistique", "ressource"],
+    tokens: ["planification", "plan", "docs", "document", "cdf", "chaine_froid", "froid", "gestion_vaccins", "vaccins", "gestion_dechets", "dechets", "securite_injections", "securite", "injection", "intrant", "logistique", "ressource", "res"],
   },
   {
     key: "prestation",

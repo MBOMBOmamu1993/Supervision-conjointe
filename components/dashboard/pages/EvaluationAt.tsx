@@ -59,13 +59,13 @@ function Legend({ data }: { data: EvaluationBundle }) {
 
 /* ===================== 1. Vue d'ensemble ===================== */
 export function EvalVue() {
-  const { data, refresh } = useEvaluationAt();
+  const { data } = useEvaluationAt();
   if (!data) return <Empty msg="Synchronisation…" />;
   const k = data.vue.kpi;
   const classement = data.vue.classement.filter((c) => c.ajuste != null);
   return (
     <div className="space-y-4">
-      <RefreshBar onRefresh={refresh} />
+      <RefreshBar />
       {!data.meta.hasData && <Pending />}
       <Banner icon="eval" tone="navy" title="Évaluation des AT — Vue d'ensemble" sub="Score selon la grille officielle (8 composantes · 100 pts) · score ajusté = obtenu ÷ applicable × 100" />
       <section>
@@ -99,13 +99,13 @@ export function EvalVue() {
 
 /* ===================== 2. Classement mensuel ===================== */
 export function EvalClassement() {
-  const { data, refresh } = useEvaluationAt();
+  const { data } = useEvaluationAt();
   if (!data) return <Empty msg="Synchronisation…" />;
   const rows = data.rows;
   const best = rows[0]; const worst = rows[rows.length - 1];
   return (
     <div className="space-y-4">
-      <RefreshBar onRefresh={refresh} />
+      <RefreshBar />
       {!data.meta.hasData && <Pending />}
       <Banner icon="rank" tone="navy" title="Classement mensuel des AT" sub="Score ajusté = score obtenu ÷ score applicable × 100 (composante NA exclue du dénominateur)" />
       <section>
@@ -137,13 +137,13 @@ export function EvalClassement() {
 
 /* ===================== 3. Performance par composante ===================== */
 export function EvalComposantes() {
-  const { data, refresh } = useEvaluationAt();
+  const { data } = useEvaluationAt();
   if (!data) return <Empty msg="Synchronisation…" />;
   const comps = data.components;
   const parAt = data.parAt.filter((p) => p.ajusteMoyen != null);
   return (
     <div className="space-y-4">
-      <RefreshBar onRefresh={refresh} />
+      <RefreshBar />
       {!data.meta.hasData && <Pending />}
       <Banner icon="component" tone="navy" title="Performance par composante" sub="NA : Non applicable — les scores sont calculés uniquement sur les composantes applicables" />
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
@@ -186,7 +186,7 @@ function pctHex(pct: number | null): string {
 
 /* ===================== 4. Évolution des performances ===================== */
 export function EvalEvolution() {
-  const { data, refresh } = useEvaluationAt();
+  const { data } = useEvaluationAt();
   if (!data) return <Empty msg="Synchronisation…" />;
   const ev = data.evolution;
   const lastIdx = ev.months.length - 1;
@@ -201,7 +201,7 @@ export function EvalEvolution() {
   const avgLast = lastMonthVals.length ? Math.round((lastMonthVals.reduce((a, b) => a + (b.v ?? 0), 0) / lastMonthVals.length) * 10) / 10 : null;
   return (
     <div className="space-y-4">
-      <RefreshBar onRefresh={refresh} />
+      <RefreshBar />
       {!data.meta.hasData && <Pending />}
       <Banner icon="up" tone="navy" title="Évolution des performances" sub="Suivi mensuel des scores ajustés (%) — repérer progressions, stagnations et contre-performances" />
       <section>
@@ -284,13 +284,13 @@ const COMPOSANTE_NAME: Record<string, string> = {
 };
 
 export function EvalGrille() {
-  const { data, refresh } = useEvaluationAt();
+  const { data } = useEvaluationAt();
   if (!data) return <Empty msg="Synchronisation…" />;
   const comps = data.components;
   const parAt = data.parAt;
   return (
     <div className="space-y-4">
-      <RefreshBar onRefresh={refresh} />
+      <RefreshBar />
       <Banner icon="cotation" tone="navy" title="Grille officielle de cotation des AT" sub="Points attribués au prorata du % obtenu · total 100 points sur 8 composantes" />
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
         <div className="card card-pad">

@@ -11,6 +11,7 @@ import { DIcon, DTONES } from "./icons";
 import { MODULES, LVL_FILTERS, LVL_LABEL, moduleByKey, pagesOf, findPage, type ModuleDef, type PageDef } from "./modules";
 import { FilterBarShell } from "./FilterBarShell";
 import { PAGE_REGISTRY } from "./registry";
+import { GlobalRefreshButton } from "./GlobalRefresh";
 
 const OMS = "/logo/oms-white.png";
 const PEV = "/logo/pev-transparent.png";
@@ -158,6 +159,7 @@ function Home({ onOpen }: { onOpen: (key: string) => void }) {
           <div className="text-[11px] font-bold uppercase tracking-[0.22em] text-white/60">Programme Élargi de Vaccination · OMS — République Démocratique du Congo</div>
           <h1 className="mt-0.5 text-[23px] font-extrabold">Plateforme — Tableau de bord Tshuapa</h1>
         </div>
+        <GlobalRefreshButton />
         <img src={PEV} alt="PEV" className="h-[58px] w-auto" />
       </div>
       <div className="mx-auto w-full max-w-[1240px] px-8 py-10">
@@ -199,6 +201,11 @@ function ModuleView({ mod, page, onSelectPage, onHome }: { mod: ModuleDef; page:
     : LVL_FILTERS[page.lvl].filter((k) => k !== "type");
   const Comp = PAGE_REGISTRY[page.id];
   const [a, b] = DTONES[mod.tone] ?? DTONES.navy;
+  // Sections dépliables de la barre latérale (onglets à groupes, ex. Contrôle
+  // qualité) : repliées par défaut — seul l'en-tête de section est visible,
+  // un clic déroule / replie son contenu.
+  const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({});
+  const toggleGroup = (name: string) => setOpenGroups((s) => ({ ...s, [name]: !s[name] }));
 
   const navLink = (p: PageDef) => (
     <button key={p.id} type="button" onClick={() => onSelectPage(p.id)}
@@ -225,12 +232,26 @@ function ModuleView({ mod, page, onSelectPage, onHome }: { mod: ModuleDef; page:
         </div>
         <nav className="flex-1 overflow-y-auto px-2 py-3 thin-scroll">
           {mod.groups
-            ? mod.groups.map((g) => (
-              <div key={g.name}>
-                <div className="px-3 pb-1.5 pt-3 text-[10px] font-extrabold uppercase tracking-[0.12em] text-white/40">{g.name}</div>
-                {g.pages.map(navLink)}
-              </div>
-            ))
+            ? mod.groups.map((g) => {
+              const open = !!openGroups[g.name];
+              return (
+                <div key={g.name}>
+                  <button
+                    type="button"
+                    onClick={() => toggleGroup(g.name)}
+                    aria-expanded={open}
+                    className="flex w-full items-center gap-2 rounded-[9px] px-3 pb-1.5 pt-3 text-left text-[10px] font-extrabold uppercase tracking-[0.12em] text-white/40 transition hover:text-white/70"
+                  >
+                    <span className="flex-1">{g.name}</span>
+                    <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth={2.4} strokeLinecap="round" strokeLinejoin="round"
+                      className="shrink-0 transition-transform duration-200" style={{ transform: open ? "rotate(180deg)" : "none" }}>
+                      <path d="m6 9 6 6 6-6" />
+                    </svg>
+                  </button>
+                  {open ? g.pages.map(navLink) : null}
+                </div>
+              );
+            })
             : (mod.pages ?? []).map(navLink)}
         </nav>
         <div className="flex items-center gap-2 border-t border-white/10 px-[18px] py-3 text-[10.5px] text-white/40">
@@ -246,6 +267,7 @@ function ModuleView({ mod, page, onSelectPage, onHome }: { mod: ModuleDef; page:
             <div className="text-[9.5px] font-bold uppercase tracking-[0.2em] text-white/60">Tableau de bord Tshuapa · PEV / OMS</div>
             <h1 className="mt-px truncate text-[16px] font-extrabold uppercase">{page.label} — {mod.name}</h1>
           </div>
+          <GlobalRefreshButton />
           <img src={PEV} alt="PEV" className="h-[46px] w-auto" />
         </div>
         {allow.length > 0 && <FilterBarShell allow={allow} source={mod.key} />}
