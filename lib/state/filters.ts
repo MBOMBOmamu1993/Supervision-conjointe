@@ -38,12 +38,21 @@ export interface FilterValues {
   types: string[];
   /** Assistant technique sélectionné (onglets Rapport mensuel / Évaluation AT). */
   at: string | null;
+  /**
+   * Entité individuelle sélectionnée au NIVEAU D'AFFICHAGE courant (onglet
+   * Supervision conjointe — sélecteur d'org unit sous le titre des pages) :
+   * une antenne par défaut, une ZS si une antenne est filtrée, une AS si une
+   * ZS est filtrée. Traduite côté client vers le filtre géo correspondant,
+   * sans changer le niveau d'affichage. Réinitialisée à chaque changement de
+   * filtre géographique principal.
+   */
+  org: string | null;
 }
 
-export type FilterField = "province" | "antenne" | "zone" | "aire" | "months" | "types" | "at";
+export type FilterField = "province" | "antenne" | "zone" | "aire" | "months" | "types" | "at" | "org";
 
 export const EMPTY_FILTERS: FilterValues = {
-  province: null, antenne: null, zone: null, aire: null, months: [], types: [], at: null,
+  province: null, antenne: null, zone: null, aire: null, months: [], types: [], at: null, org: null,
 };
 
 /**
@@ -61,7 +70,14 @@ interface FiltersStore {
 export const useFiltersStore = create<FiltersStore>((set) => ({
   tabs: {},
   set: (tab, patch) =>
-    set((s) => ({ tabs: { ...s.tabs, [tab]: { ...(s.tabs[tab] ?? EMPTY_FILTERS), ...patch } } })),
+    set((s) => {
+      const cur = s.tabs[tab] ?? EMPTY_FILTERS;
+      // Tout changement de filtre géographique principal invalide la sélection
+      // d'org unit (elle appartient au niveau d'affichage précédent).
+      const touchesGeo = (["province", "antenne", "zone", "aire"] as const).some((k) => k in patch);
+      const next = { ...cur, ...(touchesGeo && !("org" in patch) ? { org: null } : null), ...patch };
+      return { tabs: { ...s.tabs, [tab]: next } };
+    }),
   reset: (tab) => set((s) => ({ tabs: { ...s.tabs, [tab]: EMPTY_FILTERS } })),
   resetField: (tab, field) =>
     set((s) => {
@@ -69,12 +85,13 @@ export const useFiltersStore = create<FiltersStore>((set) => ({
       // Réinitialiser un niveau géographique réinitialise aussi ses enfants
       // (cohérence de la cascade Province → Antenne → ZS → Aire).
       const patch: Partial<FilterValues> =
-        field === "province" ? { province: null, antenne: null, zone: null, aire: null }
-        : field === "antenne" ? { antenne: null, zone: null, aire: null }
-        : field === "zone" ? { zone: null, aire: null }
-        : field === "aire" ? { aire: null }
+        field === "province" ? { province: null, antenne: null, zone: null, aire: null, org: null }
+        : field === "antenne" ? { antenne: null, zone: null, aire: null, org: null }
+        : field === "zone" ? { zone: null, aire: null, org: null }
+        : field === "aire" ? { aire: null, org: null }
         : field === "months" ? { months: [] }
         : field === "at" ? { at: null }
+        : field === "org" ? { org: null }
         : { types: [] };
       return { tabs: { ...s.tabs, [tab]: { ...cur, ...patch } } };
     }),

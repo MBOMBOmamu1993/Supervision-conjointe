@@ -175,14 +175,14 @@ export function StatTile({ icon, tone, label, big, sub }: { icon: IconName; tone
 }
 
 /** Bannière d'en-tête de page (dégradé clair → blanc). */
-export function Banner({ icon, tone, title, sub }: { icon: IconName; tone: Tone; title: string; sub: React.ReactNode }) {
+export function Banner({ icon, tone, title, sub }: { icon: IconName; tone: Tone; title: string; sub?: React.ReactNode }) {
   const t = TONES[tone];
   return (
     <div className="card card-pad flex items-center gap-3" style={{ background: `linear-gradient(90deg, ${t.bg}, #fff)` }}>
       <Badge icon={icon} tone={tone} size={36} />
       <div>
         <div className="text-[14px] font-extrabold text-navy-700">{title}</div>
-        <div className="text-[11.5px] text-surface-700">{sub}</div>
+        {sub != null ? <div className="text-[11.5px] text-surface-700">{sub}</div> : null}
       </div>
     </div>
   );
