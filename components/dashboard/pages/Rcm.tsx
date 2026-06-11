@@ -10,6 +10,7 @@ import { KpiTile, CardTitle, Banner, C } from "@/components/proto/proto";
 import { DIcon } from "@/components/dashboard/icons";
 import { ProtoGroupedBar, ProtoHBar } from "@/components/proto/charts";
 import Donut from "@/components/charts/Donut";
+import { TableExportButtons } from "@/components/ui/TableExport";
 
 const pctTxt = (v: number | null) => (v == null ? "—" : `${v}%`);
 function Pending() {
@@ -55,7 +56,7 @@ export function RcmVue() {
           ]} />
         </div>
         <div className="card card-pad lg:col-span-7">
-          <CardTitle icon="table" tone="navy" title="Lecture rapide" />
+          <CardTitle icon="table" tone="navy" title="Lecture rapide" right={<TableExportButtons filename="Lecture rapide" />} />
           <table className="dtable">
             <thead><tr><th className="name">Indicateur</th><th>Valeur</th></tr></thead>
             <tbody>
@@ -117,7 +118,7 @@ export function RcmVaccination() {
         </div>
       </section>
       <div className="card card-pad">
-        <CardTitle icon="table" tone="navy" title="% enfants manqués par zone de santé et antigène" />
+        <CardTitle icon="table" tone="navy" title="% enfants manqués par zone de santé et antigène" right={<TableExportButtons filename="% enfants manqués par zone de santé et antigène" />} />
         {data.missByZs.length ? (
           <div className="overflow-x-auto"><table className="dtable">
             <thead><tr><th className="name">Zone de santé</th>{ANT.map((a) => <th key={a}>{a}</th>)}</tr></thead>
@@ -201,7 +202,7 @@ export function RcmTableaux() {
         </div>
       </section>
       <div className="card card-pad">
-        <CardTitle icon="table" tone="navy" title="Raisons de non-possession de carte par aire de santé" sub="% des enfants concernés" />
+        <CardTitle icon="table" tone="navy" title="Raisons de non-possession de carte par aire de santé" sub="% des enfants concernés" right={<TableExportButtons filename="Raisons de non-possession de carte par aire de santé" />} />
         {data.parAire.length && carteCats.length ? (
           <div className="overflow-x-auto"><table className="dtable">
             <thead><tr><th className="name">Aire de santé</th>{carteCats.map((c) => <th key={c.key}>{c.label}</th>)}</tr></thead>
@@ -212,7 +213,7 @@ export function RcmTableaux() {
         ) : <Empty />}
       </div>
       <div className="card card-pad">
-        <CardTitle icon="table" tone="navy" title="Raisons principales de non vaccination par aire de santé" sub="% des enfants concernés" />
+        <CardTitle icon="table" tone="navy" title="Raisons principales de non vaccination par aire de santé" sub="% des enfants concernés" right={<TableExportButtons filename="Raisons principales de non vaccination par aire de santé" />} />
         {data.parAire.length && vaccCats.length ? (
           <div className="overflow-x-auto"><table className="dtable">
             <thead><tr><th className="name">Aire de santé</th>{vaccCats.map((c) => <th key={c.key}>{c.label}</th>)}</tr></thead>

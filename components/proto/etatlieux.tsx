@@ -12,6 +12,7 @@ import type { EdlZsPop, EdlData } from "@/data/edl-data";
 import { SectionBar } from "@/components/ui/Card";
 import { C, TONES, cotColor, fmt, KpiTile, CardTitle, Badge, StatTile, Banner, type Tone } from "./proto";
 import { ProtoGroupedBar, ProtoHBar } from "./charts";
+import { TableExportButtons } from "@/components/ui/TableExport";
 
 const sortZS = (arr: EdlZsPop[]) => arr.slice().sort((a, b) => a.zs.localeCompare(b.zs));
 /** Parse un nombre éventuellement stocké en texte (« 140 », « 12,5 »). */
@@ -98,7 +99,7 @@ export function Edl1() {
       </div>
 
       <section>
-        <SectionBar icon="bars">Population cible administrative & ajustée — par aire de santé</SectionBar>
+        <SectionBar icon="bars" right={<TableExportButtons variant="bar" filename="Population cible administrative et ajustée par aire de santé" />}>Population cible administrative & ajustée — par aire de santé</SectionBar>
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
           <div className="card card-pad lg:col-span-2">
             <div className="mb-2 text-[11px] text-surface-500">{E.asPop.length} aires de santé · tableau défilable · écart = ajustée − administrative</div>
@@ -115,7 +116,7 @@ export function Edl1() {
             </div>
           </div>
           <div className="card card-pad">
-            <CardTitle icon="child" tone="green" title="Top 50 aires de santé" sub="Plus grand poids démographique (0–11 mois ajustée)" />
+            <CardTitle icon="child" tone="green" title="Top 50 aires de santé" sub="Plus grand poids démographique (0–11 mois ajustée)" right={<TableExportButtons filename="Top 50 aires de santé" />} />
             <div className="overflow-auto" style={{ maxHeight: 300 }}>
               <table className="dtable">
                 <thead><tr><th>#</th><th className="name">Aire de santé</th><th className="name">ZS</th><th>0–11 (ajustée)</th></tr></thead>
@@ -131,7 +132,7 @@ export function Edl1() {
       </section>
 
       <section>
-        <SectionBar icon="alert">Sites par niveau de priorité (risque) — par zone de santé</SectionBar>
+        <SectionBar icon="alert" right={<TableExportButtons variant="bar" filename="Sites par niveau de priorité par zone de santé" />}>Sites par niveau de priorité (risque) — par zone de santé</SectionBar>
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
           <div className="card card-pad lg:col-span-2">
             <table className="dtable">
@@ -152,7 +153,7 @@ export function Edl1() {
             <div className="mt-2 text-[11px] text-surface-500">Visites/mois = très haute×30 (quotidien) + haute×4 + moyenne×2 + faible×1. Niveaux estimés à partir des îlots, campements de pêcheurs et d'éleveurs recensés par ZS.</div>
           </div>
           <div className="card card-pad">
-            <CardTitle icon="alert" tone="red" title="Top 6 ZS à haute priorité" sub="Plus de sites très haute + haute priorité" />
+            <CardTitle icon="alert" tone="red" title="Top 6 ZS à haute priorité" sub="Plus de sites très haute + haute priorité" right={<TableExportButtons filename="Top 6 ZS à haute priorité" />} />
             <table className="dtable">
               <thead><tr><th>#</th><th className="name">Zone de santé</th><th>Sites prioritaires</th></tr></thead>
               <tbody>
@@ -222,7 +223,7 @@ export function Edl2() {
         <SectionBar icon="flag">Stratégies de vaccination planifiées (microplan)</SectionBar>
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
           <div className="card card-pad lg:col-span-2">
-            <CardTitle icon="flag" tone="navy" title="Stratégies planifiées par zone de santé" sub="Somme par type de stratégie" />
+            <CardTitle icon="flag" tone="navy" title="Stratégies planifiées par zone de santé" sub="Somme par type de stratégie" right={<TableExportButtons filename="Stratégies planifiées par zone de santé" />} />
             <div className="overflow-auto" style={{ maxHeight: 300 }}>
               <table className="dtable">
                 <thead><tr><th className="name">Zone de santé</th><th>Fixes</th><th>Avancées</th><th>Mobiles</th><th>Spéciales</th><th>Total planifié</th></tr></thead>
@@ -253,7 +254,7 @@ export function Edl2() {
           ]} />
         </div>
         <div className="card card-pad mt-3">
-          <CardTitle icon="clinic" tone="green" title="Top 50 aires de santé par écart positif" sub="Stratégies planifiées − attendu (ACD)" />
+          <CardTitle icon="clinic" tone="green" title="Top 50 aires de santé par écart positif" sub="Stratégies planifiées − attendu (ACD)" right={<TableExportButtons filename="Top 50 aires de santé par écart positif" />} />
           <div className="overflow-auto" style={{ maxHeight: 280 }}>
             <table className="dtable">
               <thead><tr><th>#</th><th className="name">Aire de santé</th><th className="name">ZS</th><th>Planifié</th><th>Attendu ACD</th><th>Écart</th></tr></thead>
@@ -269,7 +270,7 @@ export function Edl2() {
 
       {/* 2) Accessibilité — distances & réseau */}
       <section>
-        <SectionBar icon="road">Accessibilité — distances & réseau par aire de santé</SectionBar>
+        <SectionBar icon="road" right={<TableExportButtons variant="bar" filename="Accessibilité distances et réseau par aire de santé" />}>Accessibilité — distances & réseau par aire de santé</SectionBar>
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
           <div className="card card-pad lg:col-span-2">
             <div className="mb-2 text-[11px] text-surface-500">Mise en forme conditionnée : vert &lt; 50 km · orange 50–99 km · rouge ≥ 100 km. Tableau défilable.</div>
@@ -286,7 +287,7 @@ export function Edl2() {
           </div>
           <div className="card card-pad flex flex-col gap-3">
             <div>
-              <CardTitle icon="road" tone="orange" title="% des AS à plus de 50 km par ZS" sub="Distance AS → BCZ" />
+              <CardTitle icon="road" tone="orange" title="% des AS à plus de 50 km par ZS" sub="Distance AS → BCZ" right={<TableExportButtons filename="% des AS à plus de 50 km par ZS" />} />
               <div className="overflow-auto" style={{ maxHeight: 150 }}>
                 <table className="dtable">
                   <thead><tr><th className="name">Zone de santé</th><th>AS &gt; 50 km</th><th>%</th></tr></thead>
@@ -299,7 +300,7 @@ export function Edl2() {
               </div>
             </div>
             <div>
-              <CardTitle icon="map" tone="red" title="Top 5 ZS — dernier village &gt; 20 km" sub="Nombre d'AS concernées" />
+              <CardTitle icon="map" tone="red" title="Top 5 ZS — dernier village &gt; 20 km" sub="Nombre d'AS concernées" right={<TableExportButtons filename="Top 5 ZS — dernier village &gt; 20 km" />} />
               <table className="dtable">
                 <thead><tr><th>#</th><th className="name">Zone de santé</th><th>AS &gt; 20 km</th></tr></thead>
                 <tbody>
@@ -315,7 +316,7 @@ export function Edl2() {
 
       {/* 3) Spécificités géographiques */}
       <section>
-        <SectionBar icon="map">Spécificités géographiques & populations dispersées — par ZS</SectionBar>
+        <SectionBar icon="map" right={<TableExportButtons variant="bar" filename="Spécificités géographiques et populations dispersées par ZS" />}>Spécificités géographiques & populations dispersées — par ZS</SectionBar>
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
           <div className="card card-pad lg:col-span-2">
             <table className="dtable">
@@ -329,7 +330,7 @@ export function Edl2() {
             </table>
           </div>
           <div className="card card-pad">
-            <CardTitle icon="map" tone="violet" title="Top 6 ZS — îlots & campements" sub="Total îlots + campements (pêcheurs, éleveurs, miniers)" />
+            <CardTitle icon="map" tone="violet" title="Top 6 ZS — îlots & campements" sub="Total îlots + campements (pêcheurs, éleveurs, miniers)" right={<TableExportButtons filename="Top 6 ZS — îlots & campements" />} />
             <table className="dtable">
               <thead><tr><th>#</th><th className="name">Zone de santé</th><th>Total</th></tr></thead>
               <tbody>
@@ -345,7 +346,7 @@ export function Edl2() {
       {/* 4) Participation communautaire & points d'entrée — côte à côte */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
         <div className="card card-pad">
-          <CardTitle icon="people" tone="green" title="Participation communautaire — CAC & RECO" sub="Cellules d'animation communautaire par ZS" />
+          <CardTitle icon="people" tone="green" title="Participation communautaire — CAC & RECO" sub="Cellules d'animation communautaire par ZS" right={<TableExportButtons filename="Participation communautaire — CAC & RECO" />} />
           <div className="overflow-auto" style={{ maxHeight: 300 }}>
             <table className="dtable">
               <thead><tr><th className="name">Zone de santé</th><th>Villages</th><th>CAC prévus</th><th>CAC actifs</th></tr></thead>
@@ -358,7 +359,7 @@ export function Edl2() {
           </div>
         </div>
         <div className="card card-pad">
-          <CardTitle icon="home" tone="navy" title="Points d'entrée communautaires & localités résistantes" sub="Par zone de santé" />
+          <CardTitle icon="home" tone="navy" title="Points d'entrée communautaires & localités résistantes" sub="Par zone de santé" right={<TableExportButtons filename="Points d'entrée communautaires & localités résistantes" />} />
           <div className="overflow-auto" style={{ maxHeight: 300 }}>
             <table className="dtable">
               <thead><tr><th className="name">Zone de santé</th><th>Marchés</th><th>Églises</th><th>Éc. mat.</th><th>Éc. prim.</th><th>Éc. sec.</th><th>Localités résistantes</th></tr></thead>
@@ -401,7 +402,7 @@ export function Edl3() {
         sub="Chaîne de froid, logistique et partenaires technico-financiers" />
 
       <section>
-        <SectionBar icon="fridge">Chaîne de froid — synthèse par zone de santé</SectionBar>
+        <SectionBar icon="fridge" right={<TableExportButtons variant="bar" filename="Chaîne de froid synthèse par zone de santé" />}>Chaîne de froid — synthèse par zone de santé</SectionBar>
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
           <div className="card card-pad">
             <div className="overflow-auto" style={{ maxHeight: 300 }}>
@@ -438,7 +439,7 @@ export function Edl3() {
       </section>
 
       <section>
-        <SectionBar icon="hands">Partenaires technico-financiers — domaines d'intervention par ZS</SectionBar>
+        <SectionBar icon="hands" right={<TableExportButtons variant="bar" filename="Partenaires technico-financiers par ZS" />}>Partenaires technico-financiers — domaines d'intervention par ZS</SectionBar>
         <div className="card card-pad">
           <div className="overflow-auto" style={{ maxHeight: 360 }}>
             <table className="dtable" style={{ fontSize: 10 }}>

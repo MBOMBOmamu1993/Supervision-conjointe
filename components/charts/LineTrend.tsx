@@ -7,14 +7,17 @@ export default function LineTrend({
   series,
   months,
   height = 240,
+  exportTitle,
 }: {
   series: { name: string; data: (number | null)[]; color?: string }[];
   months: string[];
   height?: number;
+  exportTitle?: string;
 }) {
   return (
     <EChart
       height={height}
+      exportTitle={exportTitle}
       option={{
         color: ["#0093d5", "#22b457", "#7c3aed", "#f29e0b", "#e23636", "#0f766e"],
         grid: { left: 4, right: 12, top: 28, bottom: 4, containLabel: true },

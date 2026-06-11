@@ -7,17 +7,20 @@ export default function Donut({
   height = 200,
   centerLabel,
   legend = true,
+  exportTitle,
 }: {
   data: { name: string; value: number; color?: string }[];
   height?: number;
   centerLabel?: string;
   /** Affiche une légende sous l'anneau (activée par défaut). */
   legend?: boolean;
+  exportTitle?: string;
 }) {
   const total = data.reduce((a, b) => a + b.value, 0);
   return (
     <EChart
       height={height}
+      exportTitle={exportTitle}
       option={{
         tooltip: { trigger: "item", formatter: "{b}: {c} ({d}%)" },
         title: centerLabel

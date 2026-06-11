@@ -10,6 +10,7 @@ import { KpiTile, CardTitle, Banner, C, TONES, apprConc } from "@/components/pro
 import { ProtoGroupedBar, ProtoHBar, ProtoConcHBar } from "@/components/proto/charts";
 import { fmtMonth } from "@/lib/client/format";
 import Donut from "@/components/charts/Donut";
+import { TableExportButtons } from "@/components/ui/TableExport";
 
 /* --------------------------- helpers --------------------------- */
 const round = (n: number) => Math.round(n * 10) / 10;
@@ -70,7 +71,7 @@ function ConcTable({ icon = "table", title, sub, label, data, months }: {
   const ok = data.length > 0 && months.length > 0;
   return (
     <div className="card card-pad">
-      <CardTitle icon={icon} tone="navy" title={title} sub={sub} />
+      <CardTitle icon={icon} tone="navy" title={title} sub={sub} right={<TableExportButtons filename={title} />} />
       {ok ? (
         <div className="overflow-x-auto"><table className="dtable">
           <thead><tr>
@@ -199,7 +200,7 @@ export function CqdCsErreurs() {
         </div>
       </div>
       <div className="card card-pad">
-        <CardTitle icon="table" tone="navy" title="Taux d'erreur par aire de santé" sub="Registre/SNIS · Pointage/registre · appréciation" />
+        <CardTitle icon="table" tone="navy" title="Taux d'erreur par aire de santé" sub="Registre/SNIS · Pointage/registre · appréciation" right={<TableExportButtons filename="Taux d'erreur par aire de santé" />} />
         {rows.length ? (
           <div className="overflow-x-auto"><table className="dtable">
             <thead><tr><th className="name">Aire de santé</th><th>Registre – SNIS</th><th>Pointage – Registre</th><th>Appréciation</th></tr></thead>
@@ -239,7 +240,7 @@ export function CqdCsOutils() {
           series={[{ name: "Bien rempli", data: [o.registre ?? 0, o.pointage ?? 0, o.snis ?? 0] }, { name: "Mal rempli", data: [100 - (o.registre ?? 0), 100 - (o.pointage ?? 0), 100 - (o.snis ?? 0)] }]} /> : <Empty />}
       </div>
       <div className="card card-pad">
-        <CardTitle icon="table" tone="navy" title="Appréciation par aire de santé" sub="Bien / Mal rempli par outil" />
+        <CardTitle icon="table" tone="navy" title="Appréciation par aire de santé" sub="Bien / Mal rempli par outil" right={<TableExportButtons filename="Appréciation par aire de santé" />} />
         {rows.length ? (
           <div className="overflow-x-auto"><table className="dtable">
             <thead><tr><th className="name">Aire de santé</th><th>Registre</th><th>Pointage</th><th>SNIS</th></tr></thead>
@@ -305,7 +306,7 @@ export function CqdCsEnfants() {
         </div>
       </div>
       <div className="card card-pad">
-        <CardTitle icon="building" tone="navy" title="Aires de santé prioritaires" sub="Classées par enfants restant à récupérer" />
+        <CardTitle icon="building" tone="navy" title="Aires de santé prioritaires" sub="Classées par enfants restant à récupérer" right={<TableExportButtons filename="Aires de santé prioritaires" />} />
         {top.length ? (
           <div className="overflow-x-auto"><table className="dtable">
             <thead><tr><th className="name">Aire de santé</th><th>Identifiés</th><th>Récupérés</th><th>Restant</th><th>Taux récup.</th><th>Priorité</th></tr></thead>
@@ -458,7 +459,7 @@ export function CqdZsErreurs() {
         </div>
       </div>
       <div className="card card-pad">
-        <CardTitle icon="table" tone="navy" title="Taux d'erreur SNIS / DHIS2 par zone de santé" sub="Avec appréciation" />
+        <CardTitle icon="table" tone="navy" title="Taux d'erreur SNIS / DHIS2 par zone de santé" sub="Avec appréciation" right={<TableExportButtons filename="Taux d'erreur SNIS / DHIS2 par zone de santé" />} />
         {rows.length ? (
           <div className="overflow-x-auto"><table className="dtable">
             <thead><tr><th className="name">Zone de santé</th><th>Taux d'erreur</th><th>Appréciation</th></tr></thead>

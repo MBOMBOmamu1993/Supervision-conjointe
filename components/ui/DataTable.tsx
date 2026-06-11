@@ -1,20 +1,24 @@
 "use client";
 
 import { EmptyState } from "@/components/ui/EmptyState";
+import { TableExportButtons } from "@/components/ui/TableExport";
 
 type Cell = string | number | null | undefined;
 
-/** Tableau générique réutilisant le style `.table-default` du dashboard. */
+/** Tableau générique réutilisant le style `.table-default` du dashboard.
+ *  `exportFilename` affiche automatiquement les boutons CSV / Excel. */
 export function DataTable({
   columns,
   rows,
   maxRows = 60,
   format,
+  exportFilename,
 }: {
   columns: string[];
   rows: Record<string, Cell>[];
   maxRows?: number;
   format?: (col: string, value: Cell) => React.ReactNode;
+  exportFilename?: string;
 }) {
   if (!rows.length || !columns.length) return <EmptyState message="Aucune donnée disponible." />;
   const render = (col: string, v: Cell): React.ReactNode => {
@@ -28,6 +32,14 @@ export function DataTable({
   };
   return (
     <div className="overflow-x-auto">
+      {exportFilename ? (
+        <div className="mb-2 flex justify-end">
+          <TableExportButtons
+            filename={exportFilename}
+            data={{ columns, rows: rows.map((r) => columns.map((c) => (r[c] === undefined ? null : (r[c] as string | number | null)))) }}
+          />
+        </div>
+      ) : null}
       <table className="table-default">
         <thead>
           <tr>
