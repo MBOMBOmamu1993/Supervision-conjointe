@@ -153,7 +153,7 @@ export function Edl1() {
             <div className="mt-2 text-[11px] text-surface-500">Visites/mois = très haute×30 (quotidien) + haute×4 + moyenne×2 + faible×1. Niveaux estimés à partir des îlots, campements de pêcheurs et d'éleveurs recensés par ZS.</div>
           </div>
           <div className="card card-pad">
-            <CardTitle icon="alert" tone="red" title="Top 6 ZS à haute priorité" sub="Plus de sites très haute + haute priorité" right={<TableExportButtons filename="Top 6 ZS à haute priorité" />} />
+            <CardTitle icon="alert" tone="red" title="Top 6 ZS avec plus de sites à très haute et haute priorité" sub="Sites très haute + haute priorité" right={<TableExportButtons filename="Top 6 ZS avec plus de sites à très haute et haute priorité" />} />
             <table className="dtable">
               <thead><tr><th>#</th><th className="name">Zone de santé</th><th>Sites prioritaires</th></tr></thead>
               <tbody>
@@ -186,8 +186,6 @@ export function Edl2() {
   // --- Stratégies planifiées (microplan) : agrégats par ZS + comparaison ACD ---
   const stratRows = zss.map((z) => ({ zs: z.zs, fix: z.sFix, av: z.sAv, mob: z.sMob, spe: z.sSpe, tot: z.sFix + z.sAv + z.sMob + z.sSpe, attendu: z.attendu }));
   const totPlan = sumN(stratRows.map((r) => r.tot));
-  const totAttendu = sumN(stratRows.map((r) => r.attendu));
-  const ecartPlan = totPlan - totAttendu;
   // Top 50 aires de santé par écart positif (planifié − attendu ACD).
   const topGapAs = E.asPop
     .map((a) => ({ as: a.as, zs: a.zs, plan: a.sFix + a.sAv + a.sMob + a.sSpe, attendu: a.attendu, ecart: a.sFix + a.sAv + a.sMob + a.sSpe - a.attendu }))
@@ -220,10 +218,10 @@ export function Edl2() {
 
       {/* 1) Stratégies de vaccination planifiées — placées en tête de l'onglet */}
       <section>
-        <SectionBar icon="flag">Stratégies de vaccination planifiées (microplan)</SectionBar>
+        <SectionBar icon="flag">Sessions de vaccination planifiées</SectionBar>
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
           <div className="card card-pad lg:col-span-2">
-            <CardTitle icon="flag" tone="navy" title="Stratégies planifiées par zone de santé" sub="Somme par type de stratégie" right={<TableExportButtons filename="Stratégies planifiées par zone de santé" />} />
+            <CardTitle icon="flag" tone="navy" title="Planification sessions de vaccination par zone de santé" sub="Somme par type de stratégie" right={<TableExportButtons filename="Planification sessions de vaccination par zone de santé" />} />
             <div className="overflow-auto" style={{ maxHeight: 300 }}>
               <table className="dtable">
                 <thead><tr><th className="name">Zone de santé</th><th>Fixes</th><th>Avancées</th><th>Mobiles</th><th>Spéciales</th><th>Total planifié</th></tr></thead>
@@ -236,12 +234,33 @@ export function Edl2() {
               </table>
             </div>
           </div>
-          <div className="card card-pad flex flex-col gap-3">
-            <CardTitle icon="scale" tone="orange" title="Planifié vs attendu (ACD)" sub="Comparaison & écart" />
-            <StatTile icon="flag" tone="navy" label="Total stratégies planifiées" big={fmt(totPlan)} />
-            <StatTile icon="clip" tone="blue" label="Total attendu selon l'ACD" big={fmt(totAttendu)} />
-            <StatTile icon="scale" tone={ecartPlan >= 0 ? "orange" : "red"} label="Écart (planifié − attendu)" big={(ecartPlan >= 0 ? "+" : "") + fmt(ecartPlan)} />
-            {totAttendu === 0 ? <div className="text-[10.5px] text-surface-500">Cible « attendu ACD » non encore renseignée dans la base — à brancher à la synchronisation.</div> : null}
+          <div className="card card-pad">
+            <CardTitle icon="scale" tone="orange" title="Ratio stratégie fixe et nombre des ESS qui vaccinent" sub="Sessions fixes planifiées rapportées aux ESS qui vaccinent"
+              right={<TableExportButtons filename="Ratio stratégie fixe et nombre des ESS qui vaccinent" />} />
+            <div className="overflow-auto" style={{ maxHeight: 300 }}>
+              <table className="dtable">
+                <thead><tr><th className="name">Zone de santé</th><th>Sessions fixes planifiées</th><th>Nbr ESS qui vaccinent</th><th>Ratio fixe / ESS qui vacc.</th></tr></thead>
+                <tbody>
+                  {zss.map((z) => {
+                    const ratio = z.essVac > 0 ? Math.round((z.sFix / z.essVac) * 10) / 10 : null;
+                    return (
+                      <tr key={z.zs}>
+                        <td className="name">{z.zs}</td>
+                        <td>{fmt(z.sFix)}</td>
+                        <td>{fmt(z.essVac)}</td>
+                        <td style={{ color: C.navy, fontWeight: 800 }}>{ratio === null ? "—" : ratio.toLocaleString("fr-FR", { minimumFractionDigits: 1, maximumFractionDigits: 1 })}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+                <tfoot><tr>
+                  <td className="name">Total province</td>
+                  <td>{fmt(sumN(zss.map((z) => z.sFix)))}</td>
+                  <td>{fmt(sumN(zss.map((z) => z.essVac)))}</td>
+                  <td>{(() => { const ev = sumN(zss.map((z) => z.essVac)); const fx = sumN(zss.map((z) => z.sFix)); return ev > 0 ? (Math.round((fx / ev) * 10) / 10).toLocaleString("fr-FR", { minimumFractionDigits: 1, maximumFractionDigits: 1 }) : "—"; })()}</td>
+                </tr></tfoot>
+              </table>
+            </div>
           </div>
         </div>
         <div className="card card-pad mt-3">
@@ -254,7 +273,7 @@ export function Edl2() {
           ]} />
         </div>
         <div className="card card-pad mt-3">
-          <CardTitle icon="clinic" tone="green" title="Top 50 aires de santé par écart positif" sub="Stratégies planifiées − attendu (ACD)" right={<TableExportButtons filename="Top 50 aires de santé par écart positif" />} />
+          <CardTitle icon="clinic" tone="green" title="Top 50 des aires de santé avec grand écart" sub="Stratégies planifiées − attendu (ACD)" right={<TableExportButtons filename="Top 50 des aires de santé avec grand écart" />} />
           <div className="overflow-auto" style={{ maxHeight: 280 }}>
             <table className="dtable">
               <thead><tr><th>#</th><th className="name">Aire de santé</th><th className="name">ZS</th><th>Planifié</th><th>Attendu ACD</th><th>Écart</th></tr></thead>
@@ -276,7 +295,7 @@ export function Edl2() {
             <div className="mb-2 text-[11px] text-surface-500">Mise en forme conditionnée : vert &lt; 50 km · orange 50–99 km · rouge ≥ 100 km. Tableau défilable.</div>
             <div className="overflow-auto" style={{ maxHeight: 300 }}>
               <table className="dtable">
-                <thead><tr><th className="name">Aire de santé</th><th className="name">Zone de santé</th><th>Distance AS–BCZ (km)</th><th>Dernier village (km)</th><th>Voie d'accès</th><th>Réseau</th></tr></thead>
+                <thead><tr><th className="name">Aire de santé</th><th className="name">Zone de santé</th><th>Distance AS–BCZ (km)</th><th>Distance dernier village et CS (km)</th><th>Voie d'accès</th><th>Réseau</th></tr></thead>
                 <tbody>
                   {E.asPop.map((a, i) => (
                     <tr key={i}><td className="name">{a.as}</td><td className="name">{a.zs}</td><CondCell v={a.distBCZ} /><CondCell v={a.distVil} /><td>{a.voie || "—"}</td><CondCell v={a.reseau} kind="reseau" /></tr>
@@ -286,6 +305,7 @@ export function Edl2() {
             </div>
           </div>
           <div className="card card-pad flex flex-col gap-3">
+            <StatTile icon="pin" tone="red" label="Nombre d'AS avec dernier village > 20 km" big={fmt(sumN(acc.map((a) => a.vil20)))} sub="Total de la sélection" />
             <div>
               <CardTitle icon="road" tone="orange" title="% des AS à plus de 50 km par ZS" sub="Distance AS → BCZ" right={<TableExportButtons filename="% des AS à plus de 50 km par ZS" />} />
               <div className="overflow-auto" style={{ maxHeight: 150 }}>
@@ -300,7 +320,7 @@ export function Edl2() {
               </div>
             </div>
             <div>
-              <CardTitle icon="map" tone="red" title="Top 5 ZS — dernier village &gt; 20 km" sub="Nombre d'AS concernées" right={<TableExportButtons filename="Top 5 ZS — dernier village &gt; 20 km" />} />
+              <CardTitle icon="map" tone="red" title="Top 5 ZS avec plus d'AS avec dernier village &gt; 20 km" sub="Nombre d'AS concernées" right={<TableExportButtons filename="Top 5 ZS avec plus d'AS avec dernier village sup 20 km" />} />
               <table className="dtable">
                 <thead><tr><th>#</th><th className="name">Zone de santé</th><th>AS &gt; 20 km</th></tr></thead>
                 <tbody>
@@ -349,11 +369,15 @@ export function Edl2() {
           <CardTitle icon="people" tone="green" title="Participation communautaire — CAC & RECO" sub="Cellules d'animation communautaire par ZS" right={<TableExportButtons filename="Participation communautaire — CAC & RECO" />} />
           <div className="overflow-auto" style={{ maxHeight: 300 }}>
             <table className="dtable">
-              <thead><tr><th className="name">Zone de santé</th><th>Villages</th><th>CAC prévus</th><th>CAC actifs</th></tr></thead>
+              <thead><tr><th className="name">Zone de santé</th><th>Villages</th><th>CAC prévus</th><th>CAC actifs</th><th>Proportion de CAC actifs</th></tr></thead>
               <tbody>
-                {E.infoZS.map((z) => (
-                  <tr key={z.zs}><td className="name">{z.zs}</td><td>{fmt(z.villages)}</td><td>{fmt(z.cac)}</td><td style={{ color: C.green, fontWeight: 700 }}>{fmt(z.cacFonc)}</td></tr>
-                ))}
+                {E.infoZS.map((z) => {
+                  const prop = z.cac > 0 ? Math.round((z.cacFonc / z.cac) * 100) : null;
+                  const col = prop === null ? "#94a3b8" : prop >= 80 ? C.green : prop >= 50 ? C.orange : C.red;
+                  return (
+                    <tr key={z.zs}><td className="name">{z.zs}</td><td>{fmt(z.villages)}</td><td>{fmt(z.cac)}</td><td style={{ color: C.green, fontWeight: 700 }}>{fmt(z.cacFonc)}</td><td style={{ background: `${col}22`, color: col, fontWeight: 800 }}>{prop === null ? "—" : `${prop}%`}</td></tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -388,11 +412,18 @@ export function Edl2() {
 export function Edl3() {
   const E = useEdl();
   const cold = E.cold.slice().sort((a, b) => a.zs.localeCompare(b.zs));
+  // Proportion des réfrigérateurs FONCTIONNELS : fonctionnels / total recensés
+  // (équipements coldAS), et non % d'AS équipées (feedback TL p.3).
+  const frigoStats = (zs: string) => {
+    const eq = E.coldAS.filter((a) => a.zs === zs);
+    const fonc = eq.filter((a) => ("" + a.etat).toUpperCase().startsWith("F")).length;
+    return { total: eq.length, fonc, prop: eq.length ? Math.round((fonc / eq.length) * 100) : null };
+  };
   const energie: Record<string, number> = {};
   E.coldAS.forEach((a) => { const k = (a.energie || "Non précisé").trim() || "Non précisé"; energie[k] = (energie[k] || 0) + 1; });
   const energieRows = Object.entries(energie).sort((a, b) => b[1] - a[1]);
   const etatF = E.coldAS.filter((a) => ("" + a.etat).toUpperCase().startsWith("F")).length;
-  const totNAS = cold.reduce((s, c) => s + c.nAS, 0), totFrigo = cold.reduce((s, c) => s + c.frigo, 0);
+  const totNAS = cold.reduce((s, c) => s + c.nAS, 0);
 
   if (!cold.length) return <div className="space-y-4"><Banner icon="fridge" tone="teal" title="Ressources humaines, matérielles & financières" sub="Sélection filtrée" /><NoData /></div>;
 
@@ -407,19 +438,19 @@ export function Edl3() {
           <div className="card card-pad">
             <div className="overflow-auto" style={{ maxHeight: 300 }}>
               <table className="dtable">
-                <thead><tr><th className="name">Zone de santé</th><th>Nbr AS</th><th>AS avec réfrigérateur fonctionnel</th><th>Couverture</th></tr></thead>
+                <thead><tr><th className="name">Zone de santé</th><th>Nbr AS</th><th>Réfrigérateurs recensés</th><th>Réfrigérateurs fonctionnels</th><th>Proportion des réfrigérateurs fonctionnels</th></tr></thead>
                 <tbody>
-                  {cold.map((c) => { const p = c.nAS ? Math.round(c.frigo / c.nAS * 100) : 0; return (
-                    <tr key={c.zs}><td className="name">{c.zs}</td><td>{c.nAS}</td><td style={{ color: C.teal, fontWeight: 700 }}>{c.frigo}</td><td style={{ background: cotColor(p) + "22", fontWeight: 800 }}>{p}%</td></tr>
+                  {cold.map((c) => { const f = frigoStats(c.zs); return (
+                    <tr key={c.zs}><td className="name">{c.zs}</td><td>{c.nAS}</td><td>{f.total || "—"}</td><td style={{ color: C.teal, fontWeight: 700 }}>{f.total ? f.fonc : "—"}</td><td style={{ background: f.prop === null ? undefined : cotColor(f.prop) + "22", fontWeight: 800 }}>{f.prop === null ? "—" : `${f.prop}%`}</td></tr>
                   ); })}
                 </tbody>
-                <tfoot><tr><td className="name">Total province</td><td>{totNAS}</td><td>{totFrigo}</td><td>{totNAS ? Math.round(totFrigo / totNAS * 100) : 0}%</td></tr></tfoot>
+                <tfoot><tr><td className="name">Total province</td><td>{totNAS}</td><td>{E.coldAS.length}</td><td>{etatF}</td><td>{E.coldAS.length ? Math.round(etatF / E.coldAS.length * 100) : 0}%</td></tr></tfoot>
               </table>
             </div>
           </div>
           <div className="card card-pad">
-            <CardTitle icon="fridge" tone="teal" title="Couverture en réfrigérateurs fonctionnels" sub="% des AS équipées par ZS" />
-            <ProtoHBar height={250} maxName={90} rows={cold.map((c) => [c.zs, c.nAS ? Math.round(c.frigo / c.nAS * 100) : 0])} />
+            <CardTitle icon="fridge" tone="teal" title="Proportion des réfrigérateurs fonctionnels" sub="Réfrigérateurs fonctionnels / réfrigérateurs totaux, par ZS" />
+            <ProtoHBar height={250} maxName={90} rows={cold.map((c) => { const f = frigoStats(c.zs); return [c.zs, f.prop ?? 0]; })} />
           </div>
         </div>
       </section>
@@ -445,7 +476,7 @@ export function Edl3() {
             <table className="dtable" style={{ fontSize: 10 }}>
               <thead><tr>
                 <th className="name" style={{ position: "sticky", left: 0, background: "#f1f5f9", zIndex: 2 }}>Zone de santé</th>
-                {E.partnerCols.map((p) => <th key={p} style={{ minWidth: 78 }}>{p}</th>)}
+                {E.partnerCols.map((p) => <th key={p} style={{ minWidth: 78 }}>{p === "GAVI" ? "CAGF" : p}</th>)}
               </tr></thead>
               <tbody>
                 {E.partners.map((pr) => (
@@ -460,7 +491,7 @@ export function Edl3() {
               </tbody>
             </table>
           </div>
-          <div className="mt-2 text-[11px] text-surface-500">Partenaires : OMS, GAVI, UNICEF, CDC, Fonds Mondial, Banque Mondiale, SANRU, CDI Bwamanda, CORDAID, Croix Rouge… · « — » = pas d'intervention recensée.</div>
+          <div className="mt-2 text-[11px] text-surface-500">Partenaires : OMS, CAGF, UNICEF, CDC, Fonds Mondial, Banque Mondiale, SANRU, CDI Bwamanda, CORDAID, Croix Rouge… · « — » = pas d'intervention recensée.</div>
         </div>
       </section>
 

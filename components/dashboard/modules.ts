@@ -27,7 +27,7 @@ export const MODULES: ModuleDef[] = [
     desc: "Informations générales, accessibilité, planification, engagement communautaire et ressources de la province.",
     pages: [
       { id: "edl_infos", label: "Informations générales", icon: "legend", lvl: "all" },
-      { id: "edl_planif", label: "Planification & communauté", icon: "reco", lvl: "all" },
+      { id: "edl_planif", label: "Session de vaccination et cartographie communautaire", icon: "reco", lvl: "all" },
       { id: "edl_ressources", label: "Ressources & partenaires", icon: "form", lvl: "all" },
     ],
   },
