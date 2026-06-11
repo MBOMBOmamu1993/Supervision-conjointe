@@ -56,6 +56,14 @@ export interface CqdSource {
   label: string;
   assetUid: string;
   exportUid: string;
+  /**
+   * ANCIEN formulaire de contrôle qualité du même niveau (asset d'origine,
+   * avant création du nouveau). Ses soumissions sont récupérées via l'API et
+   * fusionnées par _uuid — renseignable ici OU via les variables
+   * d'environnement KOBO_CQD_LEGACY_CS / KOBO_CQD_LEGACY_ZS
+   * (format : « assetUid » ou « assetUid:exportUid »).
+   */
+  legacy?: { assetUid: string; exportUid?: string };
 }
 export const CQD_SOURCES: CqdSource[] = [
   { key: "zs", label: "Contrôle qualité des données — Zone de santé", assetUid: "ajhW22rQEkVs39SuhBuwCC", exportUid: "es8g2L4gEfMbGCGADHyXVwR" },
