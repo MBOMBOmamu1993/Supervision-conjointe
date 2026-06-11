@@ -150,7 +150,7 @@ export function TableExportButtons({
 
   const cls = `inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-[11px] font-bold transition ${VARIANT_CLS[variant]}`;
   return (
-    <span ref={ref} className="inline-flex shrink-0 items-center gap-2 normal-case tracking-normal">
+    <span ref={ref} className="inline-flex max-w-full flex-wrap shrink-0 items-center gap-2 normal-case tracking-normal">
       <button type="button" className={cls} onClick={onCsv} title="Télécharger les données du tableau au format CSV">
         <Icon name="download" className="h-[12px] w-[12px]" strokeWidth={2.4} />
         Télécharger CSV

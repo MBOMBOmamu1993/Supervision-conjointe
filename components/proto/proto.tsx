@@ -125,10 +125,13 @@ export function CardTitle({ icon, tone, title, sub, right, rightBelow }: { icon:
       </div>
     );
   }
+  // Le bloc titre garde une largeur minimale lisible (basis-52) : si les
+  // actions ne tiennent pas à côté, elles passent à la ligne au lieu
+  // d'écraser le titre.
   return (
-    <div className="mb-2 flex items-center gap-2.5">
+    <div className="mb-2 flex flex-wrap items-center gap-x-2.5 gap-y-2">
       <Badge icon={icon} tone={tone} size={34} />
-      <div className="min-w-0">
+      <div className="min-w-0 grow basis-52">
         <div className="text-[12.5px] font-bold leading-tight text-navy-700">{title}</div>
         {sub ? <div className="text-[11px] leading-snug text-surface-500">{sub}</div> : null}
       </div>
