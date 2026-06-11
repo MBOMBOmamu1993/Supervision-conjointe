@@ -25,10 +25,12 @@ import {
 } from "@/config/supervision.config";
 import type { SupervisionBundle, LevelBundle } from "@/lib/supervision/types";
 
-const ANS: AnswerValue[] = ["oui", "partiel", "non", "na"];
 function totals(b: LevelBundle) {
-  const t: Record<AnswerValue, number> = { oui: 0, partiel: 0, non: 0, na: 0 };
-  for (const c of b.composanteAnswers) for (const k of ANS) t[k] += c.answers[k];
+  // Décompte TOTAL du niveau (b.answers) : toutes les questions notées du
+  // formulaire (réponses Oui / Partiellement / Non / NA), y compris celles dont
+  // la composante n'est pas reconnue — jamais les champs administratifs
+  // (Province, Antenne, ZS, Aire de santé…), exclus à la détection.
+  const t: Record<AnswerValue, number> = { ...b.answers };
   const evaluated = t.oui + t.partiel + t.non;
   const all = evaluated + t.na;
   return { ...t, evaluated, all, ouiPct: evaluated ? Math.round((t.oui / evaluated) * 100) : null };
@@ -148,22 +150,24 @@ export function SupervisionResultats() {
         const t = totals(b);
         const block = d.kpi[meta.kpiBlock];
         const months = d.meta.months;
-        const nStruct = b.perStructure.length;
-        const qParStructure = nStruct ? Math.round(t.all / nStruct) : null;
-        // Au niveau antenne, le % de réalisation suit la cible TRIMESTRIELLE
-        // (2 antennes / trimestre) ; aux niveaux ZS/AS, cibles existantes.
-        const pctRealisation = lvl === "antenne" ? d.kpi.antennes_trimestre.pct : block.pct;
+        // Questions du formulaire PAR SUPERVISION (soumission) — et non par
+        // structure : doit refléter le nombre réel de questions de la checklist.
+        const qParSupervision = b.records ? Math.round(t.all / b.records) : null;
+        // % de réalisation : compteur / attendu DYNAMIQUE (cf. analytics —
+        // attendus par antenne/ZS/aire × mois ou trimestres de la période).
+        const pctRealisation = block.pct;
         return (
           <div className="space-y-4">
             <Banner icon={meta.icon} tone={meta.tone} title={`Supervision conjointe — ${scope}`}
-              sub={<>Réalisation, qualité et scores au niveau {labels.plur.toLowerCase()} · {b.records} supervision{b.records > 1 ? "s" : ""}{lvl === "antenne" ? " · cible : 2 antennes / trimestre" : ""}</>} />
+              sub={<>Réalisation, qualité et scores au niveau {labels.plur.toLowerCase()} · {b.records} supervision{b.records > 1 ? "s" : ""}{lvl === "antenne" ? " · cible : 1 conjointe PEV central-OMS / antenne / trimestre · 1 auto-supervision / antenne / mois" : ""}</>} />
             <OrgUnitFilter d={d} />
 
             <section>
               <SectionBar icon="bars">Indicateurs clés</SectionBar>
               <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                <KpiTile icon={meta.icon} tone={meta.tone} label={`${labels.plur} supervisées`} value={block.count} pct={pctRealisation ?? undefined} />
-                <KpiTile icon="clip" tone="navy" label="Total questions administrées" value={t.all} sub={qParStructure !== null ? `Questions par structure : <b>${qParStructure}</b>` : "—"} />
+                <KpiTile icon={meta.icon} tone={meta.tone} label={`${labels.plur} supervisées`} value={block.count} pct={pctRealisation ?? undefined}
+                  sub={block.target !== null ? `Attendu sur la période : <b>${block.target}</b>` : undefined} />
+                <KpiTile icon="clip" tone="navy" label="Total questions administrées" value={t.all} sub={qParSupervision !== null ? `Questions par supervision : <b>${qParSupervision}</b>` : "—"} />
                 <KpiTile icon="check" tone="green" label={`Total réponses « Oui » — par ${labels.sing.toLowerCase()}`} value={t.oui} sub={`Proportion : <b>${propTxt(t.oui, t.all)}</b>`} />
                 <KpiTile icon="component" tone="orange" label={`Total réponses « Partiellement » — par ${labels.sing.toLowerCase()}`} value={t.partiel} sub={`Proportion : <b>${propTxt(t.partiel, t.all)}</b>`} />
                 <KpiTile icon="down" tone="red" label={`Total réponses « Non » — par ${labels.sing.toLowerCase()}`} value={t.non} sub={`Proportion : <b>${propTxt(t.non, t.all)}</b>`} />

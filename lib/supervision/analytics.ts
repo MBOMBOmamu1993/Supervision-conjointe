@@ -28,7 +28,7 @@ import {
   type ScoreQuestion,
 } from "./schema";
 import {
-  antenneOfZone, canonAntenne, zoneOfAire,
+  antenneOfZone, canonAntenne, zoneOfAire, geoScopeCounts,
   prettifyName, cleanZoneLabel, cleanAireLabel,
 } from "@/lib/geo";
 import type { SourceFetch } from "./kobo-client";
@@ -173,11 +173,16 @@ function buildRecords(source: SourceFetch): { records: SupervisionRecord[]; rows
       const av = answerFromScore(sc, mx);
       if (!av) continue;
       answers[av]++;
-      const ck = q.composante!;
-      answersByComposante[ck][av]++;
+      // Composante éventuellement inconnue (jeton hors nomenclature) : la
+      // question compte dans les totaux et le score global, pas dans les
+      // ventilations par composante.
+      const ck = q.composante;
+      if (ck) answersByComposante[ck][av]++;
       if (av !== "na" && mx !== null && mx > 0) {
-        compSum[ck].score += sc ?? 0;
-        compSum[ck].max += mx;
+        if (ck) {
+          compSum[ck].score += sc ?? 0;
+          compSum[ck].max += mx;
+        }
         globalScore += sc ?? 0;
         globalMax += mx;
       }
@@ -514,10 +519,17 @@ function radar(records: SupervisionRecord[]): { entities: { name: string; values
   return { entities, indicators };
 }
 
+function levelAnswers(records: SupervisionRecord[]): Record<AnswerValue, number> {
+  const acc = EMPTY_ANSWERS();
+  for (const r of records) for (const k of Object.keys(acc) as AnswerValue[]) acc[k] += r.answers[k];
+  return acc;
+}
+
 function buildLevel(level: StructureLevel, records: SupervisionRecord[], rows: RawRow[], scoreQs: ScoreQuestion[], months: string[]): LevelBundle {
   return {
     level,
     records: records.length,
+    answers: levelAnswers(records),
     score: scoreStat(records),
     cotations: cotationDist(records),
     perStructure: perStructure(records),
@@ -537,6 +549,25 @@ function buildLevel(level: StructureLevel, records: SupervisionRecord[], rows: R
 
 function distinctStructures(records: SupervisionRecord[]): number {
   return new Set(records.filter((r) => r.structure).map((r) => norm(r.structure))).size;
+}
+/**
+ * Structures-mois distinctes supervisées : une même structure supervisée sur
+ * deux mois compte deux fois (numérateur cohérent avec des attendus mensuels),
+ * mais deux passages le même mois ne comptent qu'une fois.
+ */
+function distinctStructureMonths(records: SupervisionRecord[]): number {
+  return new Set(records.filter((r) => r.structure).map((r) => `${norm(r.structure)}|${r.month ?? ""}`)).size;
+}
+/** Trimestre ISO d'un mois "YYYY-MM" → "YYYY-Tn". */
+function quarterOf(month: string): string {
+  const m = Number(month.slice(5, 7));
+  return `${month.slice(0, 4)}-T${Math.floor((m - 1) / 3) + 1}`;
+}
+/** Structures-trimestres distinctes supervisées (attendus trimestriels). */
+function distinctStructureQuarters(records: SupervisionRecord[]): number {
+  return new Set(
+    records.filter((r) => r.structure).map((r) => `${norm(r.structure)}|${r.month ? quarterOf(r.month) : ""}`)
+  ).size;
 }
 function kpiBlock(count: number, target: number | null): KpiBlock {
   const t = target !== null && target > 0 ? Math.round(target * 10) / 10 : target;
@@ -591,8 +622,6 @@ export function buildBundle(sources: SourceFetch[], filters: Filters, targets: S
   }
 
   const months = Array.from(new Set(allRecords.map((r) => r.month).filter((m): m is string => !!m))).sort();
-  // Nombre de mois de la période pour la mise à l'échelle des cibles attendues.
-  const monthsCount = Math.max(1, months.length);
 
   const levels = {} as Record<StructureLevel, LevelBundle>;
   (["antenne", "zs", "as"] as StructureLevel[]).forEach((lvl) => {
@@ -613,51 +642,77 @@ export function buildBundle(sources: SourceFetch[], filters: Filters, targets: S
   const zsConjointe = zsRecs.filter((r) => r.type === "conjointe_pev_oms" || r.type === "conjointe_mca");
   const csConjointe = asRecs.filter((r) => r.type === "conjointe_pev_oms" || r.type === "conjointe_mca");
 
-  // Cibles « attendues » mises à l'échelle du nombre de mois de la période.
-  const T = (perMonth: number) => perMonth * monthsCount;
+  // ----- Dénominateurs « attendus » DYNAMIQUES (feedback Dr Léandre) -----
+  // L'attendu suit la sélection : taux par unité (config) × unités géographiques
+  // couvertes par les filtres (hiérarchie provinciale) × mois/trimestres de la
+  // période. Ex. antenne filtrée + conjointe + 1 mois → 2 ZS attendues (100 %
+  // si l'antenne a supervisé ses 2 ZS du mois).
+  const scope = geoScopeCounts({ antenne: filters.antenne, zone: filters.zone, aire: filters.aire });
+  const nAnt = Math.max(1, scope.antennes);
+  const nZs = Math.max(1, scope.zones);
+  const nAs = Math.max(1, scope.aires);
+  // Période de référence : les mois explicitement filtrés, sinon les mois
+  // observés dans les données.
+  const periodMonths = filters.months && filters.months.length ? filters.months : months;
+  const nMois = Math.max(1, periodMonths.length);
+  const nTrim = Math.max(1, new Set(periodMonths.map(quarterOf)).size);
 
-  // Cibles « totales » par niveau, calculées selon le filtre « Type de
-  // supervision » actif. Sans filtre, on cumule conjointe + MoH seul ; avec
-  // filtre, on ne retient que la (les) catégorie(s) sélectionnée(s). Le compteur
-  // (numérateur) suit déjà le filtre car antRecs/zsRecs/asRecs sont filtrés.
+  // Attendus par catégorie sur la période filtrée :
+  //  - conjointe PEV central-OMS : 1 supervision / antenne / trimestre ;
+  //  - auto-supervision : 1 / antenne / mois ;
+  //  - conjointe (équipe) : 2 ZS / antenne / mois (plafonné aux ZS du périmètre)
+  //    et 3 aires / antenne / mois (3 / ZS lorsqu'une ZS est filtrée) ;
+  //  - MCA seul : 1/3 de ses ZS / mois ;
+  //  - ECZS seul : toutes les aires de santé du périmètre / mois.
+  const expAntConjointe = targets.conjointe_pev_oms_antenne_per_trimestre * nAnt * nTrim;
+  const expAntAuto = targets.auto_eval_antenne_per_month * nAnt * nMois;
+  const expZsConjointe = Math.min(targets.conjointe_zs_per_antenne_per_month * nAnt, nZs) * nMois;
+  const expAsConjointe = filters.zone
+    ? Math.min(targets.conjointe_aires_per_antenne_per_month, nAs) * nMois
+    : Math.min(targets.conjointe_aires_per_antenne_per_month * nAnt, nAs) * nMois;
+  const expZsMca = nZs * targets.mca_seul_zs_share_per_month * nMois;
+  const expAsEcz = nAs * nMois;
+
+  // Cibles « totales » par niveau, selon le filtre « Type de supervision »
+  // actif. Sans filtre, on cumule conjointe + MoH seul ; avec filtre, on ne
+  // retient que la (les) catégorie(s) sélectionnée(s). Le compteur (numérateur)
+  // suit déjà le filtre car antRecs/zsRecs/asRecs sont filtrés.
   const tf = filters.types ?? [];
   const none = tf.length === 0;
+  const hasPevOms = none || tf.includes("conjointe_pev_oms") || tf.includes("conjointe");
   const hasConjointe = none || tf.includes("conjointe_pev_oms") || tf.includes("conjointe_mca") || tf.includes("conjointe");
   const hasSeul = none || tf.includes("moh_seul");
-  const antTargetTotal = (hasConjointe ? targets.conjointe_antennes_per_month : 0) + (hasSeul ? targets.auto_eval_per_month : 0);
-  const zsTargetTotal = (hasConjointe ? targets.conjointe_zs_per_month : 0) + (hasSeul ? targets.mca_seul_per_month : 0);
-  const asTargetTotal = (hasConjointe ? targets.conjointe_aires_per_month : 0) + (hasSeul ? targets.ecz_seul_per_month : 0);
-
-  // % de réalisation au niveau ANTENNE : la cible est 2 antennes par TRIMESTRE
-  // (feedback TL p.3) — antennes distinctes supervisées dans le trimestre
-  // courant / 2, indépendamment du nombre de mois filtrés.
-  const now = new Date();
-  const qStartMonth = Math.floor(now.getMonth() / 3) * 3;
-  const quarterMonths = [0, 1, 2].map((i) => `${now.getFullYear()}-${String(qStartMonth + i + 1).padStart(2, "0")}`);
-  const antennesTrimestre = distinctStructures(antRecs.filter((r) => r.month !== null && quarterMonths.includes(r.month)));
+  const antTargetTotal = (hasPevOms ? expAntConjointe : 0) + (hasSeul ? expAntAuto : 0);
+  const zsTargetTotal = (hasConjointe ? expZsConjointe : 0) + (hasSeul ? expZsMca : 0);
+  const asTargetTotal = (hasConjointe ? expAsConjointe : 0) + (hasSeul ? expAsEcz : 0);
 
   const kpi = {
     // Compteurs « toutes catégories » (suivent le filtre Type de supervision) :
-    // nombre de structures distinctes supervisées par niveau, avec % réalisation.
-    antennes_total: kpiBlock(distinctStructures(antRecs), T(antTargetTotal)),
-    // Réalisation trimestrielle des antennes (cible : 2 antennes / trimestre).
-    antennes_trimestre: kpiBlock(antennesTrimestre, 2),
-    zs_total: kpiBlock(distinctStructures(zsRecs), T(zsTargetTotal)),
-    as_total: kpiBlock(distinctStructures(asRecs), T(asTargetTotal)),
-    // Supervision conjointe PEV central-OMS : compteur réel (0 tant que le PEV
-    // central/OMS n'a pas supervisé) vs 1/trimestre.
-    conjointe_pev_oms: kpiBlock(conjointePevOms.length, T(targets.conjointe_pev_oms_per_month)),
-    // Supervision conjointe (équipe) : 2 antennes/trim + 4 ZS/mois + 12 aires/mois
-    // (2 antennes × 2 ZS supervisées × 3 aires de santé = 12 aires/mois).
-    conjointe_mca: kpiBlock(conjointeMca.length, T(targets.conjointe_antennes_per_month + targets.conjointe_zs_per_month + targets.conjointe_aires_per_month)),
-    auto_eval: kpiBlock(autoEval.length, T(targets.auto_eval_per_month)),
-    mca_seul: kpiBlock(byType(allRecords, "mca_seul").length, T(targets.mca_seul_per_month)),
-    ecz_seul: kpiBlock(byType(allRecords, "ecz_seul").length, T(targets.ecz_seul_per_month)),
-    antennes_sup: kpiBlock(distinctStructures(antRecs.filter((r) => r.type === "conjointe_pev_oms" || r.type === "conjointe_mca")), T(targets.conjointe_antennes_per_month)),
-    zs_conjointe: kpiBlock(distinctStructures(zsConjointe), T(targets.conjointe_zs_per_month)),
-    zs_mca: kpiBlock(distinctStructures(byType(zsRecs, "mca_seul")), T(targets.mca_seul_per_month)),
-    cs_conjointe: kpiBlock(distinctStructures(csConjointe), T(targets.conjointe_aires_per_month)),
-    cs_ecz: kpiBlock(distinctStructures(byType(asRecs, "ecz_seul")), T(targets.ecz_seul_per_month)),
+    // structures-mois distinctes supervisées par niveau, avec % réalisation.
+    antennes_total: kpiBlock(distinctStructureMonths(antRecs), antTargetTotal),
+    // Réalisation trimestrielle des antennes en supervision conjointe
+    // (1 / antenne / trimestre), calée sur la PÉRIODE FILTRÉE.
+    antennes_trimestre: kpiBlock(
+      distinctStructureQuarters(antRecs.filter((r) => r.type === "conjointe_pev_oms" || r.type === "conjointe_mca")),
+      nAnt * nTrim
+    ),
+    zs_total: kpiBlock(distinctStructureMonths(zsRecs), zsTargetTotal),
+    as_total: kpiBlock(distinctStructureMonths(asRecs), asTargetTotal),
+    // Supervision conjointe PEV central-OMS : 1 / antenne / trimestre.
+    conjointe_pev_oms: kpiBlock(conjointePevOms.length, expAntConjointe),
+    // Supervision conjointe (équipe MCA/AT/ECZS) : ZS + aires attendues.
+    conjointe_mca: kpiBlock(conjointeMca.length, expZsConjointe + expAsConjointe),
+    auto_eval: kpiBlock(autoEval.length, expAntAuto),
+    mca_seul: kpiBlock(byType(allRecords, "mca_seul").length, expZsMca),
+    ecz_seul: kpiBlock(byType(allRecords, "ecz_seul").length, expAsEcz),
+    antennes_sup: kpiBlock(
+      distinctStructureQuarters(antRecs.filter((r) => r.type === "conjointe_pev_oms" || r.type === "conjointe_mca")),
+      expAntConjointe
+    ),
+    zs_conjointe: kpiBlock(distinctStructureMonths(zsConjointe), expZsConjointe),
+    zs_mca: kpiBlock(distinctStructureMonths(byType(zsRecs, "mca_seul")), expZsMca),
+    cs_conjointe: kpiBlock(distinctStructureMonths(csConjointe), expAsConjointe),
+    cs_ecz: kpiBlock(distinctStructureMonths(byType(asRecs, "ecz_seul")), expAsEcz),
     structures_conjointe: distinctStructures(conjointeAll),
     total_supervisions: allRecords.length,
   };

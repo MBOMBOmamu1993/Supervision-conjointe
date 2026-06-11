@@ -294,29 +294,36 @@ export function cqdAppreciation(pct: number | null): CotationLevel | null {
 
 /* ------------------------ Cibles attendues ------------------------ */
 /**
- * Dénominateurs « attendus » par mois (échelle provinciale), utilisés pour le
- * « % réalisé ». Ils sont multipliés par le nombre de mois de la période.
+ * Dénominateurs « attendus » (feedback Dr Léandre, 11/06/2026), exprimés en
+ * TAUX PAR UNITÉ GÉOGRAPHIQUE pour rester dynamiques quel que soit le filtre :
+ *  - auto-supervision : 1 par antenne par mois ;
+ *  - supervision conjointe PEV central-OMS : 1 par antenne par trimestre ;
+ *  - supervision conjointe (MCA/AT/ECZS) : 2 ZS par antenne par mois et
+ *    3 aires de santé par mois (soit 4 ZS et 6 aires pour la province
+ *    et ses 2 antennes) ;
+ *  - MCA seul : 1/3 de ses ZS par mois ;
+ *  - ECZS seul : TOUTES les aires de santé de la ZS par mois (dénominateur
+ *    dérivé de la hiérarchie provinciale, pas de constante).
+ * L'attendu d'une sélection = taux × nombre d'unités dans la sélection ×
+ * nombre de mois (ou trimestres) de la période filtrée.
  */
 export interface SupervisionTargets {
-  conjointe_pev_oms_per_month: number;
-  conjointe_antennes_per_month: number;
-  conjointe_zs_per_month: number;
-  conjointe_aires_per_month: number;
-  auto_eval_per_month: number;
-  mca_seul_per_month: number;
-  ecz_seul_per_month: number;
+  /** Conjointe PEV central-OMS : supervisions d'antenne par antenne et par trimestre. */
+  conjointe_pev_oms_antenne_per_trimestre: number;
+  /** Auto-supervision : par antenne et par mois. */
+  auto_eval_antenne_per_month: number;
+  /** Conjointe (équipe) : ZS supervisées par antenne et par mois. */
+  conjointe_zs_per_antenne_per_month: number;
+  /** Conjointe (équipe) : aires de santé supervisées par antenne et par mois (3/antenne → 6/province). */
+  conjointe_aires_per_antenne_per_month: number;
+  /** MCA seul : part de ses ZS à superviser chaque mois (1/3). */
+  mca_seul_zs_share_per_month: number;
 }
 
-/**
- * Valeurs provinciales par défaut (Tshuapa).
- * Province ≈ 2 antennes, ≈ 23 ZS, nombreuses aires.
- */
 export const SUPERVISION_TARGETS: SupervisionTargets = {
-  conjointe_pev_oms_per_month: 1 / 3,
-  conjointe_antennes_per_month: 2 / 3,
-  conjointe_zs_per_month: 4,
-  conjointe_aires_per_month: 12,
-  auto_eval_per_month: 2,
-  mca_seul_per_month: 8,
-  ecz_seul_per_month: 23,
+  conjointe_pev_oms_antenne_per_trimestre: 1,
+  auto_eval_antenne_per_month: 1,
+  conjointe_zs_per_antenne_per_month: 2,
+  conjointe_aires_per_antenne_per_month: 3,
+  mca_seul_zs_share_per_month: 1 / 3,
 };

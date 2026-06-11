@@ -327,12 +327,14 @@ export function detectScoreQuestions(columns: string[]): ScoreQuestion[] {
       // Champs administratifs (Province, Antenne, ZS, Aire, identification…) :
       // exclus du décompte des questions, même s'ils portent un score technique.
       if (isAdminFieldLabel(token)) return;
+      // TOUTE question notée (paire score/max) est comptée, même si son jeton
+      // ne correspond à aucune composante connue (composante = null) — sinon
+      // le « total des questions administrées » perd des questions du
+      // formulaire et ne correspond plus au nombre réel de questions.
       const composante = matchComposanteByToken(token);
-      if (composante) {
-        const label = resolveLabel(idx, token);
-        if (isAdminFieldLabel(label)) return;
-        out.push({ scoreCol: col, maxCol, token, composante, label, commentCol: resolveComment(idx) });
-      }
+      const label = resolveLabel(idx, token);
+      if (isAdminFieldLabel(label)) return;
+      out.push({ scoreCol: col, maxCol, token, composante, label, commentCol: resolveComment(idx) });
     }
   });
 
