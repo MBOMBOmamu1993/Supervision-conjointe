@@ -131,6 +131,7 @@ export function RcmVaccination() {
           </table></div>
         ) : <Empty />}
       </div>
+      <CvComparisonTable data={data} />
     </div>
   );
 }
@@ -203,7 +204,9 @@ function gapBg(rcm: number | null, snis: number | null): string | undefined {
 }
 
 function CvComparisonTable({ data }: { data: RcmBundle }) {
-  const { data: dhis2, error } = useDhis2Cv();
+  // Mois de référence DHIS2 calculé à partir de la date de réalisation du RCM
+  // (la plus récente de la sélection), et non de la date du jour.
+  const { data: dhis2, error } = useDhis2Cv(data.meta.lastRcmDate);
   const moisLabel = dhis2 ? fmtMonth(dhis2.month) : "…";
   // Jointure par nom d'AS normalisé (casse/accents) : lignes = AS couvertes par
   // le RCM (suivent les filtres de l'onglet) ; à défaut de données RCM, les AS
@@ -224,7 +227,6 @@ function CvComparisonTable({ data }: { data: RcmBundle }) {
     <div className="card card-pad">
       <CardTitle icon="syringe" tone="violet"
         title={`Couverture vaccinale RCM vs couverture administrative (DHIS2) — ${moisLabel}`}
-        sub={`Mois de référence DHIS2 : ${moisLabel}${dhis2?.fallbackUsed ? ` (mois ${fmtMonth(dhis2.requestedMonth)} non encore publié — repli sur le dernier mois disponible)` : ""} · règle : M-2 avant le 20 du mois courant, M-1 à partir du 20 · écart ≥ 10 pts en orange, ≥ 20 pts en rouge`}
         right={<TableExportButtons filename={`Couverture vaccinale RCM vs DHIS2 ${moisLabel}`} data={exportData} />} />
       {error ? <Empty msg="Données administratives DHIS2 indisponibles (snis-vaccination-api)." /> : null}
       {!error && rows.length ? (
@@ -289,7 +291,6 @@ export function RcmTableaux() {
           <KpiTile icon="table" tone="navy" label="Tableaux détaillés" value={2} />
         </div>
       </section>
-      <CvComparisonTable data={data} />
       <div className="card card-pad">
         <CardTitle icon="table" tone="navy" title="Raisons de non-possession de carte par aire de santé" sub="% des enfants concernés" right={<TableExportButtons filename="Raisons de non-possession de carte par aire de santé" />} />
         {data.parAire.length && carteCats.length ? (
