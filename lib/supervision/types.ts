@@ -109,6 +109,12 @@ export interface TopNonItem {
 export interface LevelBundle {
   level: StructureLevel;
   records: number;
+  /**
+   * Décompte TOTAL des réponses du niveau (toutes questions notées du
+   * formulaire, y compris celles sans composante reconnue) — source du
+   * « Total questions administrées ».
+   */
+  answers: Record<AnswerValue, number>;
   score: ScoreStat;
   cotations: CotationDist[];
   perStructure: NamedScore[];

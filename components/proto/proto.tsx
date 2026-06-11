@@ -101,7 +101,8 @@ export function KpiTile({ icon, tone, label, value, pct, sub }: {
       <div className="my-1 mt-[7px] text-[30px] font-extrabold leading-none tabular-nums" style={{ color: t.text }}>{fmt(value as never)}</div>
       {pct !== undefined ? (
         <div className="text-[11.5px] font-medium text-surface-700">% réalisation : <b style={{ color: t.text }}>{pct}%</b></div>
-      ) : sub ? (
+      ) : null}
+      {sub ? (
         <div className="text-[11.5px] font-medium text-surface-700" dangerouslySetInnerHTML={{ __html: sub }} />
       ) : null}
     </div>

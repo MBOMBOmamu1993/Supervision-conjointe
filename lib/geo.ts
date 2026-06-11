@@ -153,6 +153,30 @@ export function airesOfZone(zone: string | null | undefined): string[] {
     .sort((a, b) => a.localeCompare(b, "fr"));
 }
 
+/**
+ * Nombre d'unités géographiques (antennes / ZS / aires de santé) couvertes par
+ * une sélection de filtres, d'après la hiérarchie provinciale (base État de
+ * lieux). Sert de base aux DÉNOMINATEURS « attendus » dynamiques : l'attendu
+ * d'une sélection = taux par unité × unités dans la sélection × mois.
+ */
+export function geoScopeCounts(sel: GeoSelection): { antennes: number; zones: number; aires: number } {
+  const selAntenne = canonAntenne(sel.antenne ?? null);
+  const zones = EDL.zsPop.filter(
+    (z) => (!selAntenne || eqGeo(canonAntenne(z.antenne), selAntenne)) && (!sel.zone || eqGeo(z.zs, sel.zone))
+  );
+  const bareAs = (s: string) => s.replace(/^AS\s+/i, "").trim();
+  const aires = EDL.asPop.filter(
+    (a) =>
+      (!selAntenne || eqGeo(canonAntenne(a.antenne), selAntenne)) &&
+      (!sel.zone || eqGeo(a.zs, sel.zone)) &&
+      (!sel.aire || eqGeo(bareAs(a.as), sel.aire) || eqGeo(a.as, sel.aire))
+  );
+  const antennes = selAntenne
+    ? 1
+    : new Set(EDL.zsPop.map((z) => norm(canonAntenne(z.antenne) ?? "")).filter(Boolean)).size;
+  return { antennes, zones: zones.length, aires: aires.length };
+}
+
 /* ----- Nettoyage des libellés encodés Kobo (valeurs XML) ----- */
 
 /**
