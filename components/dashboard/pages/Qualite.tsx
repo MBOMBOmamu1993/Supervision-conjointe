@@ -5,6 +5,8 @@
    Antigènes : PENTA1 · PENTA3 · RR1 · RR2 — sources Pointage · Registre · SNIS · DHIS2. */
 import { useState } from "react";
 import { useCqd } from "@/lib/client/cqd-api";
+import { useTabFilters } from "@/lib/state/filters";
+import { eqGeo } from "@/lib/geo";
 import type { CqdBundle, CqdConcordanceAS, CqdLevelBundle, ConcordanceClass } from "@/lib/cqd/types";
 import { SectionBar } from "@/components/ui/Card";
 import { KpiTile, CardTitle, Banner, C, TONES, apprConc } from "@/components/proto/proto";
@@ -134,6 +136,67 @@ function CqdDefinitions() {
   );
 }
 
+/**
+ * Bandeau « aires dérivées du formulaire ZS » (pages CS) : certaines ZS
+ * (ex. Boende) n'ont été contrôlées que via le formulaire CQD Zone de santé,
+ * dont l'échantillon liste les aires visitées — l'analytique en dérive des
+ * enregistrements de niveau CS pour que ces aires restent visibles ici.
+ */
+function DerivedNotice({ b }: { b: CqdLevelBundle | undefined }) {
+  if (!b || b.derivedRecords <= 0) return null;
+  const names = b.derivedStructures;
+  return (
+    <div className="card card-pad" style={{ background: "#fff8e7", border: "1px solid #f3d9a4" }}>
+      <div className="text-[12px] leading-relaxed text-surface-700">
+        <b>Contrôle réalisé au niveau de la zone de santé :</b>{" "}
+        {names.length ? <>les aires <b>{names.join(" · ")}</b> proviennent</> : <>une partie des aires provient</>} du
+        formulaire « Contrôle qualité — Zone de santé » (aucune soumission directe du formulaire CS pour ces aires).
+        Seules les sources renseignées à ce niveau sont affichées — les indicateurs sans source disponible restent à
+        « — ». Ces aires sont marquées d&apos;un astérisque (*) dans les tableaux.
+      </div>
+    </div>
+  );
+}
+
+/**
+ * État vide « guidé » des pages CS : quand le filtre ZS ne correspond à AUCUN
+ * contrôle qualité de niveau CS (ex. ZS Boende), indique où se trouvent les
+ * contrôles CS réellement soumis dans Kobo (ZS voisines de la même antenne),
+ * au lieu de laisser la page muette.
+ */
+function CsAvailabilityNotice({ data, b }: { data: CqdBundle | undefined; b: CqdLevelBundle | undefined }) {
+  const f = useTabFilters("qualite");
+  if (!data || !b || b.records > 0 || !f.zone) return null;
+  const tuples = data.filters.geo.filter((t) => t.aire && (!f.antenne || eqGeo(t.antenne, f.antenne)));
+  const byZone = new Map<string, Set<string>>();
+  for (const t of tuples) {
+    if (!t.zone || eqGeo(t.zone, f.zone)) continue;
+    if (!byZone.has(t.zone)) byZone.set(t.zone, new Set());
+    if (t.aire) byZone.get(t.zone)!.add(t.aire);
+  }
+  const others = Array.from(byZone.entries()).sort((a, c) => a[0].localeCompare(c[0], "fr"));
+  return (
+    <div className="card card-pad" style={{ background: "#fdeeee", border: "1px solid #f2c2c2" }}>
+      <div className="text-[12px] leading-relaxed text-surface-700">
+        <b>Aucun contrôle qualité « centre de santé » n&apos;est rattaché à la ZS {f.zone} dans Kobo.</b>{" "}
+        {others.length ? (
+          <>
+            Contrôles CS disponibles{f.antenne ? <> dans l&apos;antenne <b>{f.antenne}</b></> : null} :{" "}
+            {others.map(([z, aires], i) => (
+              <span key={z}>
+                {i > 0 ? " · " : null}ZS <b>{z}</b> ({Array.from(aires).sort((a, c) => a.localeCompare(c, "fr")).join(", ")})
+              </span>
+            ))}
+            . Sélectionnez la ZS correspondante — ou seulement l&apos;antenne — pour afficher ces données.
+          </>
+        ) : (
+          <>Aucune aire de santé contrôlée n&apos;est disponible pour cette sélection.</>
+        )}
+      </div>
+    </div>
+  );
+}
+
 /** Cellule mensuelle colorée selon la classe de concordance. */
 function ConcCell({ v }: { v: number | null }) {
   if (v == null || !Number.isFinite(v)) return <td className="tabular-nums text-surface-400">—</td>;
@@ -170,10 +233,12 @@ function ConcTable({ icon = "table", title, sub, label, data, months }: {
 
 /* ===================== CS — 1. Comparaison sources ===================== */
 export function CqdCsComparaison() {
-  const { b, live } = useLevel("as");
+  const { data, b, live } = useLevel("as");
   return (
     <div className="space-y-4">
       <Banner icon="chart" tone="blue" title="Centres de santé — Comparaison des sources de données" sub="Source de référence : registre de vaccination — comparé au pointage et au SNIS, par antigène" />
+      <CsAvailabilityNotice data={data} b={b} />
+      <DerivedNotice b={b} />
       <CqdDefinitions />
       <div className="card card-pad" style={{ background: "#eaf4fd" }}>
         <div className="text-[12px] leading-relaxed text-surface-700">
@@ -213,7 +278,7 @@ export function CqdCsComparaison() {
 
 /* ===================== CS — 2. Concordance ===================== */
 export function CqdCsConcordance() {
-  const { b, live } = useLevel("as");
+  const { data, b, live } = useLevel("as");
   const cc = b?.csConcordance;
   // Graphique : SNIS/Registre puis Registre/Pointage, par antigène.
   const chartRows: [string, number][] = cc
@@ -225,6 +290,8 @@ export function CqdCsConcordance() {
   return (
     <div className="space-y-4">
       <Banner icon="concord" tone="green" title="Contrôle qualité des données des centres de santé" sub="Facteur de vérification — chaîne Fiche de pointage → Registre → SNIS · seuils 95–105" />
+      <CsAvailabilityNotice data={data} b={b} />
+      <DerivedNotice b={b} />
       <section>
         <SectionBar icon="bars">Facteurs de vérification par rapport à l'outil de référence</SectionBar>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -251,7 +318,7 @@ export function CqdCsConcordance() {
 
 /* ===================== CS — 3. Erreurs ===================== */
 export function CqdCsErreurs() {
-  const { b, live, months } = useLevel("as");
+  const { data, b, live, months } = useLevel("as");
   const rows = b?.parStructure ?? [];
   const moyen = b?.erreurRegistreSnis ?? null;
   const systematiques = rows.filter((r) => (r.erreurRegistreSnis ?? 0) >= 50).length;
@@ -261,6 +328,8 @@ export function CqdCsErreurs() {
   return (
     <div className="space-y-4">
       <Banner icon="erreurs" tone="red" title="Centres de santé — Taux d'erreur de transcription" sub="Registre → SNIS · feuille de pointage → registre" />
+      <CsAvailabilityNotice data={data} b={b} />
+      <DerivedNotice b={b} />
       <section>
         <SectionBar icon="bars">Indicateurs d'erreur</SectionBar>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -289,7 +358,7 @@ export function CqdCsErreurs() {
           <div className="overflow-x-auto"><table className="dtable">
             <thead><tr><th className="name">Aire de santé</th><th>Registre – SNIS</th><th>Pointage – Registre</th><th>Appréciation</th></tr></thead>
             <tbody>{rows.map((r) => { const a = errAppr(r.erreurRegistreSnis); return (
-              <tr key={r.name}><td className="name">{r.name}</td><td style={{ color: C.red, fontWeight: 700 }}>{pctTxt(r.erreurRegistreSnis)}</td><td>{pctTxt(r.erreurPointageRegistre)}</td><td style={{ color: a.color, fontWeight: 800 }}>{a.label}</td></tr>
+              <tr key={r.name}><td className="name">{r.name}{r.derived ? " *" : ""}</td><td style={{ color: C.red, fontWeight: 700 }}>{pctTxt(r.erreurRegistreSnis)}</td><td>{pctTxt(r.erreurPointageRegistre)}</td><td style={{ color: a.color, fontWeight: 800 }}>{a.label}</td></tr>
             ); })}</tbody>
           </table></div>
         ) : <Empty />}
@@ -301,7 +370,7 @@ export function CqdCsErreurs() {
 
 /* ===================== CS — 4. Qualité outils ===================== */
 export function CqdCsOutils() {
-  const { b, live } = useLevel("as");
+  const { data, b, live } = useLevel("as");
   const o = b?.outils ?? { registre: null, pointage: null, snis: null };
   const rows = b?.parStructure ?? [];
   const aRenforcer = rows.filter((r) => r.outilsOk < 2).length;
@@ -309,6 +378,8 @@ export function CqdCsOutils() {
   return (
     <div className="space-y-4">
       <Banner icon="form" tone="violet" title="Centres de santé — Qualité de remplissage des outils" sub="Registre · Feuille de pointage · Canevas SNIS" />
+      <CsAvailabilityNotice data={data} b={b} />
+      <DerivedNotice b={b} />
       <section>
         <SectionBar icon="bars">Qualité des outils de gestion</SectionBar>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -329,7 +400,7 @@ export function CqdCsOutils() {
           <div className="overflow-x-auto"><table className="dtable">
             <thead><tr><th className="name">Aire de santé</th><th>Registre</th><th>Pointage</th><th>SNIS</th></tr></thead>
             <tbody>{rows.map((r) => (
-              <tr key={r.name}><td className="name">{r.name}</td>
+              <tr key={r.name}><td className="name">{r.name}{r.derived ? " *" : ""}</td>
                 {[r.registreOk, r.pointageOk, r.snisOk].map((v, i) => <td key={i} style={{ background: v ? "#e6f6ec" : "#fde2e2", color: v ? "#178a44" : "#c81e1e", fontWeight: 800 }}>{okTxt(v)}</td>)}</tr>
             ))}</tbody>
           </table></div>
@@ -341,7 +412,7 @@ export function CqdCsOutils() {
 
 /* ===================== CS — 5. Enfants manqués ===================== */
 export function CqdCsEnfants() {
-  const { b } = useLevel("as");
+  const { data, b } = useLevel("as");
   const e = b?.enfants ?? { aRecuperer: 0, identifies: 0, retrouves: 0, recuperes: 0, tauxRecuperes: null };
   const rows = b?.parStructure ?? [];
   const restants = Math.max(0, e.identifies - e.recuperes);
@@ -369,6 +440,8 @@ export function CqdCsEnfants() {
   return (
     <div className="space-y-4">
       <Banner icon="child" tone="blue" title="Contrôle qualité des données des centres de santé" sub="Identification des enfants manqués — identifiés · retrouvés par les relais · récupérés" />
+      <CsAvailabilityNotice data={data} b={b} />
+      <DerivedNotice b={b} />
       <section>
         <SectionBar icon="child">Enfants manqués / à récupérer</SectionBar>
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">

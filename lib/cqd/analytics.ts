@@ -292,6 +292,7 @@ function buildRecords(src: CqdFetch): CqdRecord[] {
     return {
       id: `cqd-${src.key}-${i}`,
       level: src.key,
+      derived: false,
       province: provClean,
       antenne: anClean,
       zone: zoneClean,
@@ -329,6 +330,168 @@ function buildRecords(src: CqdFetch): CqdRecord[] {
       listeRemise: listeRemiseCol ? boolFr(row[listeRemiseCol]) : null,
     };
   });
+}
+
+/* ---------- Dérivation des aires de santé depuis le formulaire CQD ZS ---------- */
+
+type SourceKey = "registre" | "pointage" | "snis" | "dhis2";
+const SOURCE_KEYS: SourceKey[] = ["registre", "pointage", "snis", "dhis2"];
+const CQD_ANTIGENS: { key: keyof Antigen4; tokens: string[] }[] = [
+  { key: "p1", tokens: ["penta1", "p1"] },
+  { key: "p3", tokens: ["penta3", "p3"] },
+  { key: "rr1", tokens: ["rr1"] },
+  { key: "rr2", tokens: ["rr2"] },
+];
+
+interface PerAireColumns {
+  /** Colonne du nom de l'aire échantillonnée (si le formulaire l'expose). */
+  name: string | null;
+  /** Colonnes de valeurs par source × antigène. */
+  vals: Partial<Record<SourceKey, Partial<Record<keyof Antigen4, string>>>>;
+}
+
+/**
+ * Détecte les colonnes « par aire échantillonnée » du formulaire CQD ZS (le
+ * contrôle ZS porte sur un échantillon d'aires ; les champs s_snis_* /
+ * s_dhis2_* en sont les sommes). La détection travaille sur les jetons du
+ * chemin complet de la colonne (groupes Kobo inclus) pour être robuste aux
+ * nommages : indice d'aire = jeton « as1 » / « aire 2 » / « a3 » ou chiffre
+ * isolé 1–3 ; une colonne de VALEUR combine indice + source (registre,
+ * pointage, snis, dhis2) + antigène ; une colonne de NOM combine indice +
+ * « aire »/« as » sans source ni antigène. Renvoie null si aucune structure
+ * par aire n'est détectée.
+ */
+function detectPerAireColumns(columns: string[]): Map<number, PerAireColumns> | null {
+  const out = new Map<number, PerAireColumns>();
+  const entry = (idx: number): PerAireColumns => {
+    if (!out.has(idx)) out.set(idx, { name: null, vals: {} });
+    return out.get(idx)!;
+  };
+  let foundVals = 0;
+  for (const c of columns) {
+    const toks = norm(c).split(" ").filter(Boolean);
+    let idx: number | null = null;
+    let idxIsExplicit = false;
+    for (const t of toks) {
+      const m = t.match(/^(as|aire|a)?([123])$/);
+      if (m) {
+        idx = Number(m[2]);
+        idxIsExplicit = !!m[1];
+        if (idxIsExplicit) break;
+      }
+    }
+    if (idx === null) continue;
+    const srcTok = SOURCE_KEYS.find((s2) => toks.includes(s2));
+    const antigen = CQD_ANTIGENS.find((a) => a.tokens.some((t) => toks.includes(t)));
+    if (srcTok && antigen) {
+      const e = entry(idx);
+      if (!e.vals[srcTok]) e.vals[srcTok] = {};
+      if (!e.vals[srcTok]![antigen.key]) {
+        e.vals[srcTok]![antigen.key] = c;
+        foundVals++;
+      }
+    } else if (!srcTok && !antigen && (toks.includes("aire") || toks.includes("as") || idxIsExplicit) && toks.some((t) => ["aire", "as", "nom", "sante"].includes(t))) {
+      const e = entry(idx);
+      if (!e.name) e.name = c;
+    }
+  }
+  return out.size > 0 && (foundVals > 0 || Array.from(out.values()).some((e) => e.name)) ? out : null;
+}
+
+/**
+ * Dérive des enregistrements de niveau AS depuis les soumissions du formulaire
+ * CQD « Zone de santé » : certaines ZS (ex. Boende) n'ont été contrôlées que
+ * via le formulaire ZS, dont l'échantillon liste pourtant les aires de santé
+ * visitées. Sans dérivation, les pages « Contrôle qualité — Centres de santé »
+ * restent vides pour ces ZS alors que les données existent dans Kobo.
+ *
+ * Chaque aire échantillonnée devient un enregistrement `derived` rattaché à la
+ * ZS de la soumission, portant les valeurs PAR AIRE détectées (souvent
+ * seulement SNIS/DHIS2 — seules sources disponibles au niveau ZS). À défaut de
+ * colonnes par aire, les noms sont extraits du champ multi-aires : les
+ * structures apparaissent alors sans valeurs chiffrées (jamais de chiffres
+ * inventés). Les champs non disponibles par aire restent vides/neutres.
+ */
+function buildDerivedAsRecords(src: CqdFetch): CqdRecord[] {
+  if (src.key !== "zs" || src.rows.length === 0) return [];
+  const columns = getColumns(src.rows);
+  const c = (cands: string[]) => col(columns, cands);
+  const province = c(["province", "liste_province"]);
+  const antenne = c(["antenne", "liste_antenne"]);
+  const zone = c(["zone_sante", "zone de sante", "zone"]);
+  const aire = c(["aire_sante", "aire de sante", "aire"]);
+  const dateCol = c(["date_supervision", "date de supervision", "date", "today", "end"]);
+  const typeCol = c(["Type_de_supervision", "type de supervision", "type_supervision"]);
+  const perAire = detectPerAireColumns(columns);
+
+  const out: CqdRecord[] = [];
+  src.rows.forEach((row, i) => {
+    const zRaw = zone ? str(row[zone]) : null;
+    const anRaw = antenne ? str(row[antenne]) : null;
+    const provRaw = province ? str(row[province]) : null;
+    let zoneClean = snapToKnown(cleanStructureName(zRaw, null, anRaw), isKnownZone);
+    let anClean = anRaw ? prettifyName(canonAntenne(anRaw) ?? anRaw) : null;
+    if (zoneClean && !anClean) anClean = antenneOfZone(zoneClean);
+    const month = normalizeCqdMonth(dateCol ? toMonth(row[dateCol]) : null);
+    const typeLabel = typeCol ? resolveTypeLabel(row[typeCol]) : resolveTypeLabel(null);
+    // Aires échantillonnées : champ multi-aires (codes XML séparés par des
+    // espaces) — sert de repli pour nommer les aires sans colonne dédiée.
+    const multi = aire ? str(row[aire]) : null;
+    const multiNames = (multi ? multi.split(/\s+/).filter(Boolean) : []).map((raw2) =>
+      snapToKnown(cleanStructureName(raw2, zRaw, anRaw), isKnownAire)
+    );
+
+    const emptyA4 = (): Antigen4 => ({ p1: 0, p3: 0, rr1: 0, rr2: 0 });
+    const grabAire = (cols: Partial<Record<keyof Antigen4, string>> | undefined): Antigen4 => ({
+      p1: cols?.p1 ? num(row[cols.p1]) : 0,
+      p3: cols?.p3 ? num(row[cols.p3]) : 0,
+      rr1: cols?.rr1 ? num(row[cols.rr1]) : 0,
+      rr2: cols?.rr2 ? num(row[cols.rr2]) : 0,
+    });
+
+    // Indices d'aires couverts : colonnes par aire détectées, sinon autant
+    // d'entrées que de noms dans le champ multi-aires.
+    const indices = perAire ? Array.from(perAire.keys()).sort((a, b) => a - b) : multiNames.map((_, k) => k + 1);
+    for (const idx of indices) {
+      const e = perAire?.get(idx);
+      const rawName = e?.name ? str(row[e.name]) : null;
+      const nameClean = rawName
+        ? snapToKnown(cleanStructureName(rawName, zRaw, anRaw), isKnownAire)
+        : multiNames[idx - 1] ?? null;
+      if (!nameClean) continue;
+      const hasVals = e ? SOURCE_KEYS.some((s2) => e.vals[s2] && Object.keys(e.vals[s2]!).length > 0) : false;
+      const rec: CqdRecord = {
+        id: `cqd-zs-as-${i}-${idx}`,
+        level: "as",
+        derived: true,
+        province: provRaw ? prettifyName(provRaw) : null,
+        antenne: anClean,
+        zone: zoneClean,
+        aire: nameClean,
+        structure: nameClean,
+        month,
+        typeLabel,
+        registre: hasVals ? grabAire(e!.vals.registre) : emptyA4(),
+        pointage: hasVals ? grabAire(e!.vals.pointage) : emptyA4(),
+        snis: hasVals ? grabAire(e!.vals.snis) : emptyA4(),
+        dhis2: hasVals ? grabAire(e!.vals.dhis2) : emptyA4(),
+        nbValeursVerifiees: 0,
+        nbDiscordSnisDhis2: 0,
+        nbDiscordPointageRegistre: 0,
+        registreCorrect: null,
+        pointageCorrect: null,
+        snisCorrect: null,
+        enfantsARecuperer: 0,
+        enfantsIdentifies: 0,
+        enfantsRetrouves: 0,
+        enfantsRecuperes: 0,
+        manquesAntigene: null,
+        listeRemise: null,
+      };
+      out.push(rec);
+    }
+  });
+  return out;
 }
 
 function pass(r: CqdRecord, f: CqdFilters): boolean {
@@ -378,15 +541,40 @@ function discordRate(records: CqdRecord[], srcA: (r: CqdRecord) => Antigen4, src
   return comparable > 0 ? r1((discordant / comparable) * 100) : null;
 }
 
+/** Vrai si la source est renseignée (au moins une valeur > 0) dans le jeu d'enregistrements. */
+const hasSource = (records: CqdRecord[], pick: (r: CqdRecord) => Antigen4) =>
+  records.some((r) => ANTIGEN_KEYS.some((k) => pick(r)[k] > 0));
+
+/**
+ * discordRate PROTÉGÉ pour les enregistrements dérivés du formulaire ZS : une
+ * source entièrement absente (registre/pointage jamais collectés au niveau ZS)
+ * ne doit pas compter comme « discordance à 100 % » — le taux est alors
+ * inconnu (null), pas une erreur systématique. Les soumissions CS réelles
+ * conservent la règle d'origine (un 0 face à une valeur = discordance).
+ */
+function guardedRate(records: CqdRecord[], srcA: (r: CqdRecord) => Antigen4, srcB: (r: CqdRecord) => Antigen4): number | null {
+  if (records.length && records.every((r) => r.derived) && (!hasSource(records, srcA) || !hasSource(records, srcB))) return null;
+  return discordRate(records, srcA, srcB);
+}
+
 /** Taux d'erreur de transcription SNIS → DHIS2 (niveau ZS : DHIS2 saisi à la ZS). */
-const errSnisDhis2 = (records: CqdRecord[]) => discordRate(records, (r) => r.snis, (r) => r.dhis2);
+const errSnisDhis2 = (records: CqdRecord[]) => guardedRate(records, (r) => r.snis, (r) => r.dhis2);
 /** Taux d'erreur de transcription feuille de pointage → registre. */
-const errPointageRegistre = (records: CqdRecord[]) => discordRate(records, (r) => r.pointage, (r) => r.registre);
+const errPointageRegistre = (records: CqdRecord[]) => guardedRate(records, (r) => r.pointage, (r) => r.registre);
 /** Taux d'erreur de transcription registre → SNIS. */
-const errRegistreSnis = (records: CqdRecord[]) => discordRate(records, (r) => r.registre, (r) => r.snis);
+const errRegistreSnis = (records: CqdRecord[]) => guardedRate(records, (r) => r.registre, (r) => r.snis);
 
 function buildLevel(level: "zs" | "as", records: CqdRecord[]): CqdLevelBundle {
-  const sumOf = (pick: (r: CqdRecord) => number) => records.reduce((a, r) => a + pick(r), 0);
+  // AGRÉGATS PROTÉGÉS : les enregistrements dérivés du formulaire ZS sont
+  // partiels (souvent SNIS/DHIS2 seuls) — mêlés aux soumissions CS réelles,
+  // ils biaiseraient les sommes globales (ex. SNIS gonflé sans registre en
+  // face). Les agrégats de niveau (cards, antigènes, tendance, erreurs) ne
+  // les incluent donc que si la sélection ne contient QUE des dérivés
+  // (ex. filtre ZS Boende) ; les tableaux par structure les affichent
+  // toujours, chaque ratio y étant calculé au sein de la même structure.
+  const real = records.filter((r) => !r.derived);
+  const agg = real.length ? real : records;
+  const sumOf = (pick: (r: CqdRecord) => number) => agg.reduce((a, r) => a + pick(r), 0);
 
   // Concordance globale (DHIS2 vs Registre pour AS, DHIS2 vs SNIS pour ZS selon
   // spec ; on calcule les deux références et on privilégie le registre s'il est
@@ -401,7 +589,7 @@ function buildLevel(level: "zs" | "as", records: CqdRecord[]): CqdLevelBundle {
   const refRr2 = regRr2 > 0 ? regRr2 : snisRr2;
 
   const okPct = (pick: (r: CqdRecord) => boolean | null) => {
-    const vals = records.map(pick).filter((v): v is boolean => v !== null);
+    const vals = agg.map(pick).filter((v): v is boolean => v !== null);
     return vals.length ? r1((vals.filter(Boolean).length / vals.length) * 100) : null;
   };
 
@@ -412,7 +600,7 @@ function buildLevel(level: "zs" | "as", records: CqdRecord[]): CqdLevelBundle {
 
   // Évolution mensuelle.
   const byMonth = new Map<string, CqdRecord[]>();
-  for (const r of records) {
+  for (const r of agg) {
     if (!r.month) continue;
     if (!byMonth.has(r.month)) byMonth.set(r.month, []);
     byMonth.get(r.month)!.push(r);
@@ -451,13 +639,16 @@ function buildLevel(level: "zs" | "as", records: CqdRecord[]): CqdLevelBundle {
     const tauxP3 = ref3 > 0 ? r1((s((r) => r.dhis2.p3) / ref3) * 100) : null;
     const tauxR2 = refR > 0 ? r1((s((r) => r.dhis2.rr2) / refR) * 100) : null;
     // Concordance Registre/SNIS (niveau CS — pas de DHIS2 à ce niveau).
+    // Structure dérivée sans registre collecté → « — » plutôt qu'un faux 0 %.
+    const regAbsent = recs.every((r) => r.derived) && !hasSource(recs, (r) => r.registre);
     const snisP3s = s((r) => r.snis.p3); const snisR2s = s((r) => r.snis.rr2);
-    const tauxRSP3 = snisP3s > 0 ? r1((s((r) => r.registre.p3) / snisP3s) * 100) : null;
-    const tauxRSR2 = snisR2s > 0 ? r1((s((r) => r.registre.rr2) / snisR2s) * 100) : null;
+    const tauxRSP3 = snisP3s > 0 && !regAbsent ? r1((s((r) => r.registre.p3) / snisP3s) * 100) : null;
+    const tauxRSR2 = snisR2s > 0 && !regAbsent ? r1((s((r) => r.registre.rr2) / snisR2s) * 100) : null;
     const outilsOk = recs.reduce((a, r) => a + ((r.registreCorrect ? 1 : 0) + (r.pointageCorrect ? 1 : 0) + (r.snisCorrect ? 1 : 0)), 0);
     return {
       name,
       zone: recs[0]?.zone ?? null,
+      derived: recs.every((r) => r.derived),
       concordanceP3: tauxP3,
       classeP3: classify(tauxP3),
       concordanceRr2: tauxR2,
@@ -503,12 +694,12 @@ function buildLevel(level: "zs" | "as", records: CqdRecord[]): CqdLevelBundle {
       }))
       .sort((a, b) => a.name.localeCompare(b.name));
 
-  // Cards globales (tous antigènes, toutes AS).
-  const totSnis = sumKeys(records, (r) => r.snis);
-  const totReg = sumKeys(records, (r) => r.registre);
-  const totPoi = sumKeys(records, (r) => r.pointage);
+  // Cards globales (tous antigènes, toutes AS) — agrégats protégés.
+  const totSnis = sumKeys(agg, (r) => r.snis);
+  const totReg = sumKeys(agg, (r) => r.registre);
+  const totPoi = sumKeys(agg, (r) => r.pointage);
 
-  const totDhis2 = sumKeys(records, (r) => r.dhis2);
+  const totDhis2 = sumKeys(agg, (r) => r.dhis2);
 
   // Décompte des structures en sous-/sur-rapportage (tous antigènes confondus) :
   //  · AS → base SNIS/Registre ; · ZS → base DHIS2/SNIS.
@@ -530,10 +721,10 @@ function buildLevel(level: "zs" | "as", records: CqdRecord[]): CqdLevelBundle {
     zsSousRapportage: zsSous,
     zsSurRapportage: zsSur,
     parAntigene: antDefs.map(([antigene, k]) => {
-      const sn = records.reduce((a, r) => a + r.snis[k], 0);
-      const rg = records.reduce((a, r) => a + r.registre[k], 0);
-      const po = records.reduce((a, r) => a + r.pointage[k], 0);
-      const dh = records.reduce((a, r) => a + r.dhis2[k], 0);
+      const sn = agg.reduce((a, r) => a + r.snis[k], 0);
+      const rg = agg.reduce((a, r) => a + r.registre[k], 0);
+      const po = agg.reduce((a, r) => a + r.pointage[k], 0);
+      const dh = agg.reduce((a, r) => a + r.dhis2[k], 0);
       return { antigene, snisRegistre: ratio(sn, rg), registrePointage: ratio(rg, po), dhis2Snis: ratio(dh, sn) };
     }),
     snisRegistre: buildConcTable((r) => r.snis, (r) => r.registre),
@@ -564,18 +755,20 @@ function buildLevel(level: "zs" | "as", records: CqdRecord[]): CqdLevelBundle {
           .sort((a, b) => a.name.localeCompare(b.name))
       : [],
   };
-  const listesVals = records.map((r) => r.listeRemise).filter((v): v is boolean => v !== null);
+  const listesVals = agg.map((r) => r.listeRemise).filter((v): v is boolean => v !== null);
   const listesRemisesPct = listesVals.length ? r1((listesVals.filter(Boolean).length / listesVals.length) * 100) : null;
 
   return {
     level,
     records: records.length,
     structuresControlees: byStruct.size,
+    derivedRecords: records.length - real.length,
+    derivedStructures: parStructure.filter((p) => p.derived).map((p) => p.name),
     concordanceP3: concordance(dhis2P3, refP3),
     concordanceRr2: concordance(dhis2Rr2, refRr2),
-    erreurSnisDhis2: errSnisDhis2(records),
-    erreurPointageRegistre: errPointageRegistre(records),
-    erreurRegistreSnis: errRegistreSnis(records),
+    erreurSnisDhis2: errSnisDhis2(agg),
+    erreurPointageRegistre: errPointageRegistre(agg),
+    erreurRegistreSnis: errRegistreSnis(agg),
     outils: {
       registre: okPct((r) => r.registreCorrect),
       pointage: okPct((r) => r.pointageCorrect),
@@ -629,12 +822,24 @@ function uniq(values: (string | null)[]): string[] {
 
 export function buildCqdBundle(sources: CqdFetch[], filters: CqdFilters): CqdBundle {
   const parsed = sources.map((s) => ({ src: s, records: buildRecords(s) }));
-  const allUnfiltered = parsed.flatMap((p) => p.records);
+
+  // Aires dérivées du formulaire ZS (ZS contrôlées sans soumission CS directe,
+  // ex. Boende). Dédoublonnage : une aire déjà contrôlée via le formulaire CS
+  // sur le même mois n'est pas dérivée une seconde fois.
+  const realAs = parsed.find((p) => p.src.key === "as")?.records ?? [];
+  const seenAs = new Set(realAs.map((r) => `${norm(r.aire ?? r.structure ?? "")}|${r.month ?? ""}`));
+  const zsSrc = sources.find((s) => s.key === "zs");
+  const derivedAs = (zsSrc ? buildDerivedAsRecords(zsSrc) : []).filter(
+    (r) => !seenAs.has(`${norm(r.aire ?? "")}|${r.month ?? ""}`)
+  );
+
+  const allUnfiltered = [...parsed.flatMap((p) => p.records), ...derivedAs];
 
   const byLevel: Record<"zs" | "as", CqdRecord[]> = { zs: [], as: [] };
   for (const p of parsed) {
     byLevel[p.src.key] = p.records.filter((r) => pass(r, filters));
   }
+  byLevel.as = byLevel.as.concat(derivedAs.filter((r) => pass(r, filters)));
   const allFiltered = [...byLevel.zs, ...byLevel.as];
   const months = uniq(allFiltered.map((r) => r.month));
 

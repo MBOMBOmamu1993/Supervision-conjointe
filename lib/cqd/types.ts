@@ -5,6 +5,15 @@ export type ConcordanceClass = "normal" | "sous" | "sur" | "na";
 export interface CqdRecord {
   id: string;
   level: "zs" | "as";
+  /**
+   * Enregistrement DÉRIVÉ : aire de santé reconstruite depuis une soumission
+   * du formulaire CQD « Zone de santé » (contrôle mené au niveau ZS sur un
+   * échantillon d'aires — ex. ZS Boende, sans soumission CS directe). Les
+   * dérivés ne portent que les sources renseignées au niveau ZS et sont
+   * exclus des agrégats globaux dès qu'au moins une soumission CS réelle
+   * existe dans la sélection (cf. « agrégats protégés », analytics.ts).
+   */
+  derived: boolean;
   province: string | null;
   antenne: string | null;
   zone: string | null;
@@ -67,6 +76,10 @@ export interface CqdLevelBundle {
   level: "zs" | "as";
   records: number;
   structuresControlees: number;
+  /** Nombre d'enregistrements dérivés du formulaire ZS dans la sélection. */
+  derivedRecords: number;
+  /** Structures issues UNIQUEMENT d'une dérivation (aucune soumission CS réelle). */
+  derivedStructures: string[];
   /** Concordance globale PENTA3 / RR2 (DHIS2 vs référence). */
   concordanceP3: ConcordanceStat;
   concordanceRr2: ConcordanceStat;
@@ -127,6 +140,8 @@ export interface CqdLevelBundle {
   parStructure: {
     name: string;
     zone: string | null;
+    /** Vrai si la structure provient uniquement d'une dérivation du formulaire ZS. */
+    derived: boolean;
     concordanceP3: number | null;
     classeP3: ConcordanceClass;
     concordanceRr2: number | null;
