@@ -109,10 +109,23 @@ function collect(node: unknown, ctx: Record<string, unknown>, out: Record<string
   if (isChild(sm)) out.push(merged);
 }
 
+/** Antigènes du tableau comparatif CV RCM vs CV DHIS2 (feedback TL). */
+const CV_ANTIGENS = ["penta1", "penta3", "rr1", "rr2"] as const;
+type CvAntigen = (typeof CV_ANTIGENS)[number];
+/** Champs réels par antigène (RR1/RR2 = VAR1/VAR2 dans certains exports). */
+const CV_FIELDS: Record<CvAntigen, string[]> = {
+  penta1: ["penta1"],
+  penta3: ["penta3"],
+  rr1: ["var_rr1", "rr1", "var1"],
+  rr2: ["var_rr2", "rr2", "var2"],
+};
+
 interface Child {
   province: string | null; antenne: string | null; zone: string | null; aire: string | null;
   month: string | null; distance: string; carte: string; ageGroup: string;
   vacc: Record<RcmAntigene, string>;
+  /** Statut vaccinal des 4 antigènes du comparatif CV RCM vs DHIS2. */
+  cvVacc: Record<CvAntigen, string>;
   reasonsCarte: string[]; reasonsVacc: string[];
 }
 
@@ -132,6 +145,12 @@ function normalize(rows: RawRow[]): Child[] {
   return raw.map((m) => {
     const vacc = {} as Record<RcmAntigene, string>;
     for (const ag of RCM_ANTIGENES) vacc[ag] = str(pick(m, ANTIGENE_FIELD[ag])).toLowerCase();
+    const cvVacc = {} as Record<CvAntigen, string>;
+    for (const ag of CV_ANTIGENS) {
+      let v = "";
+      for (const fld of CV_FIELDS[ag]) { v = str(pick(m, fld)).toLowerCase(); if (v) break; }
+      cvVacc[ag] = v;
+    }
     // Libellés géographiques nettoyés (retrait du code de niveau et des parents
     // encodés en préfixe) — appliqués en cascade Province → Antenne → ZS → Aire.
     const province = cleanGeoName(str(pick(m, "province")) || null, []);
@@ -148,6 +167,7 @@ function normalize(rows: RawRow[]): Child[] {
       carte: str(pick(m, "carte_vaccination")).toLowerCase(),
       ageGroup: str(pick(m, "age_group")).toLowerCase(),
       vacc,
+      cvVacc,
       reasonsCarte: selectMulti(pick(m, "raisons_absence_carte")),
       reasonsVacc: selectMulti(pick(m, "raisons_non_vaccination")),
     };
@@ -279,6 +299,18 @@ export function buildRcmBundle(
     return { name, zone: ac[0]?.zone ?? null, enfants: ac.length, reasonsCarte: rc, reasonsVacc: rv };
   });
 
+  // CV RCM par aire de santé (numérateur enquête) : vaccinés / enquêtés
+  // éligibles × 100, pour les 4 antigènes du comparatif RCM vs DHIS2.
+  const cvParAire = aires.map((name) => {
+    const ac = children.filter((c) => c.aire === name);
+    const cv = {} as Record<CvAntigen, number | null>;
+    for (const ag of CV_ANTIGENS) {
+      const considered = ac.filter((c) => c.cvVacc[ag] && c.cvVacc[ag] !== "non_applicable");
+      cv[ag] = pct(considered.filter((c) => isVacc(c.cvVacc[ag])).length, considered.length);
+    }
+    return { name, zone: ac[0]?.zone ?? null, enfants: ac.length, cv };
+  });
+
   const sansCartePct = cartePct == null ? null : Math.round((100 - cartePct) * 10) / 10;
 
   return {
@@ -293,6 +325,6 @@ export function buildRcmBundle(
       asBeneficiaires: asSet.size, asTotal, localites: distTotal || totalEnfants, totalEnfants,
       distance, distancePct, missAnyPct, cartePct, sansCartePct, vaccinePct, nonVaccinePct, antigenesPrioritaires,
     },
-    missByAntigene, byAge, missByZs, reasonsCarte, reasonsVacc, parAire,
+    missByAntigene, byAge, missByZs, reasonsCarte, reasonsVacc, parAire, cvParAire,
   };
 }

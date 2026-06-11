@@ -12,6 +12,7 @@ import { ProtoScoreBar, ProtoGauge, ProtoMultiLine, ProtoStackComp, ProtoRadarMa
 import Donut from "@/components/charts/Donut";
 import { DIcon } from "@/components/dashboard/icons";
 import { RefreshBar } from "./RapportAt";
+import { TableExportButtons } from "@/components/ui/TableExport";
 
 const num = (v: number | null | undefined) => (v == null ? "—" : `${v}`);
 const pctTxt = (v: number | null | undefined) => (v == null ? "—" : `${v}%`);
@@ -117,7 +118,7 @@ export function EvalClassement() {
         </div>
       </section>
       <div className="card card-pad">
-        <CardTitle icon="table" tone="navy" title="Classement des Assistants Techniques" sub="score ajusté et décision" />
+        <CardTitle icon="table" tone="navy" title="Classement des Assistants Techniques" sub="score ajusté et décision" right={<TableExportButtons filename="Classement des Assistants Techniques" />} />
         {rows.length ? (
           <div className="overflow-x-auto"><table className="dtable">
             <thead><tr><th>Rang</th><th className="name">AT</th><th>Antenne</th><th>Mois</th><th>Score obtenu</th><th>Score applicable</th><th>Score ajusté /100</th><th>Niveau</th><th>Décision</th></tr></thead>
@@ -158,7 +159,7 @@ export function EvalComposantes() {
         </div>
       </div>
       <div className="card card-pad">
-        <CardTitle icon="table" tone="navy" title="Performance par composante et par AT" sub="identifier rapidement les composantes faibles · NA en gris" />
+        <CardTitle icon="table" tone="navy" title="Performance par composante et par AT" sub="identifier rapidement les composantes faibles · NA en gris" right={<TableExportButtons filename="Performance par composante et par AT" />} />
         {parAt.length ? (
           <div className="overflow-x-auto"><table className="dtable">
             <thead><tr><th className="name">AT</th>{comps.map((c) => <th key={c.key}>{c.short}</th>)}<th>Score ajusté</th></tr></thead>
@@ -219,7 +220,7 @@ export function EvalEvolution() {
       </div>
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
         <div className="card card-pad">
-          <CardTitle icon="table" tone="navy" title={`Variation ${ev.months[0]?.label ?? ""} – ${ev.months[lastIdx]?.label ?? ""}`} />
+          <CardTitle icon="table" tone="navy" title={`Variation ${ev.months[0]?.label ?? ""} – ${ev.months[lastIdx]?.label ?? ""}`} right={<TableExportButtons filename="Variation des performances" />} />
           {variations.length ? (
             <table className="dtable">
               <thead><tr><th className="name">AT</th><th>{ev.months[0]?.label ?? "Début"}</th><th>{ev.months[lastIdx]?.label ?? "Fin"}</th><th>Évolution</th></tr></thead>
@@ -293,7 +294,7 @@ export function EvalGrille() {
       <Banner icon="cotation" tone="navy" title="Grille officielle de cotation des AT" sub="Points attribués au prorata du % obtenu · total 100 points sur 8 composantes" />
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
         <div className="card card-pad">
-          <CardTitle icon="cotation" tone="navy" title="Pondération par composante" />
+          <CardTitle icon="cotation" tone="navy" title="Pondération par composante" right={<TableExportButtons filename="Pondération par composante" />} />
           <table className="dtable">
             <thead><tr><th className="name">Composante</th><th>Pondération</th></tr></thead>
             <tbody>
@@ -303,7 +304,7 @@ export function EvalGrille() {
           </table>
         </div>
         <div className="card card-pad">
-          <CardTitle icon="rank" tone="red" title="Classification de la performance" />
+          <CardTitle icon="rank" tone="red" title="Classification de la performance" right={<TableExportButtons filename="Classification de la performance" />} />
           <table className="dtable">
             <thead><tr><th className="name">Score ajusté</th><th>Niveau</th><th>Décision</th></tr></thead>
             <tbody>{data.niveaux.map((n) => (
@@ -315,7 +316,7 @@ export function EvalGrille() {
         </div>
       </div>
       <div className="card card-pad">
-        <CardTitle icon="table" tone="navy" title="Grille détaillée de cotation — critères & mode de calcul" />
+        <CardTitle icon="table" tone="navy" title="Grille détaillée de cotation — critères & mode de calcul" right={<TableExportButtons filename="Grille détaillée de cotation — critères & mode de calcul" />} />
         <div className="overflow-x-auto"><table className="dtable">
           <thead><tr><th className="name">Composante</th><th>Critère</th><th>Mode de calcul</th><th>Points</th></tr></thead>
           <tbody>{GRILLE_DETAIL.map((r, i) => (
@@ -325,7 +326,7 @@ export function EvalGrille() {
       </div>
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-3">
         <div className="card card-pad lg:col-span-7">
-          <CardTitle icon="table" tone="navy" title="Matrice de conformité par composante et par AT" sub="« Bien » ≥ 70 % des points · « Mal » < 70 % · « NA » non applicable" />
+          <CardTitle icon="table" tone="navy" title="Matrice de conformité par composante et par AT" sub="« Bien » ≥ 70 % des points · « Mal » < 70 % · « NA » non applicable" right={<TableExportButtons filename="Matrice de conformité par composante et par AT" />} />
           {parAt.length ? (
             <div className="overflow-x-auto"><table className="dtable">
               <thead><tr><th className="name">AT</th>{comps.map((c) => <th key={c.key}>{c.short.replace(/ \/\d+/, "")}</th>)}</tr></thead>

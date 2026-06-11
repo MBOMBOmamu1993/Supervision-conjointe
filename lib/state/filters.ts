@@ -2,6 +2,11 @@
 
 import { create } from "zustand";
 
+// Niveau d'org unit dynamique (onglet Supervision conjointe) — réexporté ici
+// pour les composants clients ; la définition vit dans lib/org-level.ts
+// (module partagé serveur + client).
+export { orgLevelOf, ORG_LABEL, ORG_TO_STRUCTURE, type OrgLevel } from "@/lib/org-level";
+
 /**
  * Groupes de « Type de supervision » exposés dans le filtre. Chaque groupe
  * agrège un ou plusieurs types canoniques (cf. config/supervision.config.ts) :

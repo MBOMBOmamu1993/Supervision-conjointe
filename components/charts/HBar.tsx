@@ -10,11 +10,16 @@ export default function HBar({
   height,
   max = 100,
   colorByCotation = true,
+  exportTitle,
+  colorFor,
 }: {
   data: { name: string; value: number | null }[];
   height?: number;
   max?: number;
   colorByCotation?: boolean;
+  exportTitle?: string;
+  /** Couleur de barre personnalisée (prioritaire sur la cotation). */
+  colorFor?: (value: number) => string;
 }) {
   const clean = data.filter((d) => d.value !== null) as { name: string; value: number }[];
   const h = height ?? Math.max(120, clean.length * 28 + 40);
@@ -23,6 +28,7 @@ export default function HBar({
   return (
     <EChart
       height={h}
+      exportTitle={exportTitle}
       option={{
         grid: { left: 4, right: 44, top: 8, bottom: 8, containLabel: true },
         tooltip: {
@@ -44,7 +50,7 @@ export default function HBar({
             type: "bar",
             data: ordered.map((d) => ({
               value: d.value,
-              itemStyle: { color: colorByCotation ? COTATION_COLOR[cotationFor(d.value)] : "#0093d5", borderRadius: [0, 3, 3, 0] },
+              itemStyle: { color: colorFor ? colorFor(d.value) : colorByCotation ? COTATION_COLOR[cotationFor(d.value)] : "#0093d5", borderRadius: [0, 3, 3, 0] },
             })),
             barWidth: "62%",
             label: { show: true, position: "right", formatter: (p: { value: number }) => `${p.value}%`, fontSize: 10, color: "#475569" },

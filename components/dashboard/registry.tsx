@@ -1,6 +1,6 @@
 "use client";
 
-import { SupervisionLevelPage, SupervisionSynthese } from "./pages/Supervision";
+import { SupervisionResultats, SupervisionScore, SupervisionConstats } from "./pages/Supervision";
 import {
   CqdCsComparaison, CqdCsConcordance, CqdCsErreurs, CqdCsOutils, CqdCsEnfants,
   CqdZsComparaison, CqdZsConcordance, CqdZsErreurs,
@@ -14,11 +14,12 @@ import TelechargerRapport from "@/app/telecharger-rapport/page";
 
 /** id de page → composant de rendu (toutes les pages sont alimentées en LIVE). */
 export const PAGE_REGISTRY: Record<string, () => JSX.Element> = {
-  // Supervision conjointe
-  sc_antennes: () => <SupervisionLevelPage level="antenne" />,
-  sc_zones: () => <SupervisionLevelPage level="zs" />,
-  sc_aires: () => <SupervisionLevelPage level="as" />,
-  sc_synthese: SupervisionSynthese,
+  // Supervision conjointe — niveau d'org unit dynamique selon les filtres.
+  // (Les anciens ids sc_antennes/sc_zones/sc_aires/sc_synthese ne sont plus dans
+  // modules.ts : un lien enregistré retombe sur la première page du module.)
+  sc_resultats: SupervisionResultats,
+  sc_score: SupervisionScore,
+  sc_constats: SupervisionConstats,
   // Qualité des données — Centres de santé
   cqd_cs_comparaison: CqdCsComparaison,
   cqd_cs_concordance: CqdCsConcordance,

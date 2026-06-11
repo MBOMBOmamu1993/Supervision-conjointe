@@ -30,6 +30,10 @@ export interface CqdRecord {
   enfantsIdentifies: number;
   enfantsRetrouves: number;
   enfantsRecuperes: number;
+  /** Enfants manqués par antigène × tranche d'âge (si champs présents dans le formulaire). */
+  manquesAntigene: Record<string, { a0_11: number; a12_23: number; a24_59: number }> | null;
+  /** Liste des enfants manqués remise à l'équipe du CS (oui/non). */
+  listeRemise: boolean | null;
 }
 
 export interface ConcordanceStat {
@@ -75,6 +79,18 @@ export interface CqdLevelBundle {
   outils: { registre: number | null; pointage: number | null; snis: number | null };
   /** Enfants perdus de vue : identifiés / retrouvés / récupérés (%). */
   enfants: { aRecuperer: number; identifies: number; retrouves: number; recuperes: number; tauxRecuperes: number | null };
+  /**
+   * Enfants manqués par antigène × tranche d'âge (0–11 · 12–23 · 24–59 mois),
+   * par structure — `available` est faux si le formulaire CQD n'expose pas
+   * (encore) les champs antigène × âge.
+   */
+  manquesParAntigene: {
+    available: boolean;
+    antigenes: string[];
+    structures: { name: string; values: Record<string, { a0_11: number; a12_23: number; a24_59: number }> }[];
+  };
+  /** % des listes d'enfants manqués remises aux équipes des centres de santé. */
+  listesRemisesPct: number | null;
   /** Comparaison des antigènes (sommes) entre sources. */
   antigenes: { antigene: string; registre: number; pointage: number; snis: number; dhis2: number }[];
   /** Concordance DHIS2/référence et erreur SNIS↔DHIS2 par antigène (%). */

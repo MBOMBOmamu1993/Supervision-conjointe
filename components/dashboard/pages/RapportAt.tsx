@@ -11,6 +11,7 @@ import { ProtoScoreBar } from "@/components/proto/charts-ext";
 import Donut from "@/components/charts/Donut";
 import LineTrend from "@/components/charts/LineTrend";
 import { DIcon } from "@/components/dashboard/icons";
+import { TableExportButtons } from "@/components/ui/TableExport";
 
 const pctTxt = (v: number | null | undefined) => (v == null ? "—" : `${v}%`);
 const heatScore = (v: number | null) => (v == null ? undefined : `${cotColor(v)}22`);
@@ -130,7 +131,7 @@ export function RapVue() {
         </div>
       </div>
       <div className="card card-pad">
-        <CardTitle icon="gauge" tone="navy" title="Score global d'appui par AT et par mois (%)" />
+        <CardTitle icon="gauge" tone="navy" title="Score global d'appui par AT et par mois (%)" right={<TableExportButtons filename="Score global d'appui par AT et par mois (%)" />} />
         {data.vue.scoreParAtMois.length ? (
           <div className="overflow-x-auto"><table className="dtable">
             <thead><tr><th className="name">Assistant technique</th><th>Antenne</th>{months.map((m) => <th key={m.key}>{m.label}</th>)}<th>Moyenne</th></tr></thead>
@@ -177,7 +178,7 @@ export function RapReunions() {
         </div>
       </div>
       <div className="card card-pad">
-        <CardTitle icon="table" tone="navy" title="Réunions appuyées par AT et par type de réunion" sub="CCPeV · coordination/surveillance · validation des données · revues mensuelles ZS" />
+        <CardTitle icon="table" tone="navy" title="Réunions appuyées par AT et par type de réunion" sub="CCPeV · coordination/surveillance · validation des données · revues mensuelles ZS" right={<TableExportButtons filename="Réunions appuyées par AT et par type de réunion" />} />
         {s.parAtType.length ? (
           <div className="overflow-x-auto"><table className="dtable">
             <thead><tr><th className="name">Assistant technique</th><th>CCPeV</th><th>Coordination / surveillance</th><th>Validation des données</th><th>Revues mensuelles ZS</th><th>Total</th></tr></thead>
@@ -188,7 +189,7 @@ export function RapReunions() {
         ) : <Empty />}
       </div>
       <div className="card card-pad">
-        <CardTitle icon="table" tone="navy" title="Réunions appuyées par AT et par mois" sub="Tous types confondus" />
+        <CardTitle icon="table" tone="navy" title="Réunions appuyées par AT et par mois" sub="Tous types confondus" right={<TableExportButtons filename="Réunions appuyées par AT et par mois" />} />
         {s.tableParAtMois.length ? (
           <div className="overflow-x-auto"><table className="dtable">
             <thead><tr><th className="name">Assistant technique</th>{months.map((m) => <th key={m.key}>{m.label}</th>)}<th>Total</th></tr></thead>
@@ -256,7 +257,7 @@ export function RapSupervisions() {
           series={[{ name: "Antenne", data: s.evolutionParMois.map((m) => m.antenne) }, { name: "Zone de santé", data: s.evolutionParMois.map((m) => m.zs) }, { name: "Aire de santé", data: s.evolutionParMois.map((m) => m.as) }]} /> : <Empty />}
       </div>
       <div className="card card-pad">
-        <CardTitle icon="table" tone="navy" title="Supervisions attendues vs réalisées par AT et par niveau" sub="Antenne · Zone de santé · Aire de santé" />
+        <CardTitle icon="table" tone="navy" title="Supervisions attendues vs réalisées par AT et par niveau" sub="Antenne · Zone de santé · Aire de santé" right={<TableExportButtons filename="Supervisions attendues vs réalisées par AT et par niveau" />} />
         {s.parAtNiveau.length ? (
           <div className="overflow-x-auto"><table className="dtable">
             <thead>
@@ -270,7 +271,7 @@ export function RapSupervisions() {
         ) : <Empty />}
       </div>
       <div className="card card-pad">
-        <CardTitle icon="table" tone="navy" title="Supervisions (Antenne · ZS · AS) réalisées par AT et par mois" />
+        <CardTitle icon="table" tone="navy" title="Supervisions (Antenne · ZS · AS) réalisées par AT et par mois" right={<TableExportButtons filename="Supervisions (Antenne · ZS · AS) réalisées par AT et par mois" />} />
         {s.tableParAtMois.length ? (
           <div className="overflow-x-auto"><table className="dtable">
             <thead><tr><th className="name">Assistant technique</th>{months.map((m) => <th key={m.key}>{m.label}</th>)}<th>Total</th></tr></thead>
@@ -323,7 +324,7 @@ export function RapMonitorage() {
       </section>
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-3">
         <div className="card card-pad lg:col-span-7">
-          <CardTitle icon="table" tone="violet" title="Monitorages réalisés par AT et par mois" />
+          <CardTitle icon="table" tone="violet" title="Monitorages réalisés par AT et par mois" right={<TableExportButtons filename="Monitorages réalisés par AT et par mois" />} />
           {s.parAtMois.length ? (
             <div className="overflow-x-auto"><table className="dtable">
               <thead><tr><th className="name">Assistant technique</th>{months.map((m) => <th key={m.key}>{m.label}</th>)}<th>Total</th></tr></thead>
@@ -415,7 +416,7 @@ export function RapSurveillance() {
         </div>
       </div>
       <div className="card card-pad">
-        <CardTitle icon="table" tone="navy" title="Surveillance rougeole — synthèse par antenne" />
+        <CardTitle icon="table" tone="navy" title="Surveillance rougeole — synthèse par antenne" right={<TableExportButtons filename="Surveillance rougeole — synthèse par antenne" />} />
         {s.rougeoleParAntenne.length ? (
           <div className="overflow-x-auto"><table className="dtable">
             <thead><tr><th className="name">Antenne</th><th>Notifiés</th><th>Investigués</th><th>% invest.</th></tr></thead>
@@ -467,7 +468,7 @@ export function RapOsp() {
       </div>
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-3">
         <div className="card card-pad lg:col-span-7">
-          <CardTitle icon="table" tone="navy" title="Rapports trimestriels Antenne PEV transmis au niveau national" sub="par antenne" />
+          <CardTitle icon="table" tone="navy" title="Rapports trimestriels Antenne PEV transmis au niveau national" sub="par antenne" right={<TableExportButtons filename="Rapports trimestriels Antenne PEV transmis au niveau national" />} />
           {s.rapportsTrimParAntenne.length ? (
             <div className="overflow-x-auto"><table className="dtable">
               <thead><tr><th className="name">Antenne</th><th>Transmis</th><th>Attendus</th><th>Statut</th></tr></thead>

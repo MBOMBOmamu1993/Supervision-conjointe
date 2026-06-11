@@ -144,6 +144,8 @@ export interface ScoreQuestion {
   token: string;
   composante: string | null;
   label: string;
+  /** Colonne de commentaire/observation associée à la question (si présente). */
+  commentCol: string | null;
 }
 
 /** Jolit un libellé de question (retire numérotation et soulignés). */
@@ -192,6 +194,20 @@ export function detectScoreQuestions(columns: string[]): ScoreQuestion[] {
     return prettyLabel(token);
   };
 
+  // Colonne de commentaire de la question : par position ([question]
+  // [commentaire] [score] [max]), sur la feuille du nom de colonne.
+  const isCommentLeaf = (c: string): boolean => {
+    const n = norm(leafName(c));
+    return n.startsWith("commentaire") || n.startsWith("observation") || n.startsWith("constat") || n.includes("commentaires");
+  };
+  const resolveComment = (scoreIdx: number): string | null => {
+    for (const back of [1, 2]) {
+      const cand = columns[scoreIdx - back];
+      if (cand && isCommentLeaf(cand)) return cand;
+    }
+    return null;
+  };
+
   columns.forEach((col, idx) => {
     let token: string | null = null;
     let maxCol: string | null = null;
@@ -225,12 +241,23 @@ export function detectScoreQuestions(columns: string[]): ScoreQuestion[] {
       seen.add(col);
       const composante = matchComposanteByToken(token);
       if (composante) {
-        out.push({ scoreCol: col, maxCol, token, composante, label: resolveLabel(idx, token) });
+        out.push({ scoreCol: col, maxCol, token, composante, label: resolveLabel(idx, token), commentCol: resolveComment(idx) });
       }
     }
   });
 
   return out;
+}
+
+/**
+ * Colonnes texte « recommandations » du formulaire (hors questions notées) :
+ * tout champ libre dont la feuille du nom contient « recommand ».
+ */
+export function detectRecommendationColumns(columns: string[]): string[] {
+  return columns.filter((c) => {
+    const n = norm(c.slice(c.lastIndexOf("/") + 1));
+    return n.includes("recommand") && !/(^|_| )(score|max|mx)(_| |$)/.test(n);
+  });
 }
 
 /** Classe une valeur brute (Oui/Partiellement/Non/Non applicable) — usage résiduel. */
@@ -285,7 +312,10 @@ export function classifySupervisionType(level: StructureLevel, fonction: unknown
 }
 
 export function getColumns(rows: RawRow[]): string[] {
+  // Balaye TOUTES les lignes : depuis la fusion XLSX + data.json, deux formats
+  // de colonnes cohabitent dans un même jeu de lignes (noms aplatis vs chemins
+  // de groupe) et un échantillon tronqué pouvait manquer le second format.
   const set = new Set<string>();
-  for (const r of rows.slice(0, 80)) for (const k of Object.keys(r)) set.add(k);
+  for (const r of rows) for (const k of Object.keys(r)) set.add(k);
   return Array.from(set);
 }

@@ -11,6 +11,7 @@ import { ProtoHBar, ProtoGroupedBar } from "@/components/proto/charts";
 import { ProtoScoreBar } from "@/components/proto/charts-ext";
 import Donut from "@/components/charts/Donut";
 import { DIcon } from "@/components/dashboard/icons";
+import { TableExportButtons } from "@/components/ui/TableExport";
 
 const pctTxt = (v: number | null | undefined) => (v == null ? "—" : `${v}%`);
 const heat = (v: number | null) => (v == null ? undefined : v >= 60 ? "#e6f6ec" : v >= 50 ? "#fff3bf" : v >= 40 ? "#ffe8cc" : "#fde2e2");
@@ -73,7 +74,7 @@ export function SavVue() {
         </div>
       </div>
       <div className="card card-pad">
-        <CardTitle icon="table" tone="navy" title="Synthèse SAV par zone de santé" sub="Identification & planification dédupliquées par centre de santé" />
+        <CardTitle icon="table" tone="navy" title="Synthèse SAV par zone de santé" sub="Identification & planification dédupliquées par centre de santé" right={<TableExportButtons filename="Synthèse SAV par zone de santé" />} />
         {data.vue.syntheseByZs.length ? (
           <div className="overflow-x-auto"><table className="dtable">
             <thead><tr><th className="name">Zone de santé</th><th>CS</th><th>Enfants identifiés</th><th>Zéro dose</th><th>Sous-vacc.</th><th>Sessions planifiées</th><th>Enfants attendus</th><th>Enfants récupérés</th><th>Taux récup.</th></tr></thead>
@@ -133,7 +134,7 @@ export function SavIdentCs() {
         </div>
       </div>
       <div className="card card-pad">
-        <CardTitle icon="table" tone="navy" title="Doses manquées par antigène et par tranche d'âge" sub="Source : BASE SAISIE DONNEES SAV · après déduplication par CS" />
+        <CardTitle icon="table" tone="navy" title="Doses manquées par antigène et par tranche d'âge" sub="Source : BASE SAISIE DONNEES SAV · après déduplication par CS" right={<TableExportButtons filename="Doses manquées par antigène et par tranche d'âge" />} />
         {antigenes.length ? (
           <div className="overflow-x-auto"><table className="dtable">
             <thead><tr><th className="name">Tranche d'âge</th>{antigenes.map((a) => <th key={a}>{a}</th>)}</tr></thead>
@@ -145,7 +146,7 @@ export function SavIdentCs() {
       </div>
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-3">
         <div className="card card-pad lg:col-span-7">
-          <CardTitle icon="table" tone="blue" title="Enfants manqués par aire de santé et tranche d'âge" />
+          <CardTitle icon="table" tone="blue" title="Enfants manqués par aire de santé et tranche d'âge" right={<TableExportButtons filename="Enfants manqués par aire de santé et tranche d'âge" />} />
           {s.parAsTrancheAge.length ? (
             <div className="overflow-x-auto"><table className="dtable">
               <thead><tr><th className="name">Aire de santé</th><th>0–11</th><th>12–23</th><th>24–59</th><th>Total</th></tr></thead>
@@ -204,7 +205,7 @@ export function SavIdentRelais() {
       </div>
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-3">
         <div className="card card-pad lg:col-span-7">
-          <CardTitle icon="table" tone="navy" title="Enfants manqués (relais) par aire de santé et tranche d'âge" />
+          <CardTitle icon="table" tone="navy" title="Enfants manqués (relais) par aire de santé et tranche d'âge" right={<TableExportButtons filename="Enfants manqués (relais) par aire de santé et tranche d'âge" />} />
           {s.parAsTrancheAge.length ? (
             <div className="overflow-x-auto"><table className="dtable">
               <thead><tr><th className="name">Aire de santé</th><th>0–11</th><th>12–23</th><th>24–59</th><th>Total</th></tr></thead>
@@ -257,7 +258,7 @@ export function SavPlanif() {
         </div>
       </div>
       <div className="card card-pad">
-        <CardTitle icon="check" tone="navy" title="Aires de santé ayant / n'ayant pas de programme de vaccination" sub="après déduplication par centre de santé" />
+        <CardTitle icon="check" tone="navy" title="Aires de santé ayant / n'ayant pas de programme de vaccination" sub="après déduplication par centre de santé" right={<TableExportButtons filename="Aires de santé ayant / n'ayant pas de programme de vaccination" />} />
         {s.asProgrammeTable.length ? (
           <div className="overflow-x-auto"><table className="dtable">
             <thead><tr><th className="name">Aire de santé</th><th>Zone de santé</th><th>Sessions</th><th>Enfants attendus</th><th>Programme</th></tr></thead>
@@ -269,7 +270,7 @@ export function SavPlanif() {
         ) : <Empty />}
       </div>
       <div className="card card-pad">
-        <CardTitle icon="table" tone="blue" title="Programme de vaccination par aire de santé" sub="une ligne par AS après déduplication" />
+        <CardTitle icon="table" tone="blue" title="Programme de vaccination par aire de santé" sub="une ligne par AS après déduplication" right={<TableExportButtons filename="Programme de vaccination par aire de santé" />} />
         {s.programmeParAs.length ? (
           <div className="overflow-x-auto"><table className="dtable">
             <thead><tr><th>N°</th><th className="name">Aire de santé</th><th>Date prévue</th><th>Type de session</th><th>Site / localité</th><th>Enfants attendus</th><th>Membres de l'équipe</th></tr></thead>
@@ -322,7 +323,7 @@ export function SavResultats() {
         </div>
       </div>
       <div className="card card-pad">
-        <CardTitle icon="table" tone="navy" title="Doses administrées par aire de santé et antigène (extrait)" sub="récupération — formulaire Résultats" />
+        <CardTitle icon="table" tone="navy" title="Doses administrées par aire de santé et antigène (extrait)" sub="récupération — formulaire Résultats" right={<TableExportButtons filename="Doses administrées par aire de santé et antigène (extrait)" />} />
         {s.parAsTable.length ? (
           <div className="overflow-x-auto"><table className="dtable">
             <thead><tr><th className="name">Aire de santé</th>{Object.keys(s.parAsTable[0].values).map((a) => <th key={a}>{a}</th>)}<th>Total</th><th>Identifiés</th><th>Taux récup.</th></tr></thead>
@@ -337,11 +338,11 @@ export function SavResultats() {
         {s.topAsFaibles.length ? <ProtoScoreBar horiz height={210} unit="%" max={100} cats={s.topAsFaibles.map((x) => x.label)} vals={s.topAsFaibles.map((x) => x.value)} /> : <Empty />}
       </div>
       <div className="card card-pad">
-        <CardTitle icon="syringe" tone="green" title="Nombre d'enfants vaccinés par antigène et par tranche d'âge" sub="Source : BASE SAISIE DONNEES SAV" />
+        <CardTitle icon="syringe" tone="green" title="Nombre d'enfants vaccinés par antigène et par tranche d'âge" sub="Source : BASE SAISIE DONNEES SAV" right={<TableExportButtons filename="Nombre d'enfants vaccinés par antigène et par tranche d'âge" />} />
         <AntiAgeTable rows={s.vaccinesParTrancheAntigene} />
       </div>
       <div className="card card-pad">
-        <CardTitle icon="gauge" tone="blue" title="% d'enfants vaccinés par antigène et par tranche d'âge" sub="Source : BASE SAISIE DONNEES SAV · vaccinés ÷ identifiés" />
+        <CardTitle icon="gauge" tone="blue" title="% d'enfants vaccinés par antigène et par tranche d'âge" sub="Source : BASE SAISIE DONNEES SAV · vaccinés ÷ identifiés" right={<TableExportButtons filename="% d'enfants vaccinés par antigène et par tranche d'âge" />} />
         <AntiAgePctTable rows={s.pctParTrancheAntigene} />
       </div>
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-3">
@@ -357,7 +358,7 @@ export function SavResultats() {
           ) : <Empty />}
         </div>
         <div className="card card-pad lg:col-span-5">
-          <CardTitle icon="table" tone="navy" title="% d'enfants récupérés" sub="vaccinés ÷ identifiés (BASE SAISIE)" />
+          <CardTitle icon="table" tone="navy" title="% d'enfants récupérés" sub="vaccinés ÷ identifiés (BASE SAISIE)" right={<TableExportButtons filename="% d'enfants récupérés" />} />
           <table className="dtable">
             <thead><tr><th className="name">Antigène</th><th>0–11</th><th>12–23</th><th>24–59</th><th>% récup.</th></tr></thead>
             <tbody>{s.syntheseAntigenes.map((a) => (
@@ -426,7 +427,7 @@ export function SavSupervision() {
         {s.ouiParQuestion.length ? <ProtoScoreBar horiz height={Math.max(260, s.ouiParQuestion.length * 22)} unit="%" max={100} cats={s.ouiParQuestion.map((q) => q.label)} vals={s.ouiParQuestion.map((q) => q.value)} /> : <Empty />}
       </div>
       <div className="card card-pad">
-        <CardTitle icon="table" tone="navy" title="Proportion de « Oui » par question et par aire de santé (extrait)" />
+        <CardTitle icon="table" tone="navy" title="Proportion de « Oui » par question et par aire de santé (extrait)" right={<TableExportButtons filename="Proportion de « Oui » par question et par aire de santé (extrait)" />} />
         {s.ouiParQuestionAs.length && cols.length ? (
           <div className="overflow-x-auto"><table className="dtable">
             <thead><tr><th className="name">Aire de santé</th>{cols.map((c) => <th key={c}>{c}</th>)}</tr></thead>

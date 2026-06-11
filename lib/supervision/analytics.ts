@@ -19,6 +19,7 @@ import {
   answerFromScore,
   classifySupervisionType,
   classifyTypeFromLabel,
+  detectRecommendationColumns,
   detectScoreQuestions,
   getColumns,
   norm,
@@ -26,7 +27,7 @@ import {
   resolveTypeLabel,
   type ScoreQuestion,
 } from "./schema";
-import { canonAntenne } from "@/lib/geo";
+import { antenneOfZone, canonAntenne, zoneOfAire } from "@/lib/geo";
 import type { SourceFetch } from "./kobo-client";
 import type {
   ComposanteAnswerDist,
@@ -128,6 +129,7 @@ function buildRecords(source: SourceFetch): { records: SupervisionRecord[]; rows
   const columns = getColumns(rows);
   const geo = resolveGeoColumns(columns);
   const scoreQs = detectScoreQuestions(columns);
+  const recoCols = detectRecommendationColumns(columns);
 
   const records: SupervisionRecord[] = rows.map((row, i) => {
     const answers = EMPTY_ANSWERS();
@@ -139,6 +141,7 @@ function buildRecords(source: SourceFetch): { records: SupervisionRecord[]; rows
     }
     let globalScore = 0;
     let globalMax = 0;
+    const constats: SupervisionRecord["constats"] = [];
 
     for (const q of scoreQs) {
       const sc = num(row[q.scoreCol]);
@@ -154,7 +157,16 @@ function buildRecords(source: SourceFetch): { records: SupervisionRecord[]; rows
         globalScore += sc ?? 0;
         globalMax += mx;
       }
+      // Constat : commentaire/observation renseigné sur la question.
+      if (q.commentCol) {
+        const text = cleanStr(row[q.commentCol]);
+        if (text && text.length > 1) constats.push({ question: q.label, composante: ck, answer: av, text });
+      }
     }
+
+    const recommandations = recoCols
+      .map((c) => cleanStr(row[c]))
+      .filter((t): t is string => !!t && t.length > 1);
 
     const composantes: Record<string, number | null> = {};
     for (const c of COMPOSANTES) {
@@ -174,10 +186,26 @@ function buildRecords(source: SourceFetch): { records: SupervisionRecord[]; rows
       }
     }
     date = normalizeSupervisionDate(date);
-    const antenne = geo.antenne ? cleanStr(row[geo.antenne]) : null;
-    const zone = geo.zone ? cleanStr(row[geo.zone]) : null;
+    let antenne = geo.antenne ? cleanStr(row[geo.antenne]) : null;
+    let zone = geo.zone ? cleanStr(row[geo.zone]) : null;
     const aire = geo.aire ? cleanStr(row[geo.aire]) : null;
     const etab = geo.etablissement ? cleanStr(row[geo.etablissement]) : null;
+
+    // Rattachement hiérarchique : complète les niveaux parents manquants via la
+    // hiérarchie provinciale statique (ZS → antenne, AS → ZS). Indispensable au
+    // drill-down par filtre ET à la non-confusion antenne « Boende » /
+    // ZS « Boende » (le rattachement va toujours de l'enfant vers le parent).
+    if (source.level === "as") {
+      const parent = zoneOfAire(aire ?? etab);
+      if (parent) {
+        if (!zone) zone = parent.zone;
+        if (!antenne) antenne = parent.antenne;
+      } else if (zone && !antenne) {
+        antenne = antenneOfZone(zone);
+      }
+    } else if (source.level === "zs" && zone && !antenne) {
+      antenne = antenneOfZone(zone);
+    }
     const structure =
       source.level === "antenne" ? antenne :
       source.level === "zs" ? zone :
@@ -209,6 +237,8 @@ function buildRecords(source: SourceFetch): { records: SupervisionRecord[]; rows
       composantes,
       answers,
       answersByComposante,
+      constats,
+      recommandations,
     };
   });
 
@@ -352,6 +382,57 @@ function monthlyMatrix(records: SupervisionRecord[], months: string[]): MonthlyM
   return rows.sort((a, b) => (b.last ?? -1) - (a.last ?? -1));
 }
 
+/**
+ * Proportion mensuelle des réponses « Oui » par structure (lignes = org units,
+ * colonnes = mois) — cf. feedback p.4 : remplace le visuel pointé du PDF.
+ * % = « oui » / total des réponses administrées (oui + partiel + non + NA).
+ */
+function ouiMonthlyMatrix(records: SupervisionRecord[], months: string[]): { name: string; scores: Record<string, number | null> }[] {
+  const byStruct = new Map<string, Map<string, { oui: number; all: number }>>();
+  for (const r of records) {
+    if (!r.month) continue;
+    const name = r.structure ?? "—";
+    if (!byStruct.has(name)) byStruct.set(name, new Map());
+    const m = byStruct.get(name)!;
+    if (!m.has(r.month)) m.set(r.month, { oui: 0, all: 0 });
+    const acc = m.get(r.month)!;
+    acc.oui += r.answers.oui;
+    acc.all += r.answers.oui + r.answers.partiel + r.answers.non + r.answers.na;
+  }
+  return Array.from(byStruct.entries())
+    .map(([name, m]) => {
+      const scores: Record<string, number | null> = {};
+      for (const mo of months) {
+        const acc = m.get(mo);
+        scores[mo] = acc && acc.all > 0 ? Math.round((acc.oui / acc.all) * 100) : null;
+      }
+      return { name, scores };
+    })
+    .sort((a, b) => a.name.localeCompare(b.name, "fr"));
+}
+
+/** Constats (commentaires de questions) et recommandations, groupés par structure. */
+function constatsByStructure(records: SupervisionRecord[]): {
+  name: string;
+  constats: { question: string; composante: string | null; answer: AnswerValue; text: string }[];
+  recommandations: string[];
+}[] {
+  const byStruct = new Map<string, SupervisionRecord[]>();
+  for (const r of records) {
+    const name = r.structure ?? "—";
+    if (!byStruct.has(name)) byStruct.set(name, []);
+    byStruct.get(name)!.push(r);
+  }
+  return Array.from(byStruct.entries())
+    .map(([name, recs]) => {
+      const constats = recs.flatMap((r) => r.constats);
+      const recommandations = Array.from(new Set(recs.flatMap((r) => r.recommandations)));
+      return { name, constats, recommandations };
+    })
+    .filter((s) => s.constats.length > 0 || s.recommandations.length > 0)
+    .sort((a, b) => a.name.localeCompare(b.name, "fr"));
+}
+
 function topNon(rows: RawRow[], scoreQs: ScoreQuestion[]): TopNonItem[] {
   const items: TopNonItem[] = [];
   for (const q of scoreQs) {
@@ -397,8 +478,10 @@ function buildLevel(level: StructureLevel, records: SupervisionRecord[], rows: R
     composantesMonthly: composantesMonthly(records, months),
     trend: trend(records),
     monthlyMatrix: monthlyMatrix(records, months),
+    ouiMonthlyMatrix: ouiMonthlyMatrix(records, months),
     topNon: topNon(rows, scoreQs),
     radar: radar(records),
+    constats: constatsByStructure(records),
   };
 }
 
@@ -421,6 +504,25 @@ export function buildBundle(sources: SourceFetch[], filters: Filters, targets: S
   // « auto-collapser » lorsqu'un filtre est actif).
   const allUnfiltered: SupervisionRecord[] = [];
   for (const p of parsed) allUnfiltered.push(...p.records);
+
+  // Garde-fou (bug « ZS Boende absente ») : toute valeur distincte de ZS
+  // présente dans les lignes brutes du formulaire ZS doit se retrouver dans les
+  // enregistrements du bundle. Une perte signale un problème de source/schéma.
+  const zsParsed = parsed.find((p) => p.source.level === "zs");
+  if (zsParsed) {
+    const geoCols = resolveGeoColumns(getColumns(zsParsed.rows));
+    if (geoCols.zone) {
+      const rawZones = new Set(
+        zsParsed.rows.map((r) => norm(cleanStr(r[geoCols.zone!]) ?? "")).filter(Boolean)
+      );
+      const recZones = new Set(zsParsed.records.map((r) => norm(r.zone ?? r.structure ?? "")).filter(Boolean));
+      for (const z of rawZones) {
+        if (!recZones.has(z)) {
+          console.warn(`[supervision] ZS « ${z} » présente dans les lignes brutes mais absente du bundle — vérifier le schéma/la normalisation.`);
+        }
+      }
+    }
+  }
 
   const byLevel = {} as Record<StructureLevel, { records: SupervisionRecord[]; rows: RawRow[]; scoreQs: ScoreQuestion[] }>;
   const allRecords: SupervisionRecord[] = [];
@@ -470,10 +572,20 @@ export function buildBundle(sources: SourceFetch[], filters: Filters, targets: S
   const zsTargetTotal = (hasConjointe ? targets.conjointe_zs_per_month : 0) + (hasSeul ? targets.mca_seul_per_month : 0);
   const asTargetTotal = (hasConjointe ? targets.conjointe_aires_per_month : 0) + (hasSeul ? targets.ecz_seul_per_month : 0);
 
+  // % de réalisation au niveau ANTENNE : la cible est 2 antennes par TRIMESTRE
+  // (feedback TL p.3) — antennes distinctes supervisées dans le trimestre
+  // courant / 2, indépendamment du nombre de mois filtrés.
+  const now = new Date();
+  const qStartMonth = Math.floor(now.getMonth() / 3) * 3;
+  const quarterMonths = [0, 1, 2].map((i) => `${now.getFullYear()}-${String(qStartMonth + i + 1).padStart(2, "0")}`);
+  const antennesTrimestre = distinctStructures(antRecs.filter((r) => r.month !== null && quarterMonths.includes(r.month)));
+
   const kpi = {
     // Compteurs « toutes catégories » (suivent le filtre Type de supervision) :
     // nombre de structures distinctes supervisées par niveau, avec % réalisation.
     antennes_total: kpiBlock(distinctStructures(antRecs), T(antTargetTotal)),
+    // Réalisation trimestrielle des antennes (cible : 2 antennes / trimestre).
+    antennes_trimestre: kpiBlock(antennesTrimestre, 2),
     zs_total: kpiBlock(distinctStructures(zsRecs), T(zsTargetTotal)),
     as_total: kpiBlock(distinctStructures(asRecs), T(asTargetTotal)),
     // Supervision conjointe PEV central-OMS : compteur réel (0 tant que le PEV

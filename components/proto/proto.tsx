@@ -108,7 +108,7 @@ export function KpiTile({ icon, tone, label, value, pct, sub }: {
   );
 }
 
-export function CardTitle({ icon, tone, title, sub }: { icon: IconName; tone: Tone; title: string; sub?: string }) {
+export function CardTitle({ icon, tone, title, sub, right }: { icon: IconName; tone: Tone; title: string; sub?: string; right?: React.ReactNode }) {
   return (
     <div className="mb-2 flex items-center gap-2.5">
       <Badge icon={icon} tone={tone} size={34} />
@@ -116,6 +116,7 @@ export function CardTitle({ icon, tone, title, sub }: { icon: IconName; tone: To
         <div className="text-[12.5px] font-bold leading-tight text-navy-700">{title}</div>
         {sub ? <div className="text-[11px] leading-snug text-surface-500">{sub}</div> : null}
       </div>
+      {right ? <div className="ml-auto flex shrink-0 items-center gap-2">{right}</div> : null}
     </div>
   );
 }
