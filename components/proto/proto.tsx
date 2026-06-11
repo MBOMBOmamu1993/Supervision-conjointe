@@ -108,7 +108,23 @@ export function KpiTile({ icon, tone, label, value, pct, sub }: {
   );
 }
 
-export function CardTitle({ icon, tone, title, sub, right }: { icon: IconName; tone: Tone; title: string; sub?: string; right?: React.ReactNode }) {
+export function CardTitle({ icon, tone, title, sub, right, rightBelow }: { icon: IconName; tone: Tone; title: string; sub?: string; right?: React.ReactNode; rightBelow?: boolean }) {
+  // rightBelow : pour les cartes étroites, les actions (ex. boutons d'export)
+  // passent sous le titre au lieu de l'écraser sur la même ligne.
+  if (right && rightBelow) {
+    return (
+      <div className="mb-2">
+        <div className="flex items-center gap-2.5">
+          <Badge icon={icon} tone={tone} size={34} />
+          <div className="min-w-0">
+            <div className="text-[12.5px] font-bold leading-tight text-navy-700">{title}</div>
+            {sub ? <div className="text-[11px] leading-snug text-surface-500">{sub}</div> : null}
+          </div>
+        </div>
+        <div className="mt-2 flex flex-wrap items-center gap-2">{right}</div>
+      </div>
+    );
+  }
   return (
     <div className="mb-2 flex items-center gap-2.5">
       <Badge icon={icon} tone={tone} size={34} />
