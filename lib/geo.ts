@@ -138,6 +138,101 @@ export function zoneOfAire(aire: string | null | undefined): { zone: string; ant
 }
 
 /**
+ * Aires de santé d'une ZS d'après la hiérarchie provinciale (base État de
+ * lieux), en libellés d'affichage (préfixe « AS » retiré). Sert à proposer la
+ * liste complète des aires d'une ZS dans les sélecteurs, même lorsque certaines
+ * aires n'ont pas encore de données.
+ */
+export function airesOfZone(zone: string | null | undefined): string[] {
+  if (!zone) return [];
+  const key = norm(zone);
+  return EDL.asPop
+    .filter((a) => norm(a.zs) === key)
+    .map((a) => a.as.replace(/^AS\s+/i, "").trim())
+    .filter(Boolean)
+    .sort((a, b) => a.localeCompare(b, "fr"));
+}
+
+/* ----- Nettoyage des libellés encodés Kobo (valeurs XML) ----- */
+
+/**
+ * Normalisation TOKENISANTE pour la comparaison de segments encodés : les
+ * codes XML Kobo séparent par underscore (« monkoto_boende ») — tout caractère
+ * non alphanumérique devient un séparateur (contrairement à `norm` ci-dessus
+ * qui ne réduit que les espaces).
+ */
+function tokNorm(s: string | null | undefined): string {
+  return stripAccents((s ?? "").toLowerCase()).replace(/[^a-z0-9]+/g, " ").trim();
+}
+
+/** Met en forme un nom de structure : « lofima 2 » → « Lofima 2 ». */
+export function prettifyName(s: string): string {
+  return s
+    .split(/[_\s]+/)
+    .filter(Boolean)
+    .map((w) => (/^\d+$/.test(w) ? w : w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()))
+    .join(" ");
+}
+
+/**
+ * Nettoie un nom de centre/aire encodé « aire_zs_antenne » (valeurs XML Kobo)
+ * en retirant les SÉQUENCES terminales de segments correspondant à la ZS puis à
+ * l'antenne, puis met le résultat en forme. La ZS est elle-même encodée
+ * « zs_antenne » (plusieurs segments) : on compare donc des séquences, pas des
+ * segments isolés. Ex. « iyongo_monkoto_boende » (ZS « monkoto_boende »,
+ * antenne « boende ») → « Iyongo » ; « lofima_2_bokungu_bokungu » → « Lofima 2 ».
+ */
+export function cleanStructureName(raw: string | null, zone: string | null, antenne: string | null): string | null {
+  if (!raw) return raw;
+  let parts = raw.split("_").filter(Boolean);
+  const parentSeqs = [zone, antenne]
+    .filter((p): p is string => !!p)
+    .map((p) => tokNorm(p).split(" ").filter(Boolean))
+    .filter((seq) => seq.length > 0);
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (const seq of parentSeqs) {
+      if (parts.length > seq.length && seq.every((tok, k) => tokNorm(parts[parts.length - seq.length + k]) === tok)) {
+        parts = parts.slice(0, parts.length - seq.length);
+        changed = true;
+      }
+    }
+  }
+  const cleaned = prettifyName(parts.join("_"));
+  return cleaned || prettifyName(raw);
+}
+
+/**
+ * Rabat un libellé nettoyé sur une entité CONNUE de la hiérarchie provinciale
+ * (base État de lieux) en retirant d'éventuels mots terminaux résiduels —
+ * segments parents d'un code Kobo qui n'ont pas pu être identifiés (parent
+ * absent de la ligne, encodage hérité d'une ancienne version du formulaire).
+ * Ex. « Iyongo Monkoto » → « Iyongo » ; « Boende Boende » → « Boende ».
+ */
+export function snapToKnown(name: string | null, isKnown: (s: string) => boolean): string | null {
+  if (!name || isKnown(name)) return name;
+  const words = name.split(" ");
+  for (let n = words.length - 1; n >= 1; n--) {
+    const cand = words.slice(0, n).join(" ");
+    if (isKnown(cand)) return cand;
+  }
+  return name;
+}
+export const isKnownZone = (s: string) => antenneOfZone(s) !== null;
+export const isKnownAire = (s: string) => zoneOfAire(s) !== null;
+
+/** Nettoyage complet d'un libellé de ZS issu d'un formulaire Kobo. */
+export function cleanZoneLabel(zone: string | null, antenne: string | null): string | null {
+  return snapToKnown(cleanStructureName(zone, null, antenne), isKnownZone);
+}
+
+/** Nettoyage complet d'un libellé d'aire de santé issu d'un formulaire Kobo. */
+export function cleanAireLabel(aire: string | null, zone: string | null, antenne: string | null): string | null {
+  return snapToKnown(cleanStructureName(aire, zone, antenne), isKnownAire);
+}
+
+/**
  * Options en cascade : chaque niveau est restreint par les niveaux parents
  * déjà sélectionnés. Les listes sont dédoublonnées.
  */

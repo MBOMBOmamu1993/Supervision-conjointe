@@ -18,7 +18,7 @@ import Radar from "@/components/charts/Radar";
 import { TableExportButtons } from "@/components/ui/TableExport";
 import { fmtPct, fmtMonth } from "@/lib/client/format";
 import { useTabFilters, orgLevelOf, ORG_LABEL, type OrgLevel } from "@/lib/state/filters";
-import { cascadeOptions, type GeoTuple } from "@/lib/geo";
+import { cascadeOptions, airesOfZone, dedupeLabels, type GeoTuple } from "@/lib/geo";
 import {
   cotationFor, COTATION_COLOR, conformiteFor, CONFORMITE_CLASSES,
   type StructureLevel, type AnswerValue,
@@ -46,7 +46,12 @@ const LEVEL_META: Record<OrgLevel, { icon: "tower" | "hospital" | "clinic"; tone
 function useOrgLevel() {
   const f = useTabFilters("supervision");
   const lvl = orgLevelOf(f);
-  return { lvl, labels: ORG_LABEL[lvl], meta: LEVEL_META[lvl], aire: f.aire };
+  const labels = ORG_LABEL[lvl];
+  // Libellé de portée des titres : pluriel du niveau (« Zones de santé ») ou,
+  // si UNE entité est sélectionnée dans le sélecteur d'org unit, son nom
+  // (« Zone de santé Boende ») — les sections reflètent alors la sélection.
+  const scope = f.org ? `${labels.sing} ${f.org}` : labels.plur;
+  return { lvl, labels, meta: LEVEL_META[lvl], aire: f.aire, org: f.org, scope };
 }
 
 /**
@@ -60,7 +65,13 @@ function OrgUnitFilter({ d }: { d: SupervisionBundle }) {
   const lvl = orgLevelOf(f);
   const labels = ORG_LABEL[lvl];
   const geo = cascadeOptions((d.filters.geo as GeoTuple[]) ?? [], { province: f.province, antenne: f.antenne, zone: f.zone });
-  const options = lvl === "antenne" ? geo.antennes : lvl === "zs" ? geo.zones : geo.aires;
+  let options = lvl === "antenne" ? geo.antennes : lvl === "zs" ? geo.zones : geo.aires;
+  // Niveau AS : la liste affiche TOUTES les aires de santé de la ZS filtrée
+  // (hiérarchie provinciale — base État de lieux), pas seulement celles ayant
+  // déjà des données ; une ZS sans supervision (ex. Monkoto) garde sa liste.
+  if (lvl === "as" && f.zone) {
+    options = dedupeLabels([...options, ...airesOfZone(f.zone)]);
+  }
   return (
     <div className="card flex flex-wrap items-center gap-2.5 px-4 py-2.5">
       <label className="text-[10px] font-extrabold uppercase tracking-[0.09em] text-slate-500">{labels.sing}</label>
@@ -129,7 +140,7 @@ function OuiMatrixTable({ b, months, label }: { b: LevelBundle; months: string[]
 /* ===================== Page 1 — Résultats de supervision ===================== */
 
 export function SupervisionResultats() {
-  const { lvl, labels, meta } = useOrgLevel();
+  const { lvl, labels, meta, scope } = useOrgLevel();
   return (
     <DataGate>
       {(d: SupervisionBundle) => {
@@ -144,7 +155,7 @@ export function SupervisionResultats() {
         const pctRealisation = lvl === "antenne" ? d.kpi.antennes_trimestre.pct : block.pct;
         return (
           <div className="space-y-4">
-            <Banner icon={meta.icon} tone={meta.tone} title={`Supervision conjointe — ${labels.plur}`}
+            <Banner icon={meta.icon} tone={meta.tone} title={`Supervision conjointe — ${scope}`}
               sub={<>Réalisation, qualité et scores au niveau {labels.plur.toLowerCase()} · {b.records} supervision{b.records > 1 ? "s" : ""}{lvl === "antenne" ? " · cible : 2 antennes / trimestre" : ""}</>} />
             <OrgUnitFilter d={d} />
 
@@ -288,7 +299,7 @@ function ConfCell({ v, strong = false }: { v: number | null; strong?: boolean })
 }
 
 export function SupervisionScore() {
-  const { lvl, labels, meta } = useOrgLevel();
+  const { lvl, labels, meta, org, scope } = useOrgLevel();
   return (
     <DataGate>
       {(d: SupervisionBundle) => {
@@ -322,7 +333,7 @@ export function SupervisionScore() {
         const nonConfStruct = valid.filter((s) => (s.score ?? 0) < 60).sort((a, x) => (a.score ?? 0) - (x.score ?? 0))[0] ?? null;
         return (
           <div className="space-y-4">
-            <Banner icon="cotation" tone={meta.tone} title={`Score de conformité — ${labels.plur}`}
+            <Banner icon="cotation" tone={meta.tone} title={`Score de conformité — ${scope}`}
               sub={<>Conformité aux standards du PEV · niveau {labels.plur.toLowerCase()} · {b.score.count} supervision{b.score.count > 1 ? "s" : ""} notée{b.score.count > 1 ? "s" : ""}</>} />
             <OrgUnitFilter d={d} />
 
@@ -331,17 +342,17 @@ export function SupervisionScore() {
 
             {/* 2. Scores globaux par niveau (dynamique) */}
             <section>
-              <SectionBar icon="bars">Scores globaux — {labels.plur}</SectionBar>
+              <SectionBar icon="bars">Scores globaux — {scope}</SectionBar>
               <div className="grid grid-cols-1 lg:grid-cols-12 gap-3">
                 <div className="lg:col-span-4 flex flex-col gap-3">
-                  <KpiTile icon={meta.icon} tone={meta.tone} label={`Score global moyen — ${labels.plur}`} value={fmtPct(b.score.moyen)}
+                  <KpiTile icon={meta.icon} tone={meta.tone} label={org ? `Score global — ${scope}` : `Score global moyen — ${labels.plur}`} value={fmtPct(b.score.moyen)}
                     sub={`${b.perStructure.length} structure${b.perStructure.length > 1 ? "s" : ""} supervisée${b.perStructure.length > 1 ? "s" : ""}`} />
                   <HlCard icon="trophy" tone="green" label="Points clés — meilleure structure" big={best?.name ?? "—"} sub={`Score : ${fmtPct(best?.score ?? null)}`} />
                   <HlCard icon="alert" tone="red" label="Points clés — structure la plus faible" big={worst?.name ?? "—"} sub={`Score : ${fmtPct(worst?.score ?? null)}`} />
                 </div>
                 <div className="card card-pad lg:col-span-8">
-                  <CardTitle icon="bars" tone={meta.tone} title={`Score global de conformité — ${labels.plur}`} sub="Couleur selon l'interprétation : Conforme · Partiellement conforme · Faible conformité · Non conforme" />
-                  {valid.length ? <HBar exportTitle={`Score global de conformité — ${labels.plur}`} colorFor={confColor} data={b.perStructure.map((s) => ({ name: s.name, value: s.score }))} /> : <div className="py-8 text-center text-[12px] text-surface-500">Aucune structure notée.</div>}
+                  <CardTitle icon="bars" tone={meta.tone} title={`Score global de conformité — ${scope}`} sub="Couleur selon l'interprétation : Conforme · Partiellement conforme · Faible conformité · Non conforme" />
+                  {valid.length ? <HBar exportTitle={`Score global de conformité — ${scope}`} colorFor={confColor} data={b.perStructure.map((s) => ({ name: s.name, value: s.score }))} /> : <div className="py-8 text-center text-[12px] text-surface-500">Aucune structure notée.</div>}
                   <div className="mt-2 flex flex-wrap gap-3">
                     {CONFORMITE_CLASSES.map((c) => (
                       <span key={c.key} className="inline-flex items-center gap-1.5 text-[10.5px] font-bold text-surface-700">
@@ -354,7 +365,7 @@ export function SupervisionScore() {
               <div className="card card-pad mt-3">
                 <CardTitle icon="legend" tone="blue" title="Lecture rapide" sub="Synthèse automatique" />
                 <ul className="space-y-1.5 pt-1 text-[12.5px] font-semibold text-surface-700">
-                  <li>• Score moyen du niveau {labels.plur.toLowerCase()} : <b>{fmtPct(b.score.moyen)}</b> ({b.score.moyen !== null ? conformiteFor(b.score.moyen).label : "—"}).</li>
+                  <li>• Score {org ? <>de conformité — <b>{scope}</b></> : <>moyen du niveau {labels.plur.toLowerCase()}</>} : <b>{fmtPct(b.score.moyen)}</b> ({b.score.moyen !== null ? conformiteFor(b.score.moyen).label : "—"}).</li>
                   {best ? <li>• Meilleure structure : <b>{best.name}</b> ({fmtPct(best.score)}).</li> : null}
                   {worst && worst !== best ? <li>• Structure la plus faible : <b>{worst.name}</b> ({fmtPct(worst.score)}).</li> : null}
                   <li>• Les scores de conformité s'interprètent séparément à chaque niveau (antennes, zones de santé, aires de santé).</li>
@@ -364,15 +375,15 @@ export function SupervisionScore() {
 
             {/* 3. Évolution mensuelle (dynamique) */}
             <section>
-              <SectionBar icon="time">Évolution mensuelle — {labels.plur}</SectionBar>
+              <SectionBar icon="time">Évolution mensuelle — {scope}</SectionBar>
               <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                 <KpiTile icon="trophy" tone="green" label="Meilleur mois" value={bestMonth ? fmtMonth(bestMonth.month) : "—"} sub={bestMonth ? `Score le plus élevé : <b>${fmtPct(bestMonth.score)}</b>` : undefined} />
                 <KpiTile icon="down" tone="orange" label="Mois le plus faible" value={worstMonth ? fmtMonth(worstMonth.month) : "—"} sub={worstMonth ? `Score le plus faible : <b>${fmtPct(worstMonth.score)}</b>` : undefined} />
                 <KpiTile icon="up" tone="blue" label="Tendance globale" value={tendance} sub={delta !== null ? `${delta >= 0 ? "+" : ""}${Math.round(delta)} pts depuis le premier mois` : undefined} />
               </div>
               <div className="card card-pad mt-3">
-                <CardTitle icon="time" tone={meta.tone} title={`Évolution du score global — ${labels.plur}`} sub="Score moyen de conformité du niveau, par mois" />
-                {months.length ? <LineTrend exportTitle={`Évolution du score global — ${labels.plur}`} months={months} series={[{ name: `Score moyen — ${labels.plur}`, data: trendData }]} /> : <div className="py-8 text-center text-[12px] text-surface-500">Pas de données mensuelles.</div>}
+                <CardTitle icon="time" tone={meta.tone} title={`Évolution du score global — ${scope}`} sub="Score moyen de conformité, par mois" />
+                {months.length ? <LineTrend exportTitle={`Évolution du score global — ${scope}`} months={months} series={[{ name: `Score moyen — ${scope}`, data: trendData }]} /> : <div className="py-8 text-center text-[12px] text-surface-500">Pas de données mensuelles.</div>}
               </div>
               <div className="card card-pad mt-3">
                 <CardTitle icon="table" tone={meta.tone} title={`Évolution du score par mois par ${labels.sing.toLowerCase()}`} sub="Cellules colorées selon les 4 classes d'interprétation"
@@ -397,25 +408,25 @@ export function SupervisionScore() {
 
             {/* 4. Score par composante (dynamique) */}
             <section>
-              <SectionBar icon="component">Score par composante — {labels.plur}</SectionBar>
+              <SectionBar icon="component">Score par composante — {scope}</SectionBar>
               <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                 <KpiTile icon="check" tone="green" label="Composante la plus forte" value={bestComp?.short ?? "—"} sub={bestComp ? `Score : <b>${fmtPct(bestComp.score)}</b>` : undefined} />
                 <KpiTile icon="alert" tone="red" label="Composante la plus faible" value={worstComp?.short ?? "—"} sub={worstComp ? `Score : <b>${fmtPct(worstComp.score)}</b>` : undefined} />
                 <KpiTile icon="component" tone="navy" label="Score moyen des composantes" value={compAvg !== null ? `${compAvg}%` : "—"} sub="6 composantes ACD" />
               </div>
               <div className="card card-pad mt-3">
-                <CardTitle icon="component" tone={meta.tone} title={`Score de conformité par composante — ${labels.plur}`} sub="Couleur selon l'interprétation 4 classes" />
-                {compValid.length ? <HBar exportTitle={`Score de conformité par composante — ${labels.plur}`} colorFor={confColor} data={b.composantes.map((c) => ({ name: c.short, value: c.score }))} /> : <div className="py-8 text-center text-[12px] text-surface-500">Aucune donnée.</div>}
+                <CardTitle icon="component" tone={meta.tone} title={`Score de conformité par composante — ${scope}`} sub="Couleur selon l'interprétation 4 classes" />
+                {compValid.length ? <HBar exportTitle={`Score de conformité par composante — ${scope}`} colorFor={confColor} data={b.composantes.map((c) => ({ name: c.short, value: c.score }))} /> : <div className="py-8 text-center text-[12px] text-surface-500">Aucune donnée.</div>}
               </div>
             </section>
 
             {/* 5. Profil radar + suivi mensuel des composantes (dynamique) */}
             <section>
-              <SectionBar icon="component">Profil radar et suivi mensuel des composantes — {labels.plur}</SectionBar>
+              <SectionBar icon="component">Profil radar et suivi mensuel des composantes — {scope}</SectionBar>
               <div className="grid grid-cols-1 lg:grid-cols-12 gap-3">
                 <div className="card card-pad lg:col-span-5">
-                  <CardTitle icon="component" tone={meta.tone} title={`Radar des composantes — ${labels.plur}`} sub="Profil des 6 composantes par structure (8 max)" />
-                  {b.radar.entities.length ? <Radar exportTitle={`Radar des composantes — ${labels.plur}`} indicators={b.radar.indicators} entities={b.radar.entities} /> : <div className="py-8 text-center text-[12px] text-surface-500">Aucune donnée.</div>}
+                  <CardTitle icon="component" tone={meta.tone} title={`Radar des composantes — ${scope}`} sub="Profil des 6 composantes par structure (8 max)" />
+                  {b.radar.entities.length ? <Radar exportTitle={`Radar des composantes — ${scope}`} indicators={b.radar.indicators} entities={b.radar.entities} /> : <div className="py-8 text-center text-[12px] text-surface-500">Aucune donnée.</div>}
                 </div>
                 <div className="card card-pad lg:col-span-7">
                   <CardTitle icon="table" tone={meta.tone} title="Score de conformité par composante et par mois" sub="Heatmap selon les 4 classes d'interprétation"
@@ -467,7 +478,7 @@ export function SupervisionScore() {
 /* ================ Page 3 — Constats & recommandations ================ */
 
 export function SupervisionConstats() {
-  const { lvl, labels, meta } = useOrgLevel();
+  const { lvl, labels, meta, scope } = useOrgLevel();
   return (
     <DataGate>
       {(d: SupervisionBundle) => {
@@ -483,7 +494,7 @@ export function SupervisionConstats() {
           .map(([key]) => b.composantes.find((c) => c.key === key)?.short ?? key);
         return (
           <div className="space-y-4">
-            <Banner icon="reco" tone={meta.tone} title={`Constats & recommandations — ${labels.plur}`}
+            <Banner icon="reco" tone={meta.tone} title={`Constats & recommandations — ${scope}`}
               sub={<>Synthèse par {labels.sing.toLowerCase()} · constats et recommandations issus de la checklist de supervision</>} />
             <OrgUnitFilter d={d} />
 

@@ -47,8 +47,8 @@ export const MODULES: ModuleDef[] = [
       {
         name: "Centres de santé", pages: [
           { id: "cqd_cs_comparaison", label: "Comparaison sources", icon: "chart", lvl: "as" },
-          { id: "cqd_cs_concordance", label: "Concordance", icon: "concord", lvl: "as" },
-          { id: "cqd_cs_erreurs", label: "Erreurs", icon: "erreurs", lvl: "as" },
+          { id: "cqd_cs_concordance", label: "Concordance des données", icon: "concord", lvl: "as" },
+          { id: "cqd_cs_erreurs", label: "Erreurs de transcription", icon: "erreurs", lvl: "as" },
           { id: "cqd_cs_outils", label: "Qualité outils", icon: "form", lvl: "as" },
           { id: "cqd_cs_enfants", label: "Enfants manqués", icon: "enfants", lvl: "as" },
         ],
@@ -56,8 +56,8 @@ export const MODULES: ModuleDef[] = [
       {
         name: "Zones de santé", pages: [
           { id: "cqd_zs_comparaison", label: "Comparaison sources", icon: "chart", lvl: "zs" },
-          { id: "cqd_zs_concordance", label: "Concordance", icon: "concord", lvl: "zs" },
-          { id: "cqd_zs_erreurs", label: "Erreurs", icon: "erreurs", lvl: "zs" },
+          { id: "cqd_zs_concordance", label: "Concordance des données", icon: "concord", lvl: "zs" },
+          { id: "cqd_zs_erreurs", label: "Erreurs de transcription", icon: "erreurs", lvl: "zs" },
         ],
       },
     ],

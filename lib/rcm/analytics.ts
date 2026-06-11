@@ -232,7 +232,16 @@ export function buildRcmBundle(
 
   const totalEnfants = children.length;
   const asSet = new Set(children.map((c) => c.aire).filter(Boolean));
-  const asTotal = filterOptions.aires.length;
+  // Dénominateur « AS ayant bénéficié du MRC » : aires de la MÊME portée
+  // géographique que la sélection (province/antenne/zone), pas de tout le jeu
+  // de données — sinon le numérateur (filtré) et le dénominateur (global)
+  // ne sont pas comparables (feedback Dr Léandre : « ça devrait être identique »).
+  const asScope = all.filter((c) =>
+    (!filters.province || eq(c.province, filters.province)) &&
+    (!filters.antenne || eq(canonAntenne(c.antenne), canonAntenne(filters.antenne))) &&
+    (!filters.zone || eq(c.zone, filters.zone))
+  );
+  const asTotal = new Set(asScope.map((c) => c.aire).filter(Boolean)).size;
 
   // Distance (au niveau enfant ≈ localité monitorée).
   const distance = { moins_5km: 0, entre_5_10km: 0, plus_10km: 0 } as Record<DistanceBand, number>;
