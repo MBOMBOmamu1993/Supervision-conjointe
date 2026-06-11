@@ -1,6 +1,5 @@
-# Workflow TEMPORAIRE de diagnostic : liste les champs d'identification des
-# soumissions des formulaires Contrôle qualité (CS et ZS) pour déboguer le
-# matching géographique. À supprimer après diagnostic.
+# Workflow TEMPORAIRE de diagnostic : structure complète des soumissions du
+# formulaire Contrôle qualité ZS (par-aire ?). À supprimer après diagnostic.
 name: debug-kobo
 on:
   push:
@@ -10,23 +9,27 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Dump CQD identification fields
+      - name: Dump CQD ZS full structure
         run: |
           TOKEN=$(grep '^KOBO_TOKEN=' .env.example | cut -d= -f2)
-          for ASSET in aaQZRLWXQ6rpTWr3uR3SEU ajhW22rQEkVs39SuhBuwCC; do
-            echo "===================== ASSET $ASSET ====================="
-            curl -s -H "Authorization: Token $TOKEN" \
-              "https://eu.kobotoolbox.org/api/v2/assets/$ASSET/data.json?limit=300" \
-            | python3 -c '
+          curl -s -H "Authorization: Token $TOKEN" \
+            "https://eu.kobotoolbox.org/api/v2/assets/ajhW22rQEkVs39SuhBuwCC/data.json?limit=300" \
+          | python3 -c '
           import json,sys
           d=json.load(sys.stdin)
-          print("count:", d.get("count"))
           for r in d.get("results", []):
-              keep={}
-              for k,v in r.items():
-                  lk=k.lower()
-                  if any(s in lk for s in ("province","antenne","zone","aire","ess","date_supervision","_submission_time","mois_a_verifier")) and not isinstance(v,(list,dict)):
-                      keep[k]=v
-              print(json.dumps(keep, ensure_ascii=False))
+              zs = r.get("zone_sante")
+              print("=========", zs, "=========")
+              if zs != "boende":
+                  print("keys:", sorted(k for k in r.keys() if not k.startswith("_")))
+                  continue
+              for k in sorted(r.keys()):
+                  if k.startswith(("_attachments","_geolocation","formhub","meta")): continue
+                  v = r[k]
+                  if isinstance(v, list):
+                      print(k, "= LIST[%d]" % len(v))
+                      for item in v[:6]:
+                          print("   ", json.dumps(item, ensure_ascii=False)[:1500])
+                  else:
+                      print(k, "=", json.dumps(v, ensure_ascii=False)[:300])
           '
-          done
