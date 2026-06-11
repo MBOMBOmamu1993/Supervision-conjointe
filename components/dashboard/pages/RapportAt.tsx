@@ -27,15 +27,12 @@ function Pending() {
     </div>
   );
 }
-export function RefreshBar({ onRefresh }: { onRefresh: () => void }) {
+/* Indicateur de synchronisation temps réel. Le bouton « Actualiser » est
+   désormais UNIQUE, dans l'en-tête du dashboard (GlobalRefreshButton). */
+export function RefreshBar() {
   return (
     <div className="flex items-center gap-2 text-[11px] font-semibold text-surface-500">
       <span className="inline-flex items-center gap-1.5"><span className="h-2 w-2 rounded-full" style={{ background: C.green }} /> Synchronisation temps réel</span>
-      <button type="button" onClick={onRefresh} className="ml-auto inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-[11.5px] font-bold text-slate-600 transition hover:border-oms-500 hover:text-oms-600">
-        <DIcon name="route" style={{ width: 13, height: 13, display: "none" }} />
-        <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round"><path d="M3 12a9 9 0 0 1 15-6.7L21 8" /><path d="M21 3v5h-5" /><path d="M21 12a9 9 0 0 1-15 6.7L3 16" /><path d="M3 21v-5h5" /></svg>
-        Actualiser
-      </button>
     </div>
   );
 }
@@ -99,12 +96,12 @@ function TopBarList({ icon, tone, title, sub, items, color }: { icon: string; to
 
 /* ===================== 1. Vue d'ensemble / Généralités ===================== */
 export function RapVue() {
-  const { data, refresh } = useRapportAt();
+  const { data } = useRapportAt();
   if (!data) return <Empty msg="Synchronisation…" />;
   const k = data.vue.kpi; const months = data.vue.months;
   return (
     <div className="space-y-4">
-      <RefreshBar onRefresh={refresh} />
+      <RefreshBar />
       {!data.meta.hasData && <Pending />}
       <Banner icon="report" tone="teal" title="Rapport mensuel des AT — Vue d'ensemble" sub="Couverture, complétude des rapports et score global d'appui" />
       <section>
@@ -149,12 +146,12 @@ export function RapVue() {
 
 /* ===================== 2. Tenue des réunions ===================== */
 export function RapReunions() {
-  const { data, refresh } = useRapportAt();
+  const { data } = useRapportAt();
   if (!data) return <Empty msg="Synchronisation…" />;
   const s = data.reunions; const months = s.months;
   return (
     <div className="space-y-4">
-      <RefreshBar onRefresh={refresh} />
+      <RefreshBar />
       {!data.meta.hasData && <Pending />}
       <Banner icon="comment" tone="teal" title="Tenue des réunions" sub="CCPeV · surveillance · validation des données · revues mensuelles ZS" />
       <section>
@@ -223,12 +220,12 @@ export function RapReunions() {
 
 /* ===================== 3. Supervisions ===================== */
 export function RapSupervisions() {
-  const { data, refresh } = useRapportAt();
+  const { data } = useRapportAt();
   if (!data) return <Empty msg="Synchronisation…" />;
   const s = data.supervisions; const months = s.months;
   return (
     <div className="space-y-4">
-      <RefreshBar onRefresh={refresh} />
+      <RefreshBar />
       {!data.meta.hasData && <Pending />}
       <Banner icon="link" tone="blue" title="Supervisions" sub="Antenne · Zone de santé · Aire de santé" />
       <section>
@@ -305,12 +302,12 @@ export function RapSupervisions() {
 
 /* ===================== 4. Monitorage de convenance ===================== */
 export function RapMonitorage() {
-  const { data, refresh } = useRapportAt();
+  const { data } = useRapportAt();
   if (!data) return <Empty msg="Synchronisation…" />;
   const s = data.monitorage; const months = s.months;
   return (
     <div className="space-y-4">
-      <RefreshBar onRefresh={refresh} />
+      <RefreshBar />
       {!data.meta.hasData && <Pending />}
       <Banner icon="gauge" tone="violet" title="Monitorage de convenance" sub="Réalisation par AT et par mois" />
       <section>
@@ -351,12 +348,12 @@ export function RapMonitorage() {
 
 /* ===================== 5. Surveillance ===================== */
 export function RapSurveillance() {
-  const { data, refresh } = useRapportAt();
+  const { data } = useRapportAt();
   if (!data) return <Empty msg="Synchronisation…" />;
   const s = data.surveillance;
   return (
     <div className="space-y-4">
-      <RefreshBar onRefresh={refresh} />
+      <RefreshBar />
       {!data.meta.hasData && <Pending />}
       <Banner icon="erreurs" tone="red" title="Surveillance" sub="Rougeole · TNN · MAPI graves" />
       <section>
@@ -441,12 +438,12 @@ export function RapSurveillance() {
 
 /* ===================== 6. OSP & activités spéciales ===================== */
 export function RapOsp() {
-  const { data, refresh } = useRapportAt();
+  const { data } = useRapportAt();
   if (!data) return <Empty msg="Synchronisation…" />;
   const s = data.osp;
   return (
     <div className="space-y-4">
-      <RefreshBar onRefresh={refresh} />
+      <RefreshBar />
       {!data.meta.hasData && <Pending />}
       <Banner icon="check" tone="teal" title="OSP, activités spéciales & rapports" sub="Outils de suivi des performances et rapports transmis" />
       <section>

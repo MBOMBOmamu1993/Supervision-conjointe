@@ -88,6 +88,18 @@ function OrgUnitFilter({ d }: { d: SupervisionBundle }) {
       <span className="text-[11px] text-surface-500">
         Sélectionnez une {labels.sing.toLowerCase()} pour visualiser sa situation spécifique.
       </span>
+      <button
+        type="button"
+        onClick={() => f.resetField("org")}
+        disabled={!f.org}
+        title={`Réinitialiser le filtre ${labels.sing.toLowerCase()}`}
+        className="ml-auto inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-[11.5px] font-bold text-slate-600 transition hover:border-oms-500 hover:text-oms-600 disabled:cursor-not-allowed disabled:opacity-40"
+      >
+        <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round">
+          <path d="M3 12a9 9 0 0 1 15-6.7L21 8" /><path d="M21 3v5h-5" /><path d="M21 12a9 9 0 0 1-15 6.7L3 16" /><path d="M3 21v-5h5" />
+        </svg>
+        Réinitialiser
+      </button>
     </div>
   );
 }
