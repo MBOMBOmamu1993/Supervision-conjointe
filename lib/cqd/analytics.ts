@@ -514,6 +514,59 @@ function buildLevel(level: "zs" | "as", records: CqdRecord[]): CqdLevelBundle {
     dhis2Snis: buildConcTable((r) => r.dhis2, (r) => r.snis),
   };
 
+  // ---- Comparaison des indicateurs PAR STRUCTURE (maquette Dr Léandre) ----
+  // Niveau CS : référence = registre de vaccination, outils comparés = fiche de
+  // pointage + canevas SNIS (FV = SNIS/registre). Niveau ZS : référence = SNIS,
+  // outil comparé = DHIS2 (FV = DHIS2/SNIS). Écart moyen ABSOLU (définition
+  // n°2 : Σ |outil − référence| / nombre d'outils comparés).
+  const isAs = level === "as";
+  const cmpStructures = Array.from(byStruct.entries())
+    .map(([name, recs]) => {
+      const s = (src: (r: CqdRecord) => Antigen4, k: keyof Antigen4) => recs.reduce((a, r) => a + src(r)[k], 0);
+      const perAnt = (k: keyof Antigen4) => {
+        const ref = isAs ? s((r) => r.registre, k) : s((r) => r.snis, k);
+        const comps = isAs ? [s((r) => r.pointage, k), s((r) => r.snis, k)] : [s((r) => r.dhis2, k)];
+        const controlled = ref > 0 || comps.some((x) => x > 0);
+        const ecart = controlled ? r1(comps.reduce((a, x) => a + Math.abs(x - ref), 0) / comps.length) : null;
+        const verif = isAs ? s((r) => r.snis, k) : s((r) => r.dhis2, k);
+        const fv = ref > 0 ? r1((verif / ref) * 100) : null;
+        return { ecart, fv };
+      };
+      const v = { p1: perAnt("p1"), p3: perAnt("p3"), rr1: perAnt("rr1"), rr2: perAnt("rr2") };
+      const ecarts = ANTIGEN_KEYS.map((k) => v[k].ecart).filter((x): x is number => x !== null);
+      const fvs = ANTIGEN_KEYS.map((k) => v[k].fv).filter((x): x is number => x !== null);
+      return {
+        name,
+        ecart: {
+          p1: v.p1.ecart, p3: v.p3.ecart, rr1: v.rr1.ecart, rr2: v.rr2.ecart,
+          total: ecarts.length ? r1(ecarts.reduce((a, x) => a + x, 0)) : null,
+        },
+        fv: {
+          p1: v.p1.fv, p3: v.p3.fv, rr1: v.rr1.fv, rr2: v.rr2.fv,
+          moyen: fvs.length ? r1(fvs.reduce((a, x) => a + x, 0) / fvs.length) : null,
+        },
+        erreur: isAs ? errRegistreSnis(recs) : errSnisDhis2(recs),
+      };
+    })
+    .sort((a, b) => a.name.localeCompare(b.name));
+  const mean = (xs: (number | null)[]) => {
+    const v = xs.filter((x): x is number => x !== null);
+    return v.length ? r1(v.reduce((a, x) => a + x, 0) / v.length) : null;
+  };
+  const comparaison = {
+    reference: isAs ? "Registre de vaccination" : "Canevas SNIS",
+    compares: isAs ? "Fiche de pointage · Canevas SNIS" : "DHIS2",
+    ecartMoyenGlobal: mean(cmpStructures.map((x) => x.ecart.total)),
+    fvMoyenGlobal: mean(cmpStructures.map((x) => x.fv.moyen)),
+    erreurMoyenneGlobale: isAs ? errRegistreSnis(records) : errSnisDhis2(records),
+    structures: cmpStructures,
+    prioritaires: [...cmpStructures]
+      .filter((x) => x.erreur !== null || x.ecart.total !== null)
+      .sort((a, b) => (b.erreur ?? -1) - (a.erreur ?? -1) || (b.ecart.total ?? -1) - (a.ecart.total ?? -1))
+      .slice(0, 3)
+      .map((x) => x.name),
+  };
+
   // Enfants manqués par antigène × âge, par structure (si champs présents).
   const withMissed = records.filter((r) => r.manquesAntigene !== null);
   const missedAntigenes = MISSED_ANTIGENS.map((a) => a.label);
@@ -591,6 +644,7 @@ function buildLevel(level: "zs" | "as", records: CqdRecord[]): CqdLevelBundle {
       });
     })(),
     csConcordance,
+    comparaison,
     trend,
     parStructure,
   };

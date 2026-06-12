@@ -7,10 +7,11 @@ import { useState } from "react";
 import { useCqd } from "@/lib/client/cqd-api";
 import type { CqdBundle, CqdConcordanceAS, CqdLevelBundle, ConcordanceClass } from "@/lib/cqd/types";
 import { SectionBar } from "@/components/ui/Card";
-import { KpiTile, CardTitle, Banner, C, TONES, apprConc } from "@/components/proto/proto";
+import { KpiTile, CardTitle, Banner, C, TONES, apprConc, PointerIcon, Badge, type Tone } from "@/components/proto/proto";
 import { ProtoGroupedBar, ProtoHBar, ProtoConcHBar } from "@/components/proto/charts";
 import { fmtMonth } from "@/lib/client/format";
 import Donut from "@/components/charts/Donut";
+import EChart from "@/components/charts/EChart";
 import { TableExportButtons } from "@/components/ui/TableExport";
 
 /* --------------------------- helpers --------------------------- */
@@ -101,9 +102,15 @@ function CqdDefinitions() {
   return (
     <section>
       <SectionBar icon="legend">Indicateurs de contrôle de qualité des données — Définitions, formules et interprétation</SectionBar>
+      {/* Fermée PAR DÉFAUT : un doigt indique qu'un clic déroule / replie la
+          note explicative (feedback Dr Léandre). */}
       <details className="card card-pad">
-        <summary className="cursor-pointer select-none text-[12.5px] font-bold text-navy-700">
-          Facteur de vérification · Écart moyen · Taux d'erreur — afficher les définitions
+        <summary className="flex cursor-pointer select-none flex-wrap items-center gap-2 text-[12.5px] font-bold text-navy-700">
+          <PointerIcon />
+          <span>Facteur de vérification · Écart moyen · Taux d'erreur — afficher les définitions</span>
+          <span className="inline-flex items-center gap-1 rounded-full px-2.5 py-[3px] text-[10.5px] font-extrabold uppercase tracking-wide text-white" style={{ background: "#0093d5" }}>
+            Cliquez ici pour dérouler / replier la note explicative
+          </span>
         </summary>
         <div className="mt-3 grid grid-cols-1 lg:grid-cols-3 gap-3">
           {defs.map((d) => (
@@ -185,9 +192,12 @@ export function CqdCsComparaison() {
       </div>
       <section>
         <SectionBar icon="bars">Écart moyen par rapport au registre de vaccination, par antigène</SectionBar>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
           {ANT4.map((lab, i) => { const a = b ? antByLabel(b, lab) : null; const e = a ? ecart(a) : null;
             return <KpiTile key={lab} icon={i < 2 ? "syringe" : "syringe"} tone={["green", "orange", "red", "blue"][i] as never} label={`Écart moyen ${lab}`} value={pctTxt(e)} />; })}
+          {/* Nombre de structures ayant bénéficié du contrôle qualité (feedback Dr Léandre). */}
+          <KpiTile icon="clinic" tone="navy" label="Nombre d'AS contrôlées" value={b?.structuresControlees ?? "—"}
+            sub="Aires de santé ayant bénéficié du contrôle qualité des données" />
         </div>
       </section>
       <div className="card card-pad">
@@ -502,9 +512,12 @@ export function CqdZsComparaison() {
       <CqdDefinitions />
       <section>
         <SectionBar icon="bars">Écart moyen SNIS / DHIS2 par antigène</SectionBar>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
           {ANT4.map((lab, i) => { const a = b ? antByLabel(b, lab) : null; const e = a && a.snis > 0 ? round(Math.abs(a.snis - a.dhis2) / a.snis * 100) : null;
             return <KpiTile key={lab} icon="syringe" tone={["green", "orange", "red", "blue"][i] as never} label={`Écart moyen ${lab}`} value={pctTxt(e)} />; })}
+          {/* Nombre de structures ayant bénéficié du contrôle qualité (feedback Dr Léandre). */}
+          <KpiTile icon="hospital" tone="navy" label="Nombre de ZS contrôlées" value={b?.structuresControlees ?? "—"}
+            sub="Zones de santé ayant bénéficié du contrôle qualité des données" />
         </div>
       </section>
       <div className="card card-pad">
@@ -635,3 +648,193 @@ export function CqdZsErreurs() {
     </div>
   );
 }
+
+/* ============ Page — Comparaison par structure (CS & ZS) ============ */
+/* Maquette Dr Léandre (12/06/2026) : écart moyen, facteur de vérification et
+   taux d'erreur PAR STRUCTURE, matrice comparative et structures prioritaires. */
+
+type CmpStruct = CqdLevelBundle["comparaison"]["structures"][number];
+const CMP_ANT: { label: string; key: "p1" | "p3" | "rr1" | "rr2"; color: string }[] = [
+  { label: "PENTA1", key: "p1", color: C.navy },
+  { label: "PENTA3", key: "p3", color: C.teal },
+  { label: "RR1", key: "rr1", color: C.orange },
+  { label: "RR2", key: "rr2", color: C.violet },
+];
+
+/** Barres horizontales EMPILÉES : écart moyen par structure et par antigène. */
+function EcartStackBar({ rows }: { rows: CmpStruct[] }) {
+  const ordered = [...rows].reverse();
+  return (
+    <EChart
+      height={Math.max(170, rows.length * 34 + 50)}
+      option={{
+        tooltip: { trigger: "axis", axisPointer: { type: "shadow" }, confine: true },
+        legend: { top: 0, textStyle: { fontSize: 10 } },
+        grid: { left: 4, right: 40, top: 26, bottom: 4, containLabel: true },
+        xAxis: { type: "value", axisLabel: { fontSize: 10 }, splitLine: { lineStyle: { color: "#f1f5f9" } } },
+        yAxis: { type: "category", data: ordered.map((r) => r.name), axisLabel: { fontSize: 10.5, width: 120, overflow: "truncate" }, axisTick: { show: false } },
+        series: [
+          ...CMP_ANT.map((a) => ({
+            name: a.label, type: "bar" as const, stack: "ecart",
+            itemStyle: { color: a.color },
+            data: ordered.map((r) => r.ecart[a.key] ?? 0),
+            label: { show: true, fontSize: 9, color: "#fff", formatter: (p: { value: number }) => (p.value > 0 ? String(p.value) : "") },
+          })),
+          {
+            name: "Total", type: "bar" as const, stack: "ecart", itemStyle: { color: "transparent" },
+            data: ordered.map((r) => 0.0001),
+            label: {
+              show: true, position: "right" as const, fontSize: 10, fontWeight: 700, color: "#334155",
+              formatter: (p: { dataIndex: number }) => { const t = ordered[p.dataIndex]?.ecart.total; return t == null ? "" : String(t); },
+            },
+            tooltip: { show: false },
+          },
+        ],
+      }}
+    />
+  );
+}
+
+/** Barres horizontales : facteur de vérification par structure et par antigène (seuils 95–105). */
+function FvGroupedBar({ rows }: { rows: CmpStruct[] }) {
+  const ordered = [...rows].reverse();
+  return (
+    <EChart
+      height={Math.max(190, rows.length * 56 + 50)}
+      option={{
+        tooltip: { trigger: "axis", axisPointer: { type: "shadow" }, confine: true, valueFormatter: (v: number | null) => (v == null ? "—" : `${v}%`) },
+        legend: { top: 0, textStyle: { fontSize: 10 } },
+        grid: { left: 4, right: 40, top: 26, bottom: 4, containLabel: true },
+        xAxis: {
+          type: "value", min: 0, axisLabel: { formatter: "{value}%", fontSize: 10 }, splitLine: { lineStyle: { color: "#f1f5f9" } },
+        },
+        yAxis: { type: "category", data: ordered.map((r) => r.name), axisLabel: { fontSize: 10.5, width: 120, overflow: "truncate" }, axisTick: { show: false } },
+        series: CMP_ANT.map((a) => ({
+          name: a.label, type: "bar" as const, barGap: "8%",
+          itemStyle: { color: a.color },
+          data: ordered.map((r) => r.fv[a.key]),
+          label: { show: true, position: "right" as const, fontSize: 8.5, color: "#475569", formatter: (p: { value: number | null }) => (p.value == null ? "" : `${p.value}%`) },
+        })),
+      }}
+    />
+  );
+}
+
+/** Couleur heatmap d'une cellule « écart » (plus faible = meilleur). */
+function ecartCellStyle(v: number | null, max: number): React.CSSProperties | undefined {
+  if (v == null || !Number.isFinite(v)) return undefined;
+  const ratio = max > 0 ? Math.min(1, v / max) : 0;
+  return { background: `rgba(226,54,54,${(0.08 + ratio * 0.45).toFixed(2)})`, fontWeight: 700 };
+}
+/** Couleur d'une cellule « facteur de vérification » selon les seuils 95–105. */
+function fvCellStyle(v: number | null): React.CSSProperties | undefined {
+  if (v == null || !Number.isFinite(v)) return undefined;
+  const t = TONES[apprConc(v).tone];
+  return { background: t.bg, color: t.text, fontWeight: 700 };
+}
+
+function CqdComparaisonStructure({ level }: { level: "as" | "zs" }) {
+  const { b, live } = useLevel(level);
+  const cmp = b?.comparaison;
+  const rows = cmp?.structures ?? [];
+  const withData = rows.filter((r) => r.ecart.total !== null || r.fv.moyen !== null || r.erreur !== null);
+  const maxEcart = Math.max(1, ...rows.flatMap((r) => CMP_ANT.map((a) => r.ecart[a.key] ?? 0)));
+  const labelStruct = level === "as" ? "Aire de santé" : "Zone de santé";
+  const errRows: [string, number][] = withData
+    .map((r) => [r.name, r.erreur ?? 0] as [string, number])
+    .sort((a, c) => c[1] - a[1]);
+  const fvG = cmp?.fvMoyenGlobal ?? null;
+  const errG = cmp?.erreurMoyenneGlobale ?? null;
+  const prioTones: Tone[] = ["red", "orange", "blue"];
+  return (
+    <div className="space-y-4">
+      <Banner icon="rank" tone="navy" title="Contrôle qualité des données : comparaison par structure"
+        sub={`Analyse comparative de l'écart moyen, du facteur de vérification et du taux d'erreur selon les structures supervisées · Référence : ${cmp?.reference ?? "—"} — outils comparés : ${cmp?.compares ?? "—"}`} />
+      <section>
+        <SectionBar icon="bars">Indicateurs clés</SectionBar>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <KpiTile icon="scale" tone="blue" label="Écart moyen global" value={cmp?.ecartMoyenGlobal ?? "—"}
+            sub="Moyenne des écarts cumulés par structure · plus faible = meilleur" />
+          <KpiTile icon="concord" tone="green" label="Facteur de vérification moyen" value={pctTxt(fvG)}
+            sub={fvG == null ? "" : apprConc(fvG).label} />
+          <KpiTile icon="erreurs" tone="orange" label="Taux d'erreur moyen" value={pctTxt(errG)}
+            sub={errG == null ? "" : errAppr(errG).label} />
+          <KpiTile icon={level === "as" ? "clinic" : "hospital"} tone="navy" label="Nombre de structures évaluées" value={b?.structuresControlees ?? "—"}
+            sub={level === "as" ? "Aires de santé contrôlées" : "Zones de santé contrôlées"} />
+        </div>
+      </section>
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-3">
+        <div className="card card-pad lg:col-span-5">
+          <CardTitle icon="bars" tone="navy" title="Écart moyen par structure et par antigène" sub="Écart cumulé PENTA1 · PENTA3 · RR1 · RR2 — plus faible = meilleur" />
+          {live && withData.length ? <EcartStackBar rows={withData} /> : <Empty />}
+        </div>
+        <div className="card card-pad lg:col-span-4">
+          <CardTitle icon="concord" tone="green" title="Facteur de vérification par structure et par antigène" sub="95–105 % = bonne concordance" />
+          {live && withData.length ? <FvGroupedBar rows={withData} /> : <Empty />}
+        </div>
+        <div className="card card-pad lg:col-span-3">
+          <CardTitle icon="erreurs" tone="orange" title="Taux d'erreur par structure" sub="Plus faible = meilleur" />
+          {live && errRows.length ? <ProtoHBar height={Math.max(170, errRows.length * 32 + 30)} byCot={false} color={C.orange} maxName={110} rows={errRows} /> : <Empty />}
+        </div>
+      </div>
+      <div className="card card-pad">
+        <CardTitle icon="table" tone="navy" title="Matrice comparative des indicateurs"
+          sub="Plus faible = meilleur (écart, erreur) · 95 % – 105 % = bonne concordance (facteur de vérification)"
+          right={<TableExportButtons filename="Matrice comparative des indicateurs par structure" />} />
+        {withData.length ? (
+          <div className="overflow-x-auto"><table className="dtable">
+            <thead>
+              <tr>
+                <th rowSpan={2} className="name">{labelStruct}</th>
+                <th colSpan={5}>Écart moyen</th>
+                <th colSpan={5}>Facteur de vérification</th>
+                <th rowSpan={2}>Taux d'erreur</th>
+              </tr>
+              <tr>
+                <th>PENTA1</th><th>PENTA3</th><th>RR1</th><th>RR2</th><th>Total</th>
+                <th>PENTA1</th><th>PENTA3</th><th>RR1</th><th>RR2</th><th>Moyen</th>
+              </tr>
+            </thead>
+            <tbody>
+              {withData.map((r) => (
+                <tr key={r.name}>
+                  <td className="name">{r.name}</td>
+                  {CMP_ANT.map((a) => <td key={`e${a.key}`} className="tabular-nums" style={ecartCellStyle(r.ecart[a.key], maxEcart)}>{r.ecart[a.key] ?? "—"}</td>)}
+                  <td className="tabular-nums" style={{ ...ecartCellStyle(r.ecart.total, maxEcart * 4), fontWeight: 800 }}>{r.ecart.total ?? "—"}</td>
+                  {CMP_ANT.map((a) => <td key={`f${a.key}`} className="tabular-nums" style={fvCellStyle(r.fv[a.key])}>{r.fv[a.key] == null ? "—" : `${r.fv[a.key]}%`}</td>)}
+                  <td className="tabular-nums" style={{ ...fvCellStyle(r.fv.moyen), fontWeight: 800 }}>{r.fv.moyen == null ? "—" : `${r.fv.moyen}%`}</td>
+                  <td className="tabular-nums" style={{ color: errAppr(r.erreur).color, fontWeight: 800 }}>{pctTxt(r.erreur)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table></div>
+        ) : <Empty />}
+      </div>
+      <div className="card card-pad">
+        <CardTitle icon="alert" tone="red" title="Structures prioritaires" sub="Taux d'erreur et écart moyen les plus élevés — appui à prioriser" />
+        {cmp?.prioritaires.length ? (
+          <div className="flex flex-wrap items-center gap-3 pt-1">
+            {cmp.prioritaires.map((name, i) => (
+              <span key={name} className="inline-flex items-center gap-2 rounded-full border px-3.5 py-1.5 text-[12.5px] font-extrabold"
+                style={{ background: TONES[prioTones[i] ?? "blue"].bg, borderColor: TONES[prioTones[i] ?? "blue"].border, color: TONES[prioTones[i] ?? "blue"].text }}>
+                <span className="flex h-5 w-5 items-center justify-center rounded-full text-[11px] text-white" style={{ background: TONES[prioTones[i] ?? "blue"].ico }}>{i + 1}</span>
+                {name}
+              </span>
+            ))}
+          </div>
+        ) : <Empty msg="Aucune structure prioritaire identifiée pour cette sélection." />}
+      </div>
+      <div className="card card-pad flex items-start gap-3" style={{ background: TONES.blue.bg, borderColor: TONES.blue.border }}>
+        <Badge icon="legend" tone="blue" size={30} />
+        <div className="text-[12.5px] leading-relaxed text-surface-700">
+          Cette page permet de comparer, par structure, les principaux indicateurs de contrôle qualité des données. La matrice
+          comparative détaille l'écart moyen et le facteur de vérification par antigène (PENTA1, PENTA3, RR1 et RR2), tandis que
+          le taux d'erreur est présenté comme un indicateur unique par structure.
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export function CqdCsStructures() { return <CqdComparaisonStructure level="as" />; }
+export function CqdZsStructures() { return <CqdComparaisonStructure level="zs" />; }

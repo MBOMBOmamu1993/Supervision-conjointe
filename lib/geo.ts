@@ -257,20 +257,57 @@ export function cleanAireLabel(aire: string | null, zone: string | null, antenne
 }
 
 /**
- * Options en cascade : chaque niveau est restreint par les niveaux parents
- * déjà sélectionnés. Les listes sont dédoublonnées.
+ * Options en cascade STRICTE : chaque niveau est restreint par les niveaux
+ * parents déjà sélectionnés, en s'appuyant à la fois sur les tuples issus des
+ * données ET sur la hiérarchie provinciale statique (base État de lieux) :
+ *  - ZS sélectionnée → la liste « Aire de santé » ne propose QUE les aires de
+ *    cette ZS (liste complète de la hiérarchie, même sans donnée), jamais les
+ *    aires d'autres ZS dont le rattachement encodé serait illisible ;
+ *  - Antenne sélectionnée → les listes ZS et Aire sont restreintes aux entités
+ *    rattachées à cette antenne. Les listes sont dédoublonnées.
  */
 export function cascadeOptions(tuples: GeoTuple[], sel: GeoSelection): CascadeOptions {
   const matchProvince = (t: GeoTuple) => !sel.province || eqGeo(t.province, sel.province);
   const matchAntenne = (t: GeoTuple) => !sel.antenne || eqGeo(t.antenne, sel.antenne);
   const matchZone = (t: GeoTuple) => !sel.zone || eqGeo(t.zone, sel.zone);
+  const selAntenne = canonAntenne(sel.antenne ?? null);
+
+  let zones = dedupeLabels(tuples.filter((t) => matchProvince(t) && matchAntenne(t)).map((t) => t.zone));
+  if (selAntenne) {
+    // Une ZS dont l'antenne de rattachement est CONNUE et différente est exclue.
+    zones = zones.filter((z) => {
+      const a = antenneOfZone(z);
+      return !a || eqGeo(canonAntenne(a), selAntenne);
+    });
+  }
+
+  let aires = dedupeLabels(
+    tuples.filter((t) => matchProvince(t) && matchAntenne(t) && matchZone(t)).map((t) => t.aire)
+  );
+  if (sel.zone) {
+    // Liste de référence : TOUTES les aires de la ZS (hiérarchie provinciale),
+    // même celles sans donnée. Les aires issues des données ne sont conservées
+    // que si elles appartiennent bien à cette ZS.
+    const ofZone = airesOfZone(sel.zone);
+    const allowed = new Set(ofZone.map((a) => norm(a)));
+    aires = dedupeLabels([
+      ...aires.filter((a) => {
+        const p = zoneOfAire(a);
+        return p ? eqGeo(p.zone, sel.zone) : allowed.has(norm(a));
+      }),
+      ...ofZone,
+    ]);
+  } else if (selAntenne) {
+    aires = aires.filter((a) => {
+      const p = zoneOfAire(a);
+      return !p || eqGeo(canonAntenne(p.antenne), selAntenne);
+    });
+  }
 
   return {
     provinces: dedupeLabels(tuples.map((t) => t.province)),
     antennes: dedupeLabels(tuples.filter(matchProvince).map((t) => t.antenne)),
-    zones: dedupeLabels(tuples.filter((t) => matchProvince(t) && matchAntenne(t)).map((t) => t.zone)),
-    aires: dedupeLabels(
-      tuples.filter((t) => matchProvince(t) && matchAntenne(t) && matchZone(t)).map((t) => t.aire)
-    ),
+    zones,
+    aires,
   };
 }

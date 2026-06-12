@@ -1,20 +1,31 @@
 "use client";
 
-/* Onglet « Rapport mensuel des consultants (AT) ». 6 sections alimentées en
-   TEMPS RÉEL via /api/at (hook useRapportAt). Collecte continue : un bouton
-   « Actualiser » force la resynchronisation. États vides gérés. */
+/* Onglet « Rapport mensuel des consultants (AT) » — REFONTE COMPLÈTE selon la
+   maquette Word du Dr Léandre (12/06/2026) :
+     · Vue d'ensemble & détails — indicateurs clés (coordination, supervision,
+       monitorage, contrôle qualité) + tableaux de détails par AT ;
+     · Planification — appuis, mise en œuvre du plan de travail, microplans ;
+     · Gestion des vaccins — inventaires + disponibilité PENTA / RR ;
+     · Chaîne de froid — fonctionnalité du matériel niveaux ZS et CS ;
+     · Prestation de services — sessions (fixes / avancées / mobiles) et
+       couvertures vaccinales ≥ 90 % par antigène ;
+     · FFOM & recommandations — forces, faiblesses, innovations, difficultés,
+       recommandations, appuis attendus, perspectives.
+   Source : formulaire Kobo « Rapport mensuel des AT » ACTUALISÉ (nouveaux
+   groupes planification / vaccins / chaîne de froid / prestation), temps réel
+   via /api/at (hook useRapportAt). Les indicateurs « contrôle qualité » de la
+   vue d'ensemble proviennent des formulaires CQ (hook useCqd). */
 import { useRapportAt } from "@/lib/client/at-api";
+import { useCqd } from "@/lib/client/cqd-api";
+import type { OpnCounts, AntenneSeries } from "@/lib/at/types";
 import { SectionBar } from "@/components/ui/Card";
-import { KpiTile, CardTitle, Banner, C, cotColor, type Tone } from "@/components/proto/proto";
+import { KpiTile, CardTitle, Banner, C, TONES, type Tone } from "@/components/proto/proto";
 import { ProtoGroupedBar } from "@/components/proto/charts";
-import { ProtoScoreBar } from "@/components/proto/charts-ext";
-import Donut from "@/components/charts/Donut";
 import LineTrend from "@/components/charts/LineTrend";
 import { DIcon } from "@/components/dashboard/icons";
 import { TableExportButtons } from "@/components/ui/TableExport";
 
 const pctTxt = (v: number | null | undefined) => (v == null ? "—" : `${v}%`);
-const heatScore = (v: number | null) => (v == null ? undefined : `${cotColor(v)}22`);
 
 function Empty({ msg = "En attente de données." }: { msg?: string }) {
   return <div className="py-10 text-center text-[12px] font-semibold text-surface-500">{msg}</div>;
@@ -28,19 +39,11 @@ function Pending() {
   );
 }
 /* Indicateur de synchronisation temps réel. Le bouton « Actualiser » est
-   désormais UNIQUE, dans l'en-tête du dashboard (GlobalRefreshButton). */
+   UNIQUE, dans l'en-tête du dashboard (GlobalRefreshButton). */
 export function RefreshBar() {
   return (
     <div className="flex items-center gap-2 text-[11px] font-semibold text-surface-500">
       <span className="inline-flex items-center gap-1.5"><span className="h-2 w-2 rounded-full" style={{ background: C.green }} /> Synchronisation temps réel</span>
-    </div>
-  );
-}
-function ListCard({ icon, tone, title, items }: { icon: string; tone: Tone; title: string; items: string[] }) {
-  return (
-    <div className="card card-pad">
-      <CardTitle icon={icon as never} tone={tone} title={title} />
-      {items.length ? <ul className="ml-4 list-disc space-y-1 text-[12px] text-surface-700">{items.map((t, i) => <li key={i}>{t}</li>)}</ul> : <Empty />}
     </div>
   );
 }
@@ -94,142 +97,112 @@ function TopBarList({ icon, tone, title, sub, items, color }: { icon: string; to
   );
 }
 
-/* ===================== 1. Vue d'ensemble / Généralités ===================== */
+/** Carte « activité réalisée » : décompte Oui / Partiel / Non / N-A (maquette planification). */
+const OPN_ITEMS: { key: keyof OpnCounts; label: string; color: string }[] = [
+  { key: "oui", label: "Oui", color: "#1f9d57" },
+  { key: "partiel", label: "Partiel", color: "#0d9488" },
+  { key: "non", label: "Non", color: "#f08c00" },
+  { key: "na", label: "N/A", color: "#94a3b8" },
+];
+function OpnCard({ icon, label, counts }: { icon: string; label: string; counts: OpnCounts }) {
+  return (
+    <div className="card card-pad">
+      <div className="mb-2 flex items-center gap-2.5">
+        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-white" style={{ background: "linear-gradient(145deg,#0a3a86,#00205c)" }}>
+          <DIcon name={icon} style={{ width: 18, height: 18 }} />
+        </span>
+        <div className="text-[12.5px] font-extrabold leading-tight text-navy-700">{label}</div>
+      </div>
+      <div className="grid grid-cols-4 gap-1.5">
+        {OPN_ITEMS.map((it) => (
+          <div key={it.key} className="rounded-lg px-1.5 py-2 text-center" style={{ background: `${it.color}14` }}>
+            <div className="text-[17px] font-extrabold leading-none" style={{ color: it.color }}>{counts[it.key]}</div>
+            <div className="mt-1 text-[10px] font-bold uppercase tracking-wide text-surface-500">{it.label}</div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/** Graphique linéaire mensuel : une série par antenne (+ éventuelle série « Ensemble »). */
+function AntenneLines({ months, series, ensemble, title, icon = "up", tone = "blue", exportTitle }: {
+  months: { key: string; label: string }[]; series: AntenneSeries[]; ensemble?: (number | null)[];
+  title: string; icon?: string; tone?: Tone; exportTitle?: string;
+}) {
+  const hasData = series.some((s) => s.values.some((v) => v != null)) || (ensemble ?? []).some((v) => v != null);
+  return (
+    <div className="card card-pad">
+      <CardTitle icon={icon as never} tone={tone} title={title} />
+      {months.length && hasData ? (
+        <LineTrend
+          exportTitle={exportTitle ?? title}
+          months={months.map((m) => m.key)}
+          series={[
+            ...series.map((s) => ({ name: s.antenne, data: s.values })),
+            ...(ensemble ? [{ name: "Ensemble", data: ensemble, color: "#f29e0b" }] : []),
+          ]}
+        />
+      ) : <Empty />}
+    </div>
+  );
+}
+
+/* ===================== 1. Vue d'ensemble & détails (PREMIÈRE PAGE) ===================== */
+
+/** Indicateurs « contrôle qualité des données » — source : formulaires CQ (CS & ZS). */
+function CqKpis() {
+  const { data } = useCqd();
+  const zs = data?.levels.zs;
+  const as = data?.levels.as;
+  return (
+    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+      <KpiTile icon="hospital" tone="navy" label="ZS contrôlées" value={zs?.structuresControlees ?? "—"} sub="zones de santé ayant bénéficié du contrôle qualité" />
+      <KpiTile icon="clinic" tone="green" label="AS contrôlées" value={as?.structuresControlees ?? "—"} sub="aires de santé ayant bénéficié du contrôle qualité" />
+      <KpiTile icon="form" tone="blue" label="Contrôles réalisés" value={(zs?.records ?? 0) + (as?.records ?? 0)} sub="formulaires CQ soumis (ZS + CS)" />
+      <KpiTile icon="calendar" tone="teal" label="Mois couverts" value={data?.meta.months.length ?? "—"} sub="période contrôlée" />
+    </div>
+  );
+}
+
 export function RapVue() {
   const { data } = useRapportAt();
+  const cqd = useCqd().data;
   if (!data) return <Empty msg="Synchronisation…" />;
-  const k = data.vue.kpi; const months = data.vue.months;
+  const k = data.vue.kpi;
+  const r = data.reunions;
+  const s = data.supervisions;
+  const m = data.monitorage;
+  const months = s.months;
   return (
     <div className="space-y-4">
       <RefreshBar />
       {!data.meta.hasData && <Pending />}
-      <Banner icon="report" tone="teal" title="Rapport mensuel des AT — Vue d'ensemble" sub="Couverture, complétude des rapports et score global d'appui" />
+      <Banner icon="report" tone="teal" title="Rapport mensuel des AT — Vue d'ensemble & détails"
+        sub="Indicateurs clés (coordination · supervision · monitorage · contrôle qualité) et détails par Assistant Technique" />
+
       <section>
-        <SectionBar icon="bars">Indicateurs clés</SectionBar>
+        <SectionBar icon="bars">Vue d'ensemble</SectionBar>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          <KpiTile icon="antenne" tone="teal" label="Antennes appuyées" value={k.antennes} sub="antennes PEV" />
-          <KpiTile icon="zs" tone="blue" label="Zones de santé appuyées" value={k.zones} sub="ZS couvertes" />
           <KpiTile icon="report" tone="green" label="Rapports mensuels soumis" value={`${k.rapportsSoumis} / ${k.rapportsAttendus}`} sub={pctTxt(k.rapportsPct)} />
           <KpiTile icon="eval" tone="violet" label="AT ayant rapporté" value={`${k.atsRapporte} / ${k.atsTotal}`} sub={pctTxt(k.atsTotal ? Math.round((k.atsRapporte / k.atsTotal) * 100) : null)} />
+          <KpiTile icon="antenne" tone="teal" label="Antennes appuyées" value={k.antennes} sub="antennes PEV" />
+          <KpiTile icon="zs" tone="blue" label="Zones de santé appuyées" value={k.zones} sub="ZS couvertes" />
         </div>
       </section>
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-3">
-        <div className="card card-pad lg:col-span-5">
-          <CardTitle icon="report" tone="teal" title="Rapports soumis par AT" />
-          {data.vue.rapportsParAt.length ? <ProtoGroupedBar height={210} unit="" colors={[C.teal]} cats={data.vue.rapportsParAt.map((r) => r.at)} series={[{ name: "Rapports", data: data.vue.rapportsParAt.map((r) => r.count) }]} rotateLabels /> : <Empty />}
-        </div>
-        <div className="card card-pad lg:col-span-4">
-          <CardTitle icon="chart" tone="blue" title="Rapports mensuels soumis par mois" />
-          {data.vue.rapportsParMois.length ? <ProtoGroupedBar height={210} unit="" colors={[C.blue]} cats={data.vue.rapportsParMois.map((r) => r.label)} series={[{ name: "Rapports", data: data.vue.rapportsParMois.map((r) => r.count) }]} /> : <Empty />}
-        </div>
-        <div className="card card-pad lg:col-span-3">
-          <CardTitle icon="cotation" tone="green" title="Complétude des rapports" />
-          <Donut height={200} data={[{ name: "Soumis", value: k.rapportsSoumis, color: C.green }, { name: "Manquants", value: Math.max(0, k.rapportsAttendus - k.rapportsSoumis), color: C.red }]} />
-        </div>
-      </div>
-      <div className="card card-pad">
-        <CardTitle icon="gauge" tone="navy" title="Score global d'appui par AT et par mois (%)" right={<TableExportButtons filename="Score global d'appui par AT et par mois (%)" />} />
-        {data.vue.scoreParAtMois.length ? (
-          <div className="overflow-x-auto"><table className="dtable">
-            <thead><tr><th className="name">Assistant technique</th><th>Antenne</th>{months.map((m) => <th key={m.key}>{m.label}</th>)}<th>Moyenne</th></tr></thead>
-            <tbody>{data.vue.scoreParAtMois.map((r) => (
-              <tr key={r.at}><td className="name">{r.at}</td><td>{r.antenne ?? "—"}</td>
-                {months.map((m) => { const v = r.byMonth[m.key]; return <td key={m.key} style={{ background: heatScore(v) }}>{v == null ? "—" : v}</td>; })}
-                <td style={{ background: heatScore(r.moyenne), fontWeight: 800 }}>{r.moyenne == null ? "—" : `${r.moyenne}%`}</td></tr>
-            ))}</tbody>
-          </table></div>
-        ) : <Empty />}
-      </div>
-    </div>
-  );
-}
 
-/* ===================== 2. Tenue des réunions ===================== */
-export function RapReunions() {
-  const { data } = useRapportAt();
-  if (!data) return <Empty msg="Synchronisation…" />;
-  const s = data.reunions; const months = s.months;
-  return (
-    <div className="space-y-4">
-      <RefreshBar />
-      {!data.meta.hasData && <Pending />}
-      <Banner icon="comment" tone="teal" title="Tenue des réunions" sub="CCPeV · surveillance · validation des données · revues mensuelles ZS" />
       <section>
-        <SectionBar icon="bars">Indicateurs clés</SectionBar>
+        <SectionBar icon="comment">Coordination — indicateurs clés</SectionBar>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          <KpiTile icon="comment" tone="teal" label="Réunions CCPeV tenues" value={`${s.kpi.ccpevTenues} / ${s.kpi.ccpevPrevues}`} sub="1 prévue / mois" />
-          <KpiTile icon="check" tone="blue" label="Réunions surveillance appuyées" value={`${s.kpi.survAppuyees} / ${s.kpi.survPrevues}`} sub={pctTxt(s.tauxParType[1]?.taux)} />
-          <KpiTile icon="table" tone="violet" label="Validation des données appuyées" value={`${s.kpi.validAppuyees} / ${s.kpi.validPrevues}`} sub={pctTxt(s.tauxParType[2]?.taux)} />
-          <KpiTile icon="reco" tone="green" label="Revues mensuelles ZS appuyées" value={`${s.kpi.revuesAppuyees} / ${s.kpi.revuesPrevues}`} sub={pctTxt(s.tauxParType[3]?.taux)} />
+          <KpiTile icon="comment" tone="teal" label="Réunions CCPeV tenues" value={`${r.kpi.ccpevTenues} / ${r.kpi.ccpevPrevues}`} sub="1 prévue / mois" />
+          <KpiTile icon="check" tone="blue" label="Réunions surveillance appuyées" value={`${r.kpi.survAppuyees} / ${r.kpi.survPrevues}`} sub={pctTxt(r.tauxParType[1]?.taux)} />
+          <KpiTile icon="table" tone="violet" label="Validation des données appuyées" value={`${r.kpi.validAppuyees} / ${r.kpi.validPrevues}`} sub={pctTxt(r.tauxParType[2]?.taux)} />
+          <KpiTile icon="reco" tone="green" label="Revues mensuelles ZS appuyées" value={`${r.kpi.revuesAppuyees} / ${r.kpi.revuesPrevues}`} sub={pctTxt(r.tauxParType[3]?.taux)} />
         </div>
       </section>
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-3">
-        <div className="card card-pad lg:col-span-7">
-          <CardTitle icon="chart" tone="teal" title="Réunions prévues vs appuyées par type" />
-          {s.prevuesVsAppuyees.some((t) => t.prevues || t.appuyees) ? <ProtoGroupedBar height={220} unit="" colors={[C.navy, C.teal]} cats={s.prevuesVsAppuyees.map((t) => t.type)} rotateLabels
-            series={[{ name: "Prévues", data: s.prevuesVsAppuyees.map((t) => t.prevues) }, { name: "Appuyées par AT", data: s.prevuesVsAppuyees.map((t) => t.appuyees) }]} /> : <Empty />}
-        </div>
-        <div className="card card-pad lg:col-span-5">
-          <CardTitle icon="gauge" tone="blue" title="Taux d'appui par type de réunion" />
-          {s.tauxParType.some((t) => t.taux != null) ? <ProtoScoreBar horiz height={220} unit="%" max={100} cats={s.tauxParType.map((t) => t.type)} vals={s.tauxParType.map((t) => t.taux ?? 0)} /> : <Empty />}
-        </div>
-      </div>
-      <div className="card card-pad">
-        <CardTitle icon="table" tone="navy" title="Réunions appuyées par AT et par type de réunion" sub="CCPeV · coordination/surveillance · validation des données · revues mensuelles ZS" right={<TableExportButtons filename="Réunions appuyées par AT et par type de réunion" />} />
-        {s.parAtType.length ? (
-          <div className="overflow-x-auto"><table className="dtable">
-            <thead><tr><th className="name">Assistant technique</th><th>CCPeV</th><th>Coordination / surveillance</th><th>Validation des données</th><th>Revues mensuelles ZS</th><th>Total</th></tr></thead>
-            <tbody>{s.parAtType.map((r) => (
-              <tr key={r.at}><td className="name">{r.at}</td><td>{r.ccpev}</td><td>{r.coordination}</td><td>{r.validation}</td><td>{r.monitorageZs}</td><td><b>{r.total}</b></td></tr>
-            ))}</tbody>
-          </table></div>
-        ) : <Empty />}
-      </div>
-      <div className="card card-pad">
-        <CardTitle icon="table" tone="navy" title="Réunions appuyées par AT et par mois" sub="Tous types confondus" right={<TableExportButtons filename="Réunions appuyées par AT et par mois" />} />
-        {s.tableParAtMois.length ? (
-          <div className="overflow-x-auto"><table className="dtable">
-            <thead><tr><th className="name">Assistant technique</th>{months.map((m) => <th key={m.key}>{m.label}</th>)}<th>Total</th></tr></thead>
-            <tbody>{s.tableParAtMois.map((r) => (
-              <tr key={r.at}><td className="name">{r.at}</td>{months.map((m) => <td key={m.key}>{r.byMonth[m.key] ?? "—"}</td>)}<td><b>{r.total}</b></td></tr>
-            ))}</tbody>
-          </table></div>
-        ) : <Empty />}
-      </div>
-      <section>
-        <SectionBar icon="erreurs">Problèmes identifiés au cours des revues mensuelles</SectionBar>
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-          <TopBarList icon="table" tone="red" title="Top 5 des problèmes de qualité des données" sub="Réunions de validation des données — Antenne PEV" items={s.topProblemesQualite} color={C.red} />
-          <TopBarList icon="reco" tone="orange" title="Top 5 des problèmes identifiés lors des revues mensuelles" sub="Réunions mensuelles de monitorage des ZS" items={s.topProblemesRevues} color={C.orange} />
-        </div>
-      </section>
-      <section>
-        <SectionBar icon="message">Synthèse des principales recommandations & actions correctrices</SectionBar>
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-          <NarrativeCard icon="reco" tone="green" title="Synthèse des principales recommandations"
-            sub="Réunions CCPeV & réunions de coordination/surveillance" items={s.recommandations}
-            emptyMsg="Aucune recommandation saisie sur la période filtrée." />
-          <NarrativeCard icon="check" tone="blue" title="Actions correctrices proposées"
-            sub="Validation des données & revues mensuelles ZS" items={s.actionsCorrectrices}
-            emptyMsg="Aucune action correctrice saisie sur la période filtrée." />
-        </div>
-      </section>
-    </div>
-  );
-}
 
-/* ===================== 3. Supervisions ===================== */
-export function RapSupervisions() {
-  const { data } = useRapportAt();
-  if (!data) return <Empty msg="Synchronisation…" />;
-  const s = data.supervisions; const months = s.months;
-  return (
-    <div className="space-y-4">
-      <RefreshBar />
-      {!data.meta.hasData && <Pending />}
-      <Banner icon="link" tone="blue" title="Supervisions" sub="Antenne · Zone de santé · Aire de santé" />
       <section>
-        <SectionBar icon="bars">Indicateurs clés</SectionBar>
+        <SectionBar icon="link">Supervision — indicateurs clés</SectionBar>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           <KpiTile icon="antenne" tone="blue" label="Antennes supervisées" value={`${s.kpi.antSup} / ${s.kpi.antPrev}`} sub={pctTxt(s.tauxParNiveau[0]?.taux)} />
           <KpiTile icon="zs" tone="violet" label="ZS supervisées" value={`${s.kpi.zsSup} / ${s.kpi.zsPrev}`} sub={pctTxt(s.tauxParNiveau[1]?.taux)} />
@@ -237,259 +210,381 @@ export function RapSupervisions() {
           <KpiTile icon="form" tone="teal" label="Formulaires soumis" value={s.kpi.formsSoumis} sub="Antenne · ZS · AS" />
         </div>
       </section>
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-3">
-        <div className="card card-pad lg:col-span-7">
-          <CardTitle icon="chart" tone="blue" title="Supervisions attendues vs réalisées par niveau" />
-          {s.attenduVsRealise.some((t) => t.attendues || t.realisees) ? <ProtoGroupedBar height={220} unit="" colors={[C.navy, C.blue]} cats={s.attenduVsRealise.map((t) => t.niveau)}
-            series={[{ name: "Attendues", data: s.attenduVsRealise.map((t) => t.attendues) }, { name: "Réalisées", data: s.attenduVsRealise.map((t) => t.realisees) }]} /> : <Empty />}
-        </div>
-        <div className="card card-pad lg:col-span-5">
-          <CardTitle icon="gauge" tone="green" title="Taux de réalisation par niveau" />
-          {s.tauxParNiveau.some((t) => t.taux != null) ? <ProtoScoreBar horiz height={220} unit="%" max={100} cats={s.tauxParNiveau.map((t) => t.niveau)} vals={s.tauxParNiveau.map((t) => t.taux ?? 0)} /> : <Empty />}
-        </div>
-      </div>
-      <div className="card card-pad">
-        <CardTitle icon="up" tone="teal" title="Évolution des supervisions réalisées par mois" sub="Antenne · Zone de santé · Aire de santé" />
-        {s.evolutionParMois.some((m) => m.total > 0) ? <ProtoGroupedBar height={220} unit="" colors={[C.navy, C.violet, C.green]} cats={s.evolutionParMois.map((m) => m.label)}
-          series={[{ name: "Antenne", data: s.evolutionParMois.map((m) => m.antenne) }, { name: "Zone de santé", data: s.evolutionParMois.map((m) => m.zs) }, { name: "Aire de santé", data: s.evolutionParMois.map((m) => m.as) }]} /> : <Empty />}
-      </div>
-      <div className="card card-pad">
-        <CardTitle icon="table" tone="navy" title="Supervisions attendues vs réalisées par AT et par niveau" sub="Antenne · Zone de santé · Aire de santé" right={<TableExportButtons filename="Supervisions attendues vs réalisées par AT et par niveau" />} />
-        {s.parAtNiveau.length ? (
-          <div className="overflow-x-auto"><table className="dtable">
-            <thead>
-              <tr><th rowSpan={2} className="name">Assistant technique</th><th colSpan={2}>Antenne</th><th colSpan={2}>Zone de santé</th><th colSpan={2}>Aire de santé</th></tr>
-              <tr><th>Att.</th><th>Réal.</th><th>Att.</th><th>Réal.</th><th>Att.</th><th>Réal.</th></tr>
-            </thead>
-            <tbody>{s.parAtNiveau.map((r) => (
-              <tr key={r.at}><td className="name">{r.at}</td><td>{r.antAtt}</td><td><b>{r.antReal}</b></td><td>{r.zsAtt}</td><td><b>{r.zsReal}</b></td><td>{r.asAtt}</td><td><b>{r.asReal}</b></td></tr>
-            ))}</tbody>
-          </table></div>
-        ) : <Empty />}
-      </div>
-      <div className="card card-pad">
-        <CardTitle icon="table" tone="navy" title="Supervisions (Antenne · ZS · AS) réalisées par AT et par mois" right={<TableExportButtons filename="Supervisions (Antenne · ZS · AS) réalisées par AT et par mois" />} />
-        {s.tableParAtMois.length ? (
-          <div className="overflow-x-auto"><table className="dtable">
-            <thead><tr><th className="name">Assistant technique</th>{months.map((m) => <th key={m.key}>{m.label}</th>)}<th>Total</th></tr></thead>
-            <tbody>{s.tableParAtMois.map((r) => (
-              <tr key={r.at}><td className="name">{r.at}</td>{months.map((m) => <td key={m.key}>{r.byMonth[m.key] ?? "—"}</td>)}<td><b>{r.total}</b></td></tr>
-            ))}</tbody>
-          </table></div>
-        ) : <Empty />}
-      </div>
+
       <section>
-        <SectionBar icon="message">Principaux constats par niveau</SectionBar>
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
+        <SectionBar icon="gauge">Monitorage rapide de convenance — indicateurs clés</SectionBar>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <KpiTile icon="gauge" tone="violet" label="Monitorages réalisés" value={`${m.kpi.realises} / ${m.kpi.prevus}`} sub={pctTxt(m.kpi.pct)} />
+          <KpiTile icon="as" tone="blue" label="AS couvertes" value={m.kpi.asCouvertes} sub="aires monitorées" />
+          <KpiTile icon="form" tone="green" label="Formulaires soumis" value={m.kpi.formsSoumis} sub="monitorage" />
+          <KpiTile icon="cotation" tone="teal" label="Taux de couverture" value={pctTxt(m.kpi.pct)} sub="réalisés / prévus" />
+        </div>
+      </section>
+
+      <section>
+        <SectionBar icon="quality">Contrôle qualité des données — indicateurs clés</SectionBar>
+        <CqKpis />
+      </section>
+
+      <section>
+        <SectionBar icon="comment">Détails coordination</SectionBar>
+        <div className="card card-pad">
+          <CardTitle icon="table" tone="navy" title="Réunions appuyées par AT et par type de réunion" sub="CCPeV · coordination/surveillance · validation des données · revues mensuelles ZS" right={<TableExportButtons filename="Réunions appuyées par AT et par type de réunion" />} />
+          {r.parAtType.length ? (
+            <div className="overflow-x-auto"><table className="dtable">
+              <thead><tr><th className="name">Assistant technique</th><th>CCPeV</th><th>Coordination / surveillance</th><th>Validation des données</th><th>Revues mensuelles ZS</th><th>Total</th></tr></thead>
+              <tbody>{r.parAtType.map((row) => (
+                <tr key={row.at}><td className="name">{row.at}</td><td>{row.ccpev}</td><td>{row.coordination}</td><td>{row.validation}</td><td>{row.monitorageZs}</td><td><b>{row.total}</b></td></tr>
+              ))}</tbody>
+            </table></div>
+          ) : <Empty />}
+        </div>
+        <div className="mt-3 grid grid-cols-1 lg:grid-cols-2 gap-3">
+          <TopBarList icon="table" tone="red" title="Top 5 des problèmes de qualité des données" sub="Réunions de validation des données — Antenne PEV" items={r.topProblemesQualite} color={C.red} />
+          <TopBarList icon="reco" tone="orange" title="Top 5 des problèmes identifiés lors des revues mensuelles" sub="Réunions mensuelles de monitorage des ZS" items={r.topProblemesRevues} color={C.orange} />
+        </div>
+      </section>
+
+      <section>
+        <SectionBar icon="link">Détails supervisions</SectionBar>
+        <div className="card card-pad">
+          <CardTitle icon="table" tone="navy" title="Supervisions attendues vs réalisées par AT et par niveau" sub="Antenne · Zone de santé · Aire de santé" right={<TableExportButtons filename="Supervisions attendues vs réalisées par AT et par niveau" />} />
+          {s.parAtNiveau.length ? (
+            <div className="overflow-x-auto"><table className="dtable">
+              <thead>
+                <tr><th rowSpan={2} className="name">Assistant technique</th><th colSpan={2}>Antenne</th><th colSpan={2}>Zone de santé</th><th colSpan={2}>Aire de santé</th></tr>
+                <tr><th>Att.</th><th>Réal.</th><th>Att.</th><th>Réal.</th><th>Att.</th><th>Réal.</th></tr>
+              </thead>
+              <tbody>{s.parAtNiveau.map((row) => (
+                <tr key={row.at}><td className="name">{row.at}</td><td>{row.antAtt}</td><td><b>{row.antReal}</b></td><td>{row.zsAtt}</td><td><b>{row.zsReal}</b></td><td>{row.asAtt}</td><td><b>{row.asReal}</b></td></tr>
+              ))}</tbody>
+            </table></div>
+          ) : <Empty />}
+        </div>
+        <div className="card card-pad mt-3">
+          <CardTitle icon="table" tone="navy" title="Supervisions (Antenne · ZS · AS) réalisées par AT et par mois" right={<TableExportButtons filename="Supervisions réalisées par AT et par mois" />} />
+          {s.tableParAtMois.length ? (
+            <div className="overflow-x-auto"><table className="dtable">
+              <thead><tr><th className="name">Assistant technique</th>{months.map((mc) => <th key={mc.key}>{mc.label}</th>)}<th>Total</th></tr></thead>
+              <tbody>{s.tableParAtMois.map((row) => (
+                <tr key={row.at}><td className="name">{row.at}</td>{months.map((mc) => <td key={mc.key}>{row.byMonth[mc.key] ?? "—"}</td>)}<td><b>{row.total}</b></td></tr>
+              ))}</tbody>
+            </table></div>
+          ) : <Empty />}
+        </div>
+        <div className="mt-3 grid grid-cols-1 lg:grid-cols-3 gap-3">
           {s.constatsParNiveau.map((g) => (
             <NarrativeCard key={g.niveau} icon="erreurs" tone="red" title={`Constats — ${g.niveau}`} items={g.items}
               emptyMsg={`Aucun constat saisi pour le niveau ${g.niveau.toLowerCase()}.`} />
           ))}
         </div>
       </section>
-      <section>
-        <SectionBar icon="reco">Principaux constats & principales recommandations</SectionBar>
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-          <NarrativeCard icon="erreurs" tone="orange" title="Principaux constats (tous niveaux)" items={s.constats}
-            emptyMsg="Aucun constat de supervision saisi sur la période filtrée." />
-          <NarrativeCard icon="reco" tone="green" title="Principales recommandations" sub="Supervisions ZS & Antenne" items={s.recommandations}
-            emptyMsg="Aucune recommandation de supervision saisie sur la période filtrée." />
-        </div>
-      </section>
-    </div>
-  );
-}
 
-/* ===================== 4. Monitorage de convenance ===================== */
-export function RapMonitorage() {
-  const { data } = useRapportAt();
-  if (!data) return <Empty msg="Synchronisation…" />;
-  const s = data.monitorage; const months = s.months;
-  return (
-    <div className="space-y-4">
-      <RefreshBar />
-      {!data.meta.hasData && <Pending />}
-      <Banner icon="gauge" tone="violet" title="Monitorage de convenance" sub="Réalisation par AT et par mois" />
       <section>
-        <SectionBar icon="bars">Indicateurs clés</SectionBar>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          <KpiTile icon="gauge" tone="violet" label="Monitorages réalisés" value={`${s.kpi.realises} / ${s.kpi.prevus}`} sub={pctTxt(s.kpi.pct)} />
-          <KpiTile icon="as" tone="blue" label="AS couvertes" value={s.kpi.asCouvertes} sub="aires monitorées" />
-          <KpiTile icon="form" tone="green" label="Formulaires soumis" value={s.kpi.formsSoumis} sub="monitorage" />
-          <KpiTile icon="cotation" tone="teal" label="Taux de couverture" value={pctTxt(s.kpi.pct)} sub="réalisés / prévus" />
-        </div>
-      </section>
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-3">
-        <div className="card card-pad lg:col-span-7">
+        <SectionBar icon="gauge">Détails monitorage rapide de convenance</SectionBar>
+        <div className="card card-pad">
           <CardTitle icon="table" tone="violet" title="Monitorages réalisés par AT et par mois" right={<TableExportButtons filename="Monitorages réalisés par AT et par mois" />} />
-          {s.parAtMois.length ? (
+          {m.parAtMois.length ? (
             <div className="overflow-x-auto"><table className="dtable">
-              <thead><tr><th className="name">Assistant technique</th>{months.map((m) => <th key={m.key}>{m.label}</th>)}<th>Total</th></tr></thead>
-              <tbody>{s.parAtMois.map((r) => (
-                <tr key={r.at}><td className="name">{r.at}</td>{months.map((m) => <td key={m.key}>{r.byMonth[m.key] ?? "—"}</td>)}<td><b>{r.total}</b></td></tr>
+              <thead><tr><th className="name">Assistant technique</th>{m.months.map((mc) => <th key={mc.key}>{mc.label}</th>)}<th>Total</th></tr></thead>
+              <tbody>{m.parAtMois.map((row) => (
+                <tr key={row.at}><td className="name">{row.at}</td>{m.months.map((mc) => <td key={mc.key}>{row.byMonth[mc.key] ?? "—"}</td>)}<td><b>{row.total}</b></td></tr>
               ))}</tbody>
             </table></div>
           ) : <Empty />}
         </div>
-        <div className="card card-pad lg:col-span-5">
-          <CardTitle icon="cotation" tone="green" title="Couverture du monitorage" />
-          <Donut height={210} data={[{ name: "AS monitorées", value: s.couverture.couvertes, color: C.green }, { name: "AS non couvertes", value: s.couverture.nonCouvertes, color: C.red }]} />
-        </div>
-      </div>
+      </section>
+
       <section>
-        <SectionBar icon="message">Principaux constats</SectionBar>
-        <NarrativeCard icon="erreurs" tone="violet" title="Principaux constats du monitorage de convenance"
-          sub="Observations principales saisies par les AT" items={s.constats}
-          emptyMsg="Aucun constat de monitorage saisi sur la période filtrée." />
+        <SectionBar icon="quality">Détails contrôle qualité</SectionBar>
+        <div className="card card-pad">
+          <CardTitle icon="table" tone="navy" title="Contrôles qualité réalisés par niveau" sub="Source : formulaires « Contrôle qualité des données » (ZS & CS)" right={<TableExportButtons filename="Contrôles qualité réalisés par niveau" />} />
+          {cqd ? (
+            <div className="overflow-x-auto"><table className="dtable">
+              <thead><tr><th className="name">Niveau</th><th>Structures contrôlées</th><th>Contrôles réalisés</th><th>Mois couverts</th></tr></thead>
+              <tbody>
+                <tr><td className="name">Zones de santé</td><td>{cqd.levels.zs.structuresControlees}</td><td>{cqd.levels.zs.records}</td><td rowSpan={2}>{cqd.meta.months.length}</td></tr>
+                <tr><td className="name">Aires de santé (CS)</td><td>{cqd.levels.as.structuresControlees}</td><td>{cqd.levels.as.records}</td></tr>
+              </tbody>
+            </table></div>
+          ) : <Empty msg="Synchronisation des données de contrôle qualité…" />}
+          <div className="mt-2 text-[11px] text-surface-500">
+            Les détails complets (écart moyen, facteur de vérification, taux d'erreur par structure) sont disponibles dans l'onglet « Contrôle qualité des données ».
+          </div>
+        </div>
       </section>
     </div>
   );
 }
 
-/* ===================== 5. Surveillance ===================== */
-export function RapSurveillance() {
+/* ===================== 2. Planification ===================== */
+export function RapPlanification() {
   const { data } = useRapportAt();
   if (!data) return <Empty msg="Synchronisation…" />;
-  const s = data.surveillance;
+  const p = data.planification;
+  const months = p.months;
+  const icons = ["check", "calendar", "legend"];
   return (
     <div className="space-y-4">
       <RefreshBar />
       {!data.meta.hasData && <Pending />}
-      <Banner icon="erreurs" tone="red" title="Surveillance" sub="Rougeole · TNN · MAPI graves" />
+      <Banner icon="calendar" tone="teal" title="Rapport mensuel AT — Planification" sub="Suivi mensuel des activités de planification et de microplanification" />
+
       <section>
-        <SectionBar icon="bars">Indicateurs clés — notifiés & investigués par maladie</SectionBar>
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
-          <KpiTile icon="erreurs" tone="red" label="Rougeole notifiés" value={s.kpi.rougeoleNotifies} sub="cas suspects" />
-          <KpiTile icon="check" tone="blue" label="Rougeole investigués" value={s.kpi.rougeoleInvestigues} sub={pctTxt(s.kpi.rougeolePct)} />
-          <KpiTile icon="reco" tone="violet" label="TNN notifiés" value={s.kpi.tnnNotifies} sub="cas notifiés" />
-          <KpiTile icon="check" tone="teal" label="TNN investigués" value={s.kpi.tnnInvestigues} sub={pctTxt(s.kpi.tnnPct)} />
-          <KpiTile icon="erreurs" tone="orange" label="MAPI graves notifiées" value={s.kpi.mapiNotifiees} sub="cas notifiés" />
-          <KpiTile icon="check" tone="green" label="MAPI graves investiguées" value={s.kpi.mapiInvestiguees} sub={pctTxt(s.kpi.mapiPct)} />
+        <SectionBar icon="check">Activités réalisées</SectionBar>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          {p.activites.map((a, i) => <OpnCard key={a.key} icon={icons[i] ?? "check"} label={a.label} counts={a.counts} />)}
         </div>
       </section>
-      <section>
-        <SectionBar icon="time">Cas notifiés par mois et proportion des cas investigués — par maladie</SectionBar>
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
-          {[
-            { lab: "Rougeole", tone: "red" as Tone, n: (m: typeof s.parMois[number]) => m.rougeoleN, i: (m: typeof s.parMois[number]) => m.rougeoleI, p: (m: typeof s.parMois[number]) => m.rougeolePct, color: C.red },
-            { lab: "TNN", tone: "violet" as Tone, n: (m: typeof s.parMois[number]) => m.tnnN, i: (m: typeof s.parMois[number]) => m.tnnI, p: (m: typeof s.parMois[number]) => m.tnnPct, color: C.violet },
-            { lab: "MAPI graves", tone: "orange" as Tone, n: (m: typeof s.parMois[number]) => m.mapiN, i: (m: typeof s.parMois[number]) => m.mapiI, p: (m: typeof s.parMois[number]) => m.mapiPct, color: C.orange },
-          ].map((d) => (
-            <div key={d.lab} className="card card-pad">
-              <CardTitle icon="chart" tone={d.tone} title={`${d.lab} — notifiés vs investigués par mois`} />
-              {s.parMois.some((m) => d.n(m) || d.i(m)) ? (
-                <>
-                  <ProtoGroupedBar height={190} unit="" colors={[C.navy, d.color]} cats={s.parMois.map((m) => m.label)}
-                    series={[{ name: "Notifiés", data: s.parMois.map((m) => d.n(m)) }, { name: "Investigués", data: s.parMois.map((m) => d.i(m)) }]} />
-                  <div className="mt-2 text-[11px] font-semibold text-surface-500">Proportion des cas investigués</div>
-                  <LineTrend height={150} months={s.parMois.map((m) => m.month)} series={[{ name: "% investigués", data: s.parMois.map((m) => d.p(m)), color: d.color }]} />
-                </>
-              ) : <Empty />}
-            </div>
-          ))}
-        </div>
-      </section>
+
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
         <div className="card card-pad">
-          <CardTitle icon="chart" tone="orange" title="Cas notifiés vs ripostes organisées (Rougeole · TNN)" />
-          {s.ripostesParMaladie.some((r) => r.notifies || r.ripostes) ? <ProtoGroupedBar height={220} unit="" colors={[C.navy, C.green]} cats={s.ripostesParMaladie.map((r) => r.maladie)}
-            series={[{ name: "Cas notifiés", data: s.ripostesParMaladie.map((r) => r.notifies) }, { name: "Ripostes organisées", data: s.ripostesParMaladie.map((r) => r.ripostes) }]} /> : <Empty />}
+          <CardTitle icon="chart" tone="navy" title="Niveau de mise en œuvre des activités du plan de travail par antenne et par mois" sub="Pourcentage (%)" />
+          {months.length && p.miseEnOeuvre.some((s) => s.values.some((v) => v != null)) ? (
+            <ProtoGroupedBar height={240} unit="%" max={100} cats={months.map((mc) => mc.label)}
+              series={p.miseEnOeuvre.map((s) => ({ name: s.antenne, data: s.values.map((v) => v ?? 0) }))} />
+          ) : <Empty />}
         </div>
-        <div className="card card-pad">
-          <CardTitle icon="erreurs" tone="red" title="Nombre de zones de santé en épidémie de rougeole par mois" />
-          {s.parMois.some((m) => m.zsEpidemie > 0) ? <ProtoGroupedBar height={220} unit="" colors={[C.red]} cats={s.parMois.map((m) => m.label)}
-            series={[{ name: "ZS en épidémie", data: s.parMois.map((m) => m.zsEpidemie) }]} /> : <Empty msg="Aucune zone de santé en épidémie sur la période." />}
-        </div>
+        <AntenneLines months={months} series={p.zsMicroplan} icon="up" tone="blue"
+          title="% des ZS avec microplan de qualité et consolidé validé par l'antenne, par mois" />
       </div>
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-3">
-        <div className="card card-pad lg:col-span-4">
-          <CardTitle icon="cotation" tone="teal" title="Proportion des listes linéaires partagées" sub="Listes rougeole à jour ÷ disponibles" />
-          <Donut height={200} data={[{ name: "À jour / partagées", value: s.listesLineaires.ajour, color: C.green }, { name: "Non à jour", value: Math.max(0, s.listesLineaires.dispo - s.listesLineaires.ajour), color: C.red }]} />
-          <div className="mt-1 text-center text-[12px] font-bold text-surface-600">{pctTxt(s.listesLineaires.pct)} · {s.listesLineaires.ajour}/{s.listesLineaires.dispo} ZS</div>
-        </div>
-        <div className="card card-pad lg:col-span-8">
-          <CardTitle icon="gauge" tone="blue" title="Proportion des listes linéaires partagées par antenne" />
-          {s.listesLineaires.parAntenne.some((a) => a.pct != null) ? <ProtoScoreBar horiz height={210} unit="%" max={100} cats={s.listesLineaires.parAntenne.map((a) => a.antenne)} vals={s.listesLineaires.parAntenne.map((a) => a.pct ?? 0)} /> : <Empty />}
-        </div>
-      </div>
+
       <div className="card card-pad">
-        <CardTitle icon="table" tone="navy" title="Surveillance rougeole — synthèse par antenne" right={<TableExportButtons filename="Surveillance rougeole — synthèse par antenne" />} />
-        {s.rougeoleParAntenne.length ? (
+        <CardTitle icon="table" tone="navy" title="Détail mensuel par antenne" sub="Dernier mois renseigné par antenne" right={<TableExportButtons filename="Planification — détail mensuel par antenne" />} />
+        {p.detailParAntenne.length ? (
           <div className="overflow-x-auto"><table className="dtable">
-            <thead><tr><th className="name">Antenne</th><th>Notifiés</th><th>Investigués</th><th>% invest.</th></tr></thead>
-            <tbody>{s.rougeoleParAntenne.map((r) => (
-              <tr key={r.antenne}><td className="name">{r.antenne}</td><td>{r.notifies}</td><td>{r.investigues}</td><td style={{ background: r.pct == null ? undefined : `${cotColor(r.pct)}22` }}>{pctTxt(r.pct)}</td></tr>
+            <thead><tr><th className="name">Antenne</th><th>Microplan appuyé<br />(Oui / Partiel / Non / N-A)</th><th>Plan de travail appuyé<br />(Oui / Partiel / Non / N-A)</th><th>État des lieux actualisé<br />(Oui / Partiel / Non / N-A)</th><th>Mise en œuvre du plan (%)</th><th>ZS avec microplan validé (%)</th></tr></thead>
+            <tbody>{p.detailParAntenne.map((row) => (
+              <tr key={row.antenne}>
+                <td className="name">{row.antenne}</td>
+                <td>{row.microplan}</td><td>{row.planTravail}</td><td>{row.etatLieux}</td>
+                <td className="tabular-nums">{pctTxt(row.miseEnOeuvre)}</td>
+                <td className="tabular-nums">{pctTxt(row.zsMicroplan)}</td>
+              </tr>
             ))}</tbody>
           </table></div>
         ) : <Empty />}
       </div>
-      <section>
-        <SectionBar icon="message">Commentaires de surveillance</SectionBar>
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-          <NarrativeCard icon="erreurs" tone="red" title="Commentaires — surveillance rougeole" items={s.commentairesRougeole}
-            emptyMsg="Aucun commentaire de surveillance rougeole sur la période filtrée." />
-          <NarrativeCard icon="erreurs" tone="violet" title="Commentaires — surveillance TNN / MAPI graves" items={s.commentairesTnnMapi}
-            emptyMsg="Aucun commentaire de surveillance TNN / MAPI sur la période filtrée." />
-        </div>
-      </section>
+
+      <NarrativeCard icon="message" tone="blue" title="Observations clés" sub="Commentaires sur la planification saisis par les AT"
+        items={p.commentaires} emptyMsg="Aucun commentaire de planification saisi sur la période filtrée." />
     </div>
   );
 }
 
-/* ===================== 6. OSP & activités spéciales ===================== */
-export function RapOsp() {
+/* ===================== 3. Gestion des vaccins ===================== */
+
+/** Cellule du tableau d'inventaires (heatmap Réalisé / Partiel / Non réalisé). */
+function InvCell({ v }: { v: string | null }) {
+  if (!v) return <td className="text-surface-400">—</td>;
+  const style =
+    v === "Réalisé" ? { background: "#e6f6ec", color: "#178a44" } :
+    v === "Partiel" ? { background: "#e6f3fb", color: "#0078ae" } :
+    { background: "#fff5e4", color: "#c87b04" };
+  return <td style={{ ...style, fontWeight: 800 }}>{v}</td>;
+}
+
+export function RapVaccins() {
   const { data } = useRapportAt();
   if (!data) return <Empty msg="Synchronisation…" />;
-  const s = data.osp;
+  const v = data.vaccins;
+  const months = v.months;
   return (
     <div className="space-y-4">
       <RefreshBar />
       {!data.meta.hasData && <Pending />}
-      <Banner icon="check" tone="teal" title="OSP, activités spéciales & rapports" sub="Outils de suivi des performances et rapports transmis" />
-      <section>
-        <SectionBar icon="bars">Indicateurs clés</SectionBar>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          <KpiTile icon="check" tone="green" label="OSP partagés" value={pctTxt(s.kpi.ospPartagesPct)} sub="remplis & transmis" />
-          <KpiTile icon="calendar" tone="blue" label="Activités spéciales" value={s.kpi.activitesSpeciales} sub="types recensés" />
-          <KpiTile icon="report" tone="violet" label="Rapports trimestriels transmis" value={`${s.kpi.rapportsTrimTransmis} / ${s.kpi.rapportsTrimAttendus}`} sub="antennes" />
-          <KpiTile icon="gauge" tone="teal" label="Activités OMS justifiées" value={pctTxt(s.kpi.omsJustifieesPct)} sub="preuve / rapport" />
-        </div>
-      </section>
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-        <div className="card card-pad">
-          <CardTitle icon="chart" tone="blue" title="OSP : disponibles · remplis · transmis (par antenne)" />
-          {s.ospParAntenne.length ? <ProtoGroupedBar height={220} unit="%" max={100} colors={[C.navy, C.blue, C.green]} cats={s.ospParAntenne.map((r) => r.antenne)}
-            series={[{ name: "Disponible", data: s.ospParAntenne.map((r) => r.disponible ?? 0) }, { name: "Rempli régul.", data: s.ospParAntenne.map((r) => r.rempli ?? 0) }, { name: "Transmis", data: s.ospParAntenne.map((r) => r.transmis ?? 0) }]} /> : <Empty />}
-        </div>
-        <ListCard icon="legend" tone="violet" title="Types d'activités spéciales appuyées" items={s.typesActivites} />
-      </div>
+      <Banner icon="syringe" tone="blue" title="Rapport mensuel AT — Gestion des vaccins" sub="Suivi mensuel des inventaires de vaccins et de la disponibilité des antigènes PENTA et RR" />
+
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-3">
-        <div className="card card-pad lg:col-span-7">
-          <CardTitle icon="table" tone="navy" title="Rapports trimestriels Antenne PEV transmis au niveau national" sub="par antenne" right={<TableExportButtons filename="Rapports trimestriels Antenne PEV transmis au niveau national" />} />
-          {s.rapportsTrimParAntenne.length ? (
+        <div className="card card-pad lg:col-span-8">
+          <CardTitle icon="table" tone="navy" title="Réalisation des inventaires de vaccins par antenne et par mois" right={<TableExportButtons filename="Réalisation des inventaires de vaccins par antenne et par mois" />} />
+          {v.inventaireParAntenneMois.length && months.length ? (
             <div className="overflow-x-auto"><table className="dtable">
-              <thead><tr><th className="name">Antenne</th><th>Transmis</th><th>Attendus</th><th>Statut</th></tr></thead>
-              <tbody>{s.rapportsTrimParAntenne.map((r) => (
-                <tr key={r.antenne}><td className="name">{r.antenne}</td><td>{r.transmis}</td><td>{r.attendus}</td>
-                  <td style={{ background: r.statut ? "#e6f6ec" : "#fde2e2", fontWeight: 700, color: r.statut ? "#178a44" : "#c81e1e" }}>{r.statut ? "Bien" : "Mal"}</td></tr>
+              <thead><tr><th className="name">Antenne</th>{months.map((mc) => <th key={mc.key}>{mc.label}</th>)}</tr></thead>
+              <tbody>{v.inventaireParAntenneMois.map((row) => (
+                <tr key={row.antenne}><td className="name">{row.antenne}</td>{months.map((mc) => <InvCell key={mc.key} v={row.byMonth[mc.key]} />)}</tr>
               ))}</tbody>
             </table></div>
           ) : <Empty />}
+          <div className="mt-2 flex flex-wrap gap-3 text-[10.5px] font-bold text-surface-600">
+            <span className="inline-flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-sm" style={{ background: "#2bbd6b" }} />Réalisé</span>
+            <span className="inline-flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-sm" style={{ background: "#36b3ec" }} />Partiel</span>
+            <span className="inline-flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-sm" style={{ background: "#fbbf24" }} />Non réalisé</span>
+          </div>
         </div>
-        <div className="card card-pad lg:col-span-5">
-          <CardTitle icon="gauge" tone="teal" title="% d'activités financées par l'OMS justifiées" />
-          {s.omsJustifieesParAntenne.some((r) => r.pct != null) ? <ProtoScoreBar horiz height={210} unit="%" max={100} cats={s.omsJustifieesParAntenne.map((r) => r.antenne)} vals={s.omsJustifieesParAntenne.map((r) => r.pct ?? 0)} /> : <Empty />}
+        <div className="lg:col-span-4 flex flex-col gap-3">
+          <div className="card card-pad">
+            <CardTitle icon="legend" tone="teal" title="Situation du mois — inventaires" sub={v.inventaire.moisLabel ? `Période : ${v.inventaire.moisLabel}` : undefined} />
+            <div className="space-y-2.5 pt-1">
+              {[
+                { lab: "Antennes ayant réalisé l'inventaire", val: v.inventaire.realises, tone: "green" as Tone, icon: "check" },
+                { lab: "Antennes partiellement à jour", val: v.inventaire.partiels, tone: "blue" as Tone, icon: "time" },
+                { lab: "Antennes non à jour", val: v.inventaire.nonRealises, tone: "orange" as Tone, icon: "alert" },
+              ].map((it) => (
+                <div key={it.lab} className="flex items-center gap-3 rounded-xl border px-3 py-2.5" style={{ background: TONES[it.tone].bg, borderColor: TONES[it.tone].border }}>
+                  <DIcon name={it.icon} style={{ width: 18, height: 18, color: TONES[it.tone].text }} />
+                  <div className="flex-1 text-[12px] font-bold text-surface-700">{it.lab}</div>
+                  <div className="text-[16px] font-extrabold" style={{ color: TONES[it.tone].text }}>{it.val}</div>
+                  <div className="text-[11px] font-semibold text-surface-500">sur {v.inventaire.total}</div>
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
       </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+        {v.dispo.map((d) => (
+          <AntenneLines key={d.key} months={months} series={d.series} title={d.label} icon="up" tone={d.key.startsWith("penta") ? "blue" : "violet"} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/* ===================== 4. Chaîne de froid ===================== */
+export function RapChaineFroid() {
+  const { data } = useRapportAt();
+  if (!data) return <Empty msg="Synchronisation…" />;
+  const c = data.chaineFroid;
+  const months = c.months;
+  return (
+    <div className="space-y-4">
+      <RefreshBar />
+      {!data.meta.hasData && <Pending />}
+      <Banner icon="gauge" tone="navy" title="Rapport mensuel AT — Gestion matérielle de la chaîne de froid" sub="Suivi mensuel de la fonctionnalité des équipements de chaîne de froid" />
+
       <section>
-        <SectionBar icon="message">Rapports trimestriels & rapports OMS — commentaires</SectionBar>
+        <SectionBar icon="bars">Indicateurs clés</SectionBar>
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+          <KpiTile icon="antenne" tone="blue" label="Antennes suivies" value={c.kpi.antennesSuivies} sub="antennes PEV" />
+          <KpiTile icon="zs" tone="teal" label="ZS couvertes" value={c.kpi.zsCouvertes} sub="zones de santé appuyées" />
+          <KpiTile icon="report" tone="green" label="Rapports mensuels" value={c.kpi.rapports} sub="soumissions analysées" />
+        </div>
+      </section>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+        <AntenneLines months={months} series={c.cdfZs} icon="up" tone="navy"
+          title="% matériel de chaîne de froid fonctionnel au niveau ZS, par mois" />
+        <AntenneLines months={months} series={c.cdfCs} icon="up" tone="blue"
+          title="% matériel de chaîne de froid fonctionnel au niveau CS, par mois" />
+      </div>
+
+      <div className="card card-pad">
+        <CardTitle icon="table" tone="navy" title="Détail mensuel par antenne" right={<TableExportButtons filename="Chaîne de froid — détail mensuel par antenne" />} />
+        {c.detailParAntenne.length ? (
+          <div className="overflow-x-auto"><table className="dtable">
+            <thead><tr><th className="name">Antenne</th><th>Fonctionnalité CDF niveau ZS (%)</th><th>Fonctionnalité CDF niveau CS (%)</th><th>Observations techniques</th></tr></thead>
+            <tbody>{c.detailParAntenne.map((row) => (
+              <tr key={row.antenne}>
+                <td className="name">{row.antenne}</td>
+                <td className="tabular-nums">{pctTxt(row.cdfZs)}</td>
+                <td className="tabular-nums">{pctTxt(row.cdfCs)}</td>
+                <td style={{ whiteSpace: "normal", textAlign: "left" }}>{row.observations ?? "—"}</td>
+              </tr>
+            ))}</tbody>
+          </table></div>
+        ) : <Empty />}
+      </div>
+
+      <NarrativeCard icon="message" tone="blue" title="Observations clés" sub="Commentaires sur le matériel de chaîne de froid saisis par les AT"
+        items={c.commentaires} emptyMsg="Aucun commentaire de chaîne de froid saisi sur la période filtrée." />
+    </div>
+  );
+}
+
+/* ===================== 5. Prestation de services ===================== */
+export function RapPrestation() {
+  const { data } = useRapportAt();
+  if (!data) return <Empty msg="Synchronisation…" />;
+  const p = data.prestation;
+  const months = p.months;
+  const couvHasData = p.couvertures.series.some((s) => s.data.some((v) => v != null));
+  return (
+    <div className="space-y-4">
+      <RefreshBar />
+      {!data.meta.hasData && <Pending />}
+      <Banner icon="chart" tone="green" title="Rapport mensuel AT — Prestation de services"
+        sub="Sessions de vaccination (fixes · avancées · mobiles) et couvertures vaccinales — données rapportées par les AT à partir du DHIS2" />
+
+      <section>
+        <SectionBar icon="up">Réalisation des sessions de vaccination (% des AS ≥ 80 %)</SectionBar>
+        <div className="space-y-3">
+          {p.sessions.map((s2) => (
+            <AntenneLines key={s2.key} months={months} series={s2.series} ensemble={s2.ensemble}
+              title={`${s2.label}, par mois et par antenne`} icon="up" tone="blue" />
+          ))}
+        </div>
+      </section>
+
+      <div className="card card-pad">
+        <CardTitle icon="chart" tone="navy" title="% des aires de santé avec couverture vaccinale ≥ 90 %"
+          sub="Quatre antigènes (Penta1 · Penta3 · RR1 · RR2), par mois et par antenne" />
+        {couvHasData ? (
+          <ProtoGroupedBar height={280} unit="%" max={100} rotateLabels
+            colors={["#00205c", "#0d9488", "#0093d5", "#7c3aed"]}
+            cats={p.couvertures.cats}
+            series={p.couvertures.series.map((s2) => ({ name: s2.name, data: s2.data.map((v) => v ?? 0) }))} />
+        ) : <Empty />}
+      </div>
+
+      <div className="card card-pad">
+        <CardTitle icon="table" tone="navy" title={`Détail par antenne — ${p.detail.moisLabel ?? "mois en cours"}`}
+          right={<TableExportButtons filename="Prestation de services — détail par antenne" />} />
+        {p.detail.rows.length ? (
+          <div className="overflow-x-auto"><table className="dtable">
+            <thead><tr><th className="name">Antenne</th><th>Sessions fixes (%)</th><th>Stratégies avancées (%)</th><th>Sessions mobiles (%)</th><th>AS avec Penta1 ≥ 90%</th><th>AS avec Penta3 ≥ 90%</th><th>AS avec RR1 ≥ 90%</th><th>AS avec RR2 ≥ 90%</th></tr></thead>
+            <tbody>{p.detail.rows.map((row) => (
+              <tr key={row.antenne}>
+                <td className="name">{row.antenne}</td>
+                <td className="tabular-nums">{pctTxt(row.fixes)}</td>
+                <td className="tabular-nums">{pctTxt(row.avancees)}</td>
+                <td className="tabular-nums">{pctTxt(row.mobiles)}</td>
+                <td className="tabular-nums">{pctTxt(row.p1)}</td>
+                <td className="tabular-nums">{pctTxt(row.p3)}</td>
+                <td className="tabular-nums">{pctTxt(row.rr1)}</td>
+                <td className="tabular-nums">{pctTxt(row.rr2)}</td>
+              </tr>
+            ))}</tbody>
+          </table></div>
+        ) : <Empty />}
+      </div>
+
+      <NarrativeCard icon="message" tone="green" title="Commentaires sur la prestation de service"
+        sub="Saisis par les AT dans le rapport mensuel" items={p.commentaires}
+        emptyMsg="Aucun commentaire de prestation saisi sur la période filtrée." />
+    </div>
+  );
+}
+
+/* ===================== 6. FFOM & recommandations ===================== */
+export function RapFfom() {
+  const { data } = useRapportAt();
+  if (!data) return <Empty msg="Synchronisation…" />;
+  const f = data.ffom;
+  return (
+    <div className="space-y-4">
+      <RefreshBar />
+      {!data.meta.hasData && <Pending />}
+      <Banner icon="message" tone="violet" title="Rapport mensuel AT — FFOM, difficultés & innovations"
+        sub="Forces · Faiblesses · Innovations & bonnes pratiques · Difficultés — puis recommandations, appuis attendus et perspectives" />
+
+      <section>
+        <SectionBar icon="component">FFOM — Difficultés & innovations</SectionBar>
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-          <NarrativeCard icon="report" tone="violet" title="Commentaires sur les rapports trimestriels PEV"
-            sub="Transmission du rapport trimestriel de l'Antenne PEV (section 12)"
-            items={s.commentairesRapportPev} emptyMsg="Aucun commentaire saisi sur le rapport trimestriel sur la période filtrée." />
-          <NarrativeCard icon="report" tone="teal" title="Commentaires sur les rapports de l'OMS"
-            sub="Rapports des activités sous financement OMS (section 13)"
-            items={s.commentairesRapportsOms} emptyMsg="Aucun commentaire saisi sur les rapports OMS sur la période filtrée." />
+          <NarrativeCard icon="check" tone="green" title="Forces" items={f.forces} emptyMsg="Aucun point fort saisi sur la période filtrée." />
+          <NarrativeCard icon="up" tone="blue" title="Innovations & bonnes pratiques" items={f.innovations} emptyMsg="Aucune innovation saisie sur la période filtrée." />
+          <NarrativeCard icon="down" tone="orange" title="Faiblesses" items={f.faiblesses} emptyMsg="Aucun point faible saisi sur la période filtrée." />
+          <NarrativeCard icon="erreurs" tone="red" title="Difficultés" items={f.difficultes} emptyMsg="Aucune difficulté saisie sur la période filtrée." />
+        </div>
+      </section>
+
+      <section>
+        <SectionBar icon="reco">Recommandations · appuis attendus · perspectives</SectionBar>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
+          <NarrativeCard icon="reco" tone="teal" title="Recommandations" items={f.recommandations} emptyMsg="Aucune recommandation saisie sur la période filtrée." />
+          <NarrativeCard icon="link" tone="navy" title="Appuis attendus du Bureau Pays OMS" items={f.appuisAttendus} emptyMsg="Aucun appui attendu saisi sur la période filtrée." />
+          <NarrativeCard icon="route" tone="violet" title="Perspectives" items={f.perspectives} emptyMsg="Aucune perspective saisie sur la période filtrée." />
         </div>
       </section>
     </div>

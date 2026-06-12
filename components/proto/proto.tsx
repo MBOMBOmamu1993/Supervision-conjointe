@@ -59,6 +59,21 @@ export function apprConc(p: number): { label: string; tone: Tone } {
 
 /* ---------------- Composants ---------------- */
 
+/**
+ * Doigt indicateur (feedback Dr Léandre) : signale qu'un clic déroule / replie
+ * une note explicative repliée par défaut.
+ */
+export function PointerIcon({ size = 18 }: { size?: number }) {
+  return (
+    <svg viewBox="0 0 24 24" width={size} height={size} fill="none" stroke="#f08c00" strokeWidth={1.9} strokeLinecap="round" strokeLinejoin="round" className="shrink-0" aria-hidden>
+      <path d="M8 13V5.5a1.5 1.5 0 0 1 3 0V12" />
+      <path d="M11 11.5v-1a1.5 1.5 0 0 1 3 0V12" />
+      <path d="M14 11.5a1.5 1.5 0 0 1 3 0V13" />
+      <path d="M17 12.5a1.5 1.5 0 0 1 3 0V16a6 6 0 0 1-6 6h-2a6 6 0 0 1-5.2-3L4.3 14a1.6 1.6 0 0 1 2.7-1.7L8 13" />
+    </svg>
+  );
+}
+
 export function Badge({ icon, tone, size = 34 }: { icon: IconName; tone: Tone; size?: number }) {
   const t = HT[tone];
   const s = Math.round(size * 0.55);

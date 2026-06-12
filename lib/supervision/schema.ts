@@ -234,7 +234,9 @@ export interface ScoreQuestion {
 /** Jolit un libellé de question (retire numérotation et soulignés). */
 function prettyLabel(raw: string): string {
   const clean = raw.replace(/^\s*\d+[.)]\s*/, "").replace(/_/g, " ").trim();
-  return clean.length > 90 ? clean.slice(0, 87) + "…" : clean;
+  // Troncature large : l'intitulé exact de la question doit rester lisible
+  // (Top 10 des « Non » — le tooltip affiche le libellé complet).
+  return clean.length > 160 ? clean.slice(0, 157) + "…" : clean;
 }
 
 /**
@@ -259,10 +261,21 @@ function leafName(col: string): string {
  * la lecture des valeurs (`row[scoreCol]`). La colonne « max » est cherchée
  * dans le même groupe que la colonne « score ».
  */
-export function detectScoreQuestions(columns: string[]): ScoreQuestion[] {
+export function detectScoreQuestions(columns: string[], labels?: Record<string, string>): ScoreQuestion[] {
   const colSet = new Set(columns);
   const out: ScoreQuestion[] = [];
   const seen = new Set<string>();
+
+  // Libellé RÉEL d'une colonne question via le schéma du formulaire (asset
+  // content Kobo, name technique → label FR). Les colonnes du data.json live
+  // sont des noms techniques (« grp_planification/plan_09 ») : sans ce mapping,
+  // les visuels (Top 10 des « Non »…) affichaient ces codes au lieu de
+  // l'intitulé exact de la question.
+  const labelOf = (col: string): string | null => {
+    if (!labels) return null;
+    const leaf = leafName(col).toLowerCase().trim();
+    return labels[leaf] ?? null;
+  };
 
   const resolveLabel = (scoreIdx: number, token: string): string => {
     for (const back of [2, 1, 3]) {
@@ -274,6 +287,9 @@ export function detectScoreQuestions(columns: string[]): ScoreQuestion[] {
       if (n.startsWith("commentaire") || n.startsWith("observation") || n.includes("commentaires")) continue;
       // Jamais un champ administratif comme libellé de question.
       if (isAdminFieldLabel(cand)) continue;
+      // Intitulé exact du formulaire si connu, sinon le nom de colonne lui-même.
+      const real = labelOf(cand);
+      if (real && !isAdminFieldLabel(real)) return prettyLabel(real);
       if (cand.length > 8) return prettyLabel(cand);
     }
     return prettyLabel(token);

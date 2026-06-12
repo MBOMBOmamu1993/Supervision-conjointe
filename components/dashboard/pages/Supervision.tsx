@@ -10,7 +10,7 @@
    Données LIVE via /api/supervision. Charte et composants existants. */
 import { DataGate } from "@/components/ui/DataGate";
 import { SectionBar } from "@/components/ui/Card";
-import { KpiTile, CardTitle, Banner, HlCard, TONES, Badge } from "@/components/proto/proto";
+import { KpiTile, CardTitle, Banner, HlCard, TONES, Badge, PointerIcon } from "@/components/proto/proto";
 import StackedAnswers from "@/components/charts/StackedAnswers";
 import HBar from "@/components/charts/HBar";
 import LineTrend from "@/components/charts/LineTrend";
@@ -18,7 +18,7 @@ import Radar from "@/components/charts/Radar";
 import { TableExportButtons } from "@/components/ui/TableExport";
 import { fmtPct, fmtMonth } from "@/lib/client/format";
 import { useTabFilters, orgLevelOf, ORG_LABEL, type OrgLevel } from "@/lib/state/filters";
-import { cascadeOptions, airesOfZone, dedupeLabels, type GeoTuple } from "@/lib/geo";
+import { cascadeOptions, type GeoTuple } from "@/lib/geo";
 import {
   cotationFor, COTATION_COLOR, conformiteFor, CONFORMITE_CLASSES,
   type StructureLevel, type AnswerValue,
@@ -66,14 +66,10 @@ function OrgUnitFilter({ d }: { d: SupervisionBundle }) {
   const f = useTabFilters("supervision");
   const lvl = orgLevelOf(f);
   const labels = ORG_LABEL[lvl];
+  // Cascade STRICTE (cf. lib/geo.ts) : une ZS filtrée ne propose QUE ses aires
+  // de santé (liste complète de la hiérarchie provinciale, même sans donnée).
   const geo = cascadeOptions((d.filters.geo as GeoTuple[]) ?? [], { province: f.province, antenne: f.antenne, zone: f.zone });
-  let options = lvl === "antenne" ? geo.antennes : lvl === "zs" ? geo.zones : geo.aires;
-  // Niveau AS : la liste affiche TOUTES les aires de santé de la ZS filtrée
-  // (hiérarchie provinciale — base État de lieux), pas seulement celles ayant
-  // déjà des données ; une ZS sans supervision (ex. Monkoto) garde sa liste.
-  if (lvl === "as" && f.zone) {
-    options = dedupeLabels([...options, ...airesOfZone(f.zone)]);
-  }
+  const options = lvl === "antenne" ? geo.antennes : lvl === "zs" ? geo.zones : geo.aires;
   return (
     <div className="card flex flex-wrap items-center gap-2.5 px-4 py-2.5">
       <label className="text-[10px] font-extrabold uppercase tracking-[0.09em] text-slate-500">{labels.sing}</label>
@@ -238,9 +234,15 @@ function NoteScorage() {
   return (
     <section>
       <SectionBar icon="legend">Note explicative — Système de scorage</SectionBar>
-      <details className="card card-pad" open>
-        <summary className="cursor-pointer select-none text-[12.5px] font-bold text-navy-700">
-          Mesure de la conformité aux standards du PEV — barème, pondération, formule et interprétation
+      {/* Fermée PAR DÉFAUT (feedback Dr Léandre) : un doigt indique qu'un clic
+          déroule / replie la note explicative. */}
+      <details className="card card-pad">
+        <summary className="flex cursor-pointer select-none flex-wrap items-center gap-2 text-[12.5px] font-bold text-navy-700">
+          <PointerIcon />
+          <span>Mesure de la conformité aux standards du PEV — barème, pondération, formule et interprétation</span>
+          <span className="inline-flex items-center gap-1 rounded-full px-2.5 py-[3px] text-[10.5px] font-extrabold uppercase tracking-wide text-white" style={{ background: "#0093d5" }}>
+            Cliquez ici pour dérouler / replier la note explicative
+          </span>
         </summary>
         <div className="mt-3 space-y-3">
           <div className="rounded-xl px-4 py-3 text-[12.5px] leading-relaxed text-surface-800" style={{ background: "#eaf4fd", borderLeft: "4px solid #0093d5" }}>
@@ -484,6 +486,123 @@ export function SupervisionScore() {
                 <HlCard icon="alert" tone="red" label={`${labels.sing} non conforme`} big={nonConfStruct?.name ?? "Aucune"} sub={nonConfStruct ? `Score moyen : ${fmtPct(nonConfStruct.score)}` : "Aucune structure sous 60 %"} />
               </div>
             </section>
+          </div>
+        );
+      }}
+    </DataGate>
+  );
+}
+
+/* ============ Page — Comparaison globale des scores de conformité ============ */
+
+const ALL_LEVELS: StructureLevel[] = ["antenne", "zs", "as"];
+const CMP_META: Record<StructureLevel, { icon: "tower" | "hospital" | "clinic"; tone: "navy" | "violet" | "green"; sing: string; plur: string; chartTitle: string }> = {
+  antenne: { icon: "tower", tone: "navy", sing: "Antenne", plur: "Antennes", chartTitle: "Antennes : score global de conformité" },
+  zs: { icon: "hospital", tone: "violet", sing: "ZS", plur: "Zones de santé", chartTitle: "Zones de santé visitées : score global" },
+  as: { icon: "clinic", tone: "green", sing: "AS", plur: "Aires de santé", chartTitle: "Aires de santé visitées : score global" },
+};
+
+/** Légende des 4 classes d'interprétation du score de conformité. */
+function ConformiteLegend() {
+  return (
+    <div className="mt-2 flex flex-wrap gap-3">
+      {CONFORMITE_CLASSES.map((c) => (
+        <span key={c.key} className="inline-flex items-center gap-1.5 text-[10.5px] font-bold text-surface-700">
+          <span className="h-2.5 w-2.5 rounded-sm" style={{ background: c.color }} />{c.label}
+        </span>
+      ))}
+    </div>
+  );
+}
+
+/**
+ * Comparaison transversale des scores de conformité de TOUTES les antennes, de
+ * toutes les zones de santé visitées et de toutes les aires de santé, sans
+ * tenir compte de leur appartenance hiérarchique (+ radars par niveau) —
+ * maquette Word du Dr Léandre (feedback 12/06/2026).
+ */
+export function SupervisionComparaison() {
+  return (
+    <DataGate>
+      {(d: SupervisionBundle) => {
+        const confColor = (v: number) => conformiteFor(v).color;
+        const lvlData = ALL_LEVELS.map((lvl) => {
+          const b = d.levels[lvl];
+          const valid = b.perStructure.filter((s) => s.score !== null);
+          const best = [...valid].sort((a, x) => (x.score ?? 0) - (a.score ?? 0))[0] ?? null;
+          return { lvl, b, valid, best, meta: CMP_META[lvl] };
+        });
+        // Score moyen global : moyenne des scores notés, pondérée par le nombre
+        // de supervisions notées de chaque niveau.
+        const totCount = lvlData.reduce((a, x) => a + (x.b.score.moyen !== null ? x.b.score.count : 0), 0);
+        const moyenGlobal = totCount
+          ? Math.round((lvlData.reduce((a, x) => a + (x.b.score.moyen ?? 0) * (x.b.score.moyen !== null ? x.b.score.count : 0), 0) / totCount) * 10) / 10
+          : null;
+        const nEntites = lvlData.reduce((a, x) => a + x.b.perStructure.length, 0);
+        return (
+          <div className="space-y-4">
+            <Banner icon="bars" tone="navy" title="Comparaison globale des scores de conformité"
+              sub="Analyse comparative des antennes, zones de santé et aires de santé, sans distinction d'appartenance hiérarchique" />
+
+            <section>
+              <SectionBar icon="bars">Indicateurs clés</SectionBar>
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
+                <KpiTile icon="cotation" tone="blue" label="Score moyen global" value={fmtPct(moyenGlobal)}
+                  sub={moyenGlobal !== null ? `<b>${conformiteFor(moyenGlobal).label}</b>` : undefined} />
+                {lvlData.map(({ lvl, best, meta }) => (
+                  <KpiTile key={lvl} icon={meta.icon} tone={meta.tone} label={`Meilleure ${lvl === "antenne" ? "antenne" : meta.sing}`}
+                    value={best?.name ?? "—"} sub={best ? `<b>${fmtPct(best.score)}</b> · ${best.score !== null ? conformiteFor(best.score).label : ""}` : "Aucune structure notée"} />
+                ))}
+                <KpiTile icon="people" tone="teal" label="Nombre d'entités supervisées" value={nEntites}
+                  sub={`Antennes : <b>${d.levels.antenne.perStructure.length}</b> · ZS : <b>${d.levels.zs.perStructure.length}</b> · AS : <b>${d.levels.as.perStructure.length}</b>`} />
+              </div>
+            </section>
+
+            <section>
+              <SectionBar icon="bars">Classement des scores de conformité — toutes entités</SectionBar>
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
+                {lvlData.map(({ lvl, b, valid, meta }) => (
+                  <div key={lvl} className="card card-pad">
+                    <CardTitle icon={meta.icon} tone={meta.tone} title={meta.chartTitle}
+                      sub={`Score moyen ${meta.plur.toLowerCase()} : ${fmtPct(b.score.moyen)}`} />
+                    {valid.length ? (
+                      <HBar exportTitle={meta.chartTitle} colorFor={confColor}
+                        data={b.perStructure.map((s) => ({ name: s.name, value: s.score }))}
+                        height={Math.max(150, b.perStructure.length * 26 + 40)} />
+                    ) : <div className="py-8 text-center text-[12px] text-surface-500">Aucune structure notée.</div>}
+                    <ConformiteLegend />
+                  </div>
+                ))}
+              </div>
+            </section>
+
+            <section>
+              <SectionBar icon="component">Radars de conformité par composante</SectionBar>
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
+                {lvlData.map(({ lvl, b, meta }) => (
+                  <div key={lvl} className="card card-pad">
+                    <CardTitle icon="component" tone={meta.tone} title={`Radar de conformité — ${meta.plur}`}
+                      sub="Profil des 6 composantes par structure (8 max)" />
+                    {b.radar.entities.length
+                      ? <Radar exportTitle={`Radar de conformité — ${meta.plur}`} indicators={b.radar.indicators} entities={b.radar.entities} height={280} />
+                      : <div className="py-8 text-center text-[12px] text-surface-500">Aucune donnée.</div>}
+                    <div className="mt-2 rounded-lg border border-surface-200 bg-[#f6f8fb] px-3 py-2 text-center text-[11.5px] font-bold text-navy-700">
+                      Moyenne globale {meta.plur.toLowerCase()} : {fmtPct(b.score.moyen)}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </section>
+
+            <div className="card card-pad flex items-start gap-3" style={{ background: TONES.blue.bg, borderColor: TONES.blue.border }}>
+              <Badge icon="legend" tone="blue" size={30} />
+              <div className="text-[12.5px] leading-relaxed text-surface-700">
+                Cet onglet permet une comparaison transversale des scores de conformité des antennes, zones de santé et aires de
+                santé, sans distinction d'appartenance hiérarchique. Les graphiques de classement facilitent l'identification des
+                entités les plus performantes et de celles nécessitant un appui prioritaire. Les radars présentent le profil de
+                conformité par composante.
+              </div>
+            </div>
           </div>
         );
       }}
