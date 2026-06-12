@@ -64,6 +64,19 @@ export interface AtNarratives {
   // Rapports — commentaires
   commentaireRapportTrim: string[];
   commentaireRapportsOms: string[];
+  // Nouveaux groupes du formulaire actualisé (12/06/2026)
+  commentairePlanification: string[];
+  commentaireChaineFroid: string[];
+  commentairePrestation: string[];
+  // FFOM — Innovations & bonnes pratiques
+  pointsForts: string[];
+  innovations: string[];
+  pointsFaibles: string[];
+  difficultes: string[];
+  // Recommandations — Attentes — Perspectives
+  recommandationsGenerales: string[];
+  appuiAttendu: string[];
+  perspectives: string[];
 }
 
 /** Verbatim contextualisé (AT · antenne · mois) pour l'affichage. */
@@ -97,6 +110,12 @@ export interface AtFilterOptions {
   provinces: string[]; antennes: string[]; months: string[]; monthLabels: string[]; ats: string[];
   geo: { province: string | null; antenne: string | null; zone: string | null; aire: string | null }[];
 }
+
+/** Réponse Oui / Partiel / Non / Non applicable (appuis du formulaire actualisé). */
+export interface OpnCounts { oui: number; partiel: number; non: number; na: number }
+
+/** Série mensuelle par antenne (valeurs alignées sur `months`). */
+export interface AntenneSeries { antenne: string; values: (number | null)[] }
 
 /** Bundle « Rapport mensuel des AT » (6 sections). */
 export interface RapportBundle {
@@ -181,6 +200,64 @@ export interface RapportBundle {
     commentairesRapportPev: NarrativeItem[];
     /** Commentaires sur les rapports des activités sous financement OMS. */
     commentairesRapportsOms: NarrativeItem[];
+  };
+  /* ---- Nouvelles sections (formulaire Kobo actualisé — maquette Word 12/06/2026) ---- */
+  /** Appui à la planification et à la microplanification. */
+  planification: {
+    /** Cartes « Activités réalisées » : décompte Oui / Partiel / Non / N-A. */
+    activites: { key: string; label: string; counts: OpnCounts }[];
+    /** Niveau de mise en œuvre du plan de travail (%) par antenne et par mois. */
+    miseEnOeuvre: AntenneSeries[];
+    /** % des ZS avec microplan de qualité validé par l'antenne, par mois. */
+    zsMicroplan: AntenneSeries[];
+    detailParAntenne: {
+      antenne: string; microplan: string; planTravail: string; etatLieux: string;
+      miseEnOeuvre: number | null; zsMicroplan: number | null;
+    }[];
+    commentaires: NarrativeItem[];
+    months: { key: string; label: string }[];
+  };
+  /** Appui à la gestion des vaccins (inventaires + disponibilité PENTA / RR). */
+  vaccins: {
+    /** Situation du mois (dernier mois renseigné) : inventaires par antenne. */
+    inventaire: { realises: number; partiels: number; nonRealises: number; total: number; moisLabel: string | null };
+    inventaireParAntenneMois: { antenne: string; byMonth: Record<string, string | null> }[];
+    /** Taux de disponibilité PENTA / RR — niveaux antenne et zones de santé. */
+    dispo: { key: string; label: string; series: AntenneSeries[] }[];
+    months: { key: string; label: string }[];
+  };
+  /** Appui à la gestion matérielle de la chaîne de froid. */
+  chaineFroid: {
+    kpi: { antennesSuivies: number; zsCouvertes: number; rapports: number };
+    cdfZs: AntenneSeries[];
+    cdfCs: AntenneSeries[];
+    detailParAntenne: { antenne: string; cdfZs: number | null; cdfCs: number | null; observations: string | null }[];
+    commentaires: NarrativeItem[];
+    months: { key: string; label: string }[];
+  };
+  /** Appui à la prestation de services (sessions + couvertures vaccinales). */
+  prestation: {
+    /** % des AS ayant réalisé ≥ 80 % des sessions, par stratégie. */
+    sessions: { key: string; label: string; series: AntenneSeries[]; ensemble: (number | null)[] }[];
+    /** % des AS avec couverture ≥ 90 % par antigène (catégories antenne × mois). */
+    couvertures: { cats: string[]; series: { name: string; data: (number | null)[] }[] };
+    /** Détail par antenne — dernier mois renseigné. */
+    detail: {
+      moisLabel: string | null;
+      rows: { antenne: string; fixes: number | null; avancees: number | null; mobiles: number | null; p1: number | null; p3: number | null; rr1: number | null; rr2: number | null }[];
+    };
+    commentaires: NarrativeItem[];
+    months: { key: string; label: string }[];
+  };
+  /** Analyse FFOM, innovations, recommandations, appuis attendus et perspectives. */
+  ffom: {
+    forces: NarrativeItem[];
+    innovations: NarrativeItem[];
+    faiblesses: NarrativeItem[];
+    difficultes: NarrativeItem[];
+    recommandations: NarrativeItem[];
+    appuisAttendus: NarrativeItem[];
+    perspectives: NarrativeItem[];
   };
 }
 

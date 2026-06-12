@@ -145,7 +145,7 @@ function buildRecords(source: SourceFetch): { records: SupervisionRecord[]; rows
     }
     return null;
   };
-  const scoreQs = detectScoreQuestions(columns);
+  const scoreQs = detectScoreQuestions(columns, source.labels);
   const recoCols = detectRecommendationColumns(columns);
   // Champs texte libres « Constats majeurs » (ajoutés aux checklists CS et ZS
   // en 2026) : alimentent la colonne « A. Constats majeurs » de la page

@@ -15,7 +15,57 @@ import {
   type AtComponentDef, type AtComponentKey, type AtComponentScore, type AtScore,
   type AtNiveau, type AtNiveauDef, type AtRecord, type AtFilterOptions,
   type RapportBundle, type EvaluationBundle, type AtNarratives, type NarrativeItem,
+  type OpnCounts, type AntenneSeries,
 } from "./types";
+
+/* ====== Champs du formulaire ACTUALISÉ (12/06/2026) — names techniques Kobo ======
+   Groupes ajoutés : appui à la planification, gestion des vaccins, gestion du
+   matériel de chaîne de froid, prestation de services, analyse FFOM et
+   recommandations (cf. XLSForm « Rapport mensuel des AT »). Les names sont les
+   identifiants auto-générés par Kobo (labels tronqués) — exacts du XLSForm. */
+const F_PLANIF = {
+  microplan: "Avez_vous_appuy_l_a_labor_le_micro_plan",
+  planTravailDispo: "L_antenne_dispose_t_d_un_plan_de_travail",
+  planTravailAppui: "Avez_vous_appuy_l_a_ravail_de_la_p_riode",
+  miseEnOeuvre: "Quel_est_le_niveau_d_travail_de_l_antenne",
+  zsMicroplan: "_des_ZS_avec_microp_valid_par_l_antenne",
+  infosChangees: "Les_informations_rel_es_durant_la_p_riode",
+  etatLieuxActualise: "Si_informations_chan_ieu_de_votre_antenne",
+  commentaire: "Commentaire_sur_la_planification",
+} as const;
+const F_VACCINS = {
+  pentaAntenne: "Quel_est_le_taux_de_e_durant_la_p_riode_",
+  rrAntenne: "Quel_est_le_taux_de_e_durant_la_p_riode__001",
+  pentaZs: "Quel_est_le_taux_de_durant_la_p_riode_",
+  rrZs: "Quel_est_le_taux_de_e_durant_la_p_riode__002",
+  inventaire: "L_Inventaire_de_vacc_niveau_de_l_antenne_",
+} as const;
+const F_CDF = {
+  zs: "_mat_riel_de_cha_ne_onctionnel_niveau_ZS",
+  cs: "_mat_riel_de_cha_ne_onctionnel_niveau_CS",
+  commentaire: "Commentaires_sur_les_s_de_chaine_de_froid",
+} as const;
+const F_PREST = {
+  fixes: "_des_aires_de_sant_de_vaccination_fixes",
+  avancees: "_des_aires_de_sant_vaccination_avanc_es",
+  mobiles: "_des_aires_de_sant_vaccination_mobiles",
+  p1: "_des_aires_de_sant_ccinale_en_penta1_90",
+  p3: "_des_aires_de_sant_ccinale_en_penta3_90",
+  rr1: "_des_aires_de_sant_vaccinale_en_RR1_90",
+  rr2: "_des_aires_de_sant_vaccinale_en_RR2_90",
+  commentaire: "Commentaires_sur_la_restation_de_service",
+} as const;
+const F_FFOM = {
+  forces: "Points_forts_g_n_ral",
+  innovations: "Innovations_Bonnes_Pratiques",
+  faibles: "Points_faibles_g_n_ral",
+  difficultes: "Difficult_rencontr_par_l_AT",
+} as const;
+const F_RECO = {
+  recommandations: "Recommandations",
+  appui: "Appui_attendu_du_Bureau_Pays_OMS",
+  perspectives: "Perspectives",
+} as const;
 
 /* ============================ Constantes paramétrables ============================ */
 
@@ -164,6 +214,17 @@ function extractNarratives(m: Record<string, unknown>): AtNarratives {
     observationsTnnMapi: dedup(txt(m, "observations_tnn_mapi")),
     commentaireRapportTrim: dedup(txt(m, "commentaire_rapport_trim")),
     commentaireRapportsOms: dedup(txt(m, "commentaire_rapports_oms")),
+    // Nouveaux groupes (formulaire actualisé 12/06/2026)
+    commentairePlanification: dedup(txt(m, F_PLANIF.commentaire)),
+    commentaireChaineFroid: dedup(txt(m, F_CDF.commentaire)),
+    commentairePrestation: dedup(txt(m, F_PREST.commentaire)),
+    pointsForts: dedup(txt(m, F_FFOM.forces)),
+    innovations: dedup(txt(m, F_FFOM.innovations)),
+    pointsFaibles: dedup(txt(m, F_FFOM.faibles)),
+    difficultes: dedup(txt(m, F_FFOM.difficultes)),
+    recommandationsGenerales: dedup(txt(m, F_RECO.recommandations)),
+    appuiAttendu: dedup(txt(m, F_RECO.appui)),
+    perspectives: dedup(txt(m, F_RECO.perspectives)),
   };
 }
 
@@ -374,6 +435,18 @@ function numericRaw(m: Record<string, unknown>): Record<string, number | string 
   out["preuve_liste_rougeole"] = str(pick(m, "preuve_liste_rougeole"));
   out["nb_zs_liste_rougeole_dispo"] = num(pick(m, "nb_zs_liste_rougeole_dispo"));
   out["nb_zs_liste_rougeole_ajour"] = num(pick(m, "nb_zs_liste_rougeole_ajour"));
+  // Nouveaux groupes (formulaire actualisé 12/06/2026) — numériques (%)
+  for (const k of [
+    F_PLANIF.miseEnOeuvre, F_PLANIF.zsMicroplan,
+    F_VACCINS.pentaAntenne, F_VACCINS.rrAntenne, F_VACCINS.pentaZs, F_VACCINS.rrZs,
+    F_CDF.zs, F_CDF.cs,
+    F_PREST.fixes, F_PREST.avancees, F_PREST.mobiles, F_PREST.p1, F_PREST.p3, F_PREST.rr1, F_PREST.rr2,
+  ]) out[k.toLowerCase()] = num(pick(m, k));
+  // — et choix (Oui / Partiel / Non / N-A, inventaire)
+  for (const k of [
+    F_PLANIF.microplan, F_PLANIF.planTravailDispo, F_PLANIF.planTravailAppui,
+    F_PLANIF.infosChangees, F_PLANIF.etatLieuxActualise, F_VACCINS.inventaire, F_CDF.commentaire,
+  ]) out[k.toLowerCase()] = str(pick(m, k));
   return out;
 }
 
@@ -605,6 +678,174 @@ export function buildRapportBundle(fetched: { label: string; rows: RawRow[]; ok:
     return { antenne: ant, pct: pct(sum(rr.map((r) => rawN(r, "nb_zs_liste_rougeole_ajour"))), sum(rr.map((r) => rawN(r, "nb_zs_liste_rougeole_dispo")))) };
   });
 
+  /* ---- Nouvelles sections : planification · vaccins · chaîne de froid ·
+         prestation · FFOM (formulaire Kobo actualisé — maquette 12/06/2026) ---- */
+  const rawNum = (r: AtRecord, k: string): number | null => {
+    const v = r.raw[k.toLowerCase()];
+    return typeof v === "number" && Number.isFinite(v) ? v : null;
+  };
+  const rawStr = (r: AtRecord, k: string): string => String(r.raw[k.toLowerCase()] ?? "");
+  const meanOf = (xs: (number | null)[]): number | null => {
+    const v = xs.filter((x): x is number => x != null);
+    return v.length ? Math.round((v.reduce((a, x) => a + x, 0) / v.length) * 10) / 10 : null;
+  };
+  /** Réponse canonique d'un select Oui / Partiel / Non / Non applicable (code « option_4 » = N-A). */
+  const opn = (v: string): keyof OpnCounts | null => {
+    const s = norm(str(selectMulti(v)[0] ?? v));
+    if (!s) return null;
+    if (/^option|non.?app|^na$|sans.?objet/.test(s)) return "na";
+    if (/partiel/.test(s)) return "partiel";
+    if (/^oui|^yes/.test(s)) return "oui";
+    if (/^non|^no/.test(s)) return "non";
+    return null;
+  };
+  const OPN_LABEL: Record<keyof OpnCounts, string> = { oui: "Oui", partiel: "Partiel", non: "Non", na: "N/A" };
+  const opnLabel = (v: string): string => { const k = opn(v); return k ? OPN_LABEL[k] : "—"; };
+  const countOpn = (key: string): OpnCounts => {
+    const c: OpnCounts = { oui: 0, partiel: 0, non: 0, na: 0 };
+    for (const r of recs) { const k = opn(rawStr(r, key)); if (k) c[k]++; }
+    return c;
+  };
+  const serieParAntenne = (key: string): AntenneSeries[] => antennes.map((ant) => ({
+    antenne: ant,
+    values: months.map((mc) => meanOf(recs.filter((r) => r.antenne === ant && r.month === mc.key).map((r) => rawNum(r, key)))),
+  }));
+  const ensembleSerie = (key: string): (number | null)[] =>
+    months.map((mc) => meanOf(recs.filter((r) => r.month === mc.key).map((r) => rawNum(r, key))));
+  /** Dernier enregistrement (mois le plus récent) d'une antenne. */
+  const latestOf = (ant: string): AtRecord | null =>
+    recs.filter((r) => r.antenne === ant && r.month).sort((a, b) => (a.month! < b.month! ? -1 : 1)).pop() ?? null;
+  const lastMonth = months.length ? months[months.length - 1] : null;
+
+  const planification: RapportBundle["planification"] = {
+    activites: [
+      { key: "microplan", label: "Appui à l'élaboration du microplan", counts: countOpn(F_PLANIF.microplan) },
+      { key: "plan_travail", label: "Appui à l'élaboration du plan de travail de la période", counts: countOpn(F_PLANIF.planTravailAppui) },
+      { key: "etat_lieux", label: "Actualisation de l'état des lieux de l'antenne", counts: countOpn(F_PLANIF.etatLieuxActualise) },
+    ],
+    miseEnOeuvre: serieParAntenne(F_PLANIF.miseEnOeuvre),
+    zsMicroplan: serieParAntenne(F_PLANIF.zsMicroplan),
+    detailParAntenne: antennes.map((ant) => {
+      const r = latestOf(ant);
+      return {
+        antenne: ant,
+        microplan: r ? opnLabel(rawStr(r, F_PLANIF.microplan)) : "—",
+        planTravail: r ? opnLabel(rawStr(r, F_PLANIF.planTravailAppui)) : "—",
+        etatLieux: r ? opnLabel(rawStr(r, F_PLANIF.etatLieuxActualise)) : "—",
+        miseEnOeuvre: r ? rawNum(r, F_PLANIF.miseEnOeuvre) : null,
+        zsMicroplan: r ? rawNum(r, F_PLANIF.zsMicroplan) : null,
+      };
+    }),
+    commentaires: collectNarratives(recs, (n) => n.commentairePlanification),
+    months,
+  };
+
+  /** Statut d'inventaire de vaccins (codes Kobo « 100 » = Oui, « 80____99 » = Non). */
+  const invLabel = (v: string): string | null => {
+    const s = norm(str(selectMulti(v)[0] ?? v));
+    if (!s) return null;
+    if (/^100|^oui|realise/.test(s)) return "Réalisé";
+    if (/partiel/.test(s)) return "Partiel";
+    return "Non réalisé";
+  };
+  const invParAntenneMois = antennes.map((ant) => {
+    const byMonth: Record<string, string | null> = {};
+    for (const mc of months) {
+      const r = recs.find((x) => x.antenne === ant && x.month === mc.key);
+      byMonth[mc.key] = r ? invLabel(rawStr(r, F_VACCINS.inventaire)) : null;
+    }
+    return { antenne: ant, byMonth };
+  });
+  const invMois = lastMonth ? invParAntenneMois.map((a) => a.byMonth[lastMonth.key]) : [];
+  const vaccins: RapportBundle["vaccins"] = {
+    inventaire: {
+      realises: invMois.filter((v) => v === "Réalisé").length,
+      partiels: invMois.filter((v) => v === "Partiel").length,
+      nonRealises: invMois.filter((v) => v === "Non réalisé").length,
+      total: antennes.length,
+      moisLabel: lastMonth?.label ?? null,
+    },
+    inventaireParAntenneMois: invParAntenneMois,
+    dispo: [
+      { key: "penta_antenne", label: "Taux de disponibilité des vaccins PENTA — niveau antenne et par mois", series: serieParAntenne(F_VACCINS.pentaAntenne) },
+      { key: "rr_antenne", label: "Taux de disponibilité des vaccins RR — niveau antenne et par mois", series: serieParAntenne(F_VACCINS.rrAntenne) },
+      { key: "penta_zs", label: "Taux de disponibilité des vaccins PENTA — niveau zones de santé et par mois", series: serieParAntenne(F_VACCINS.pentaZs) },
+      { key: "rr_zs", label: "Taux de disponibilité des vaccins RR — niveau zones de santé et par mois", series: serieParAntenne(F_VACCINS.rrZs) },
+    ],
+    months,
+  };
+
+  const chaineFroid: RapportBundle["chaineFroid"] = {
+    kpi: { antennesSuivies: antennes.length, zsCouvertes: zonesSet.size, rapports: recs.length },
+    cdfZs: serieParAntenne(F_CDF.zs),
+    cdfCs: serieParAntenne(F_CDF.cs),
+    detailParAntenne: antennes.map((ant) => {
+      const rr = recs.filter((r) => r.antenne === ant);
+      const obs = rr.flatMap((r) => r.narratives.commentaireChaineFroid);
+      return {
+        antenne: ant,
+        cdfZs: meanOf(rr.map((r) => rawNum(r, F_CDF.zs))),
+        cdfCs: meanOf(rr.map((r) => rawNum(r, F_CDF.cs))),
+        observations: obs.length ? obs[obs.length - 1] : null,
+      };
+    }),
+    commentaires: collectNarratives(recs, (n) => n.commentaireChaineFroid),
+    months,
+  };
+
+  // Couvertures vaccinales ≥ 90 % : catégories « antenne · mois », 4 antigènes.
+  const couvCats: string[] = [];
+  const couvIdx: { ant: string; month: string }[] = [];
+  for (const mc of months) for (const ant of antennes) { couvCats.push(`${ant} · ${mc.label}`); couvIdx.push({ ant, month: mc.key }); }
+  const couvSerie = (label: string, key: string) => ({
+    name: label,
+    data: couvIdx.map(({ ant, month }) => meanOf(recs.filter((r) => r.antenne === ant && r.month === month).map((r) => rawNum(r, key)))),
+  });
+  const prestation: RapportBundle["prestation"] = {
+    sessions: [
+      { key: "fixes", label: "% des AS ayant réalisé au moins 80 % des sessions fixes", series: serieParAntenne(F_PREST.fixes), ensemble: ensembleSerie(F_PREST.fixes) },
+      { key: "avancees", label: "% des AS ayant réalisé au moins 80 % des stratégies avancées", series: serieParAntenne(F_PREST.avancees), ensemble: ensembleSerie(F_PREST.avancees) },
+      { key: "mobiles", label: "% des AS ayant réalisé au moins 80 % des sessions mobiles", series: serieParAntenne(F_PREST.mobiles), ensemble: ensembleSerie(F_PREST.mobiles) },
+    ],
+    couvertures: {
+      cats: couvCats,
+      series: [
+        couvSerie("Penta1 ≥ 90%", F_PREST.p1),
+        couvSerie("Penta3 ≥ 90%", F_PREST.p3),
+        couvSerie("RR1 ≥ 90%", F_PREST.rr1),
+        couvSerie("RR2 ≥ 90%", F_PREST.rr2),
+      ],
+    },
+    detail: {
+      moisLabel: lastMonth?.label ?? null,
+      rows: antennes.map((ant) => {
+        const r = lastMonth ? recs.find((x) => x.antenne === ant && x.month === lastMonth.key) ?? null : null;
+        return {
+          antenne: ant,
+          fixes: r ? rawNum(r, F_PREST.fixes) : null,
+          avancees: r ? rawNum(r, F_PREST.avancees) : null,
+          mobiles: r ? rawNum(r, F_PREST.mobiles) : null,
+          p1: r ? rawNum(r, F_PREST.p1) : null,
+          p3: r ? rawNum(r, F_PREST.p3) : null,
+          rr1: r ? rawNum(r, F_PREST.rr1) : null,
+          rr2: r ? rawNum(r, F_PREST.rr2) : null,
+        };
+      }),
+    },
+    commentaires: collectNarratives(recs, (n) => n.commentairePrestation),
+    months,
+  };
+
+  const ffom: RapportBundle["ffom"] = {
+    forces: collectNarratives(recs, (n) => n.pointsForts),
+    innovations: collectNarratives(recs, (n) => n.innovations),
+    faiblesses: collectNarratives(recs, (n) => n.pointsFaibles),
+    difficultes: collectNarratives(recs, (n) => n.difficultes),
+    recommandations: collectNarratives(recs, (n) => n.recommandationsGenerales),
+    appuisAttendus: collectNarratives(recs, (n) => n.appuiAttendu),
+    perspectives: collectNarratives(recs, (n) => n.perspectives),
+  };
+
   return {
     meta: { generatedAt: new Date().toISOString(), source: { label: fetched.label, rows: fetched.rows.length, ok: fetched.ok, error: fetched.error }, hasData: all.length > 0 },
     filters,
@@ -684,6 +925,11 @@ export function buildRapportBundle(fetched: { label: string; rows: RawRow[]; ok:
       commentairesRapportPev: collectNarratives(recs, (n) => n.commentaireRapportTrim),
       commentairesRapportsOms: collectNarratives(recs, (n) => n.commentaireRapportsOms),
     },
+    planification,
+    vaccins,
+    chaineFroid,
+    prestation,
+    ffom,
   };
 }
 

@@ -122,6 +122,48 @@ export interface SourceFetch {
   rows: RawRow[];
   ok: boolean;
   error?: string;
+  /**
+   * Libellés RÉELS des questions du formulaire (asset content Kobo) :
+   * name technique (minuscule) → libellé français. Sert à afficher l'intitulé
+   * exact des questions (Top 10 des « Non », constats…) au lieu des noms
+   * techniques de colonnes du data.json (« grp_planification/plan_09 »).
+   */
+  labels?: Record<string, string>;
+}
+
+/** Libellés des questions d'un asset Kobo (content.survey) : name → label FR. */
+async function fetchAssetLabels(assetUid: string): Promise<Record<string, string>> {
+  const cacheKey = `kobo:labels:${assetUid}`;
+  const cached = cacheGet<Record<string, string>>(cacheKey, 3600);
+  if (cached) return cached;
+  const url = `${ENV.KOBO_BASE_URL}/api/v2/assets/${assetUid}.json`;
+  const buf = await fetchBuffer(url, "application/json");
+  const json = JSON.parse(new TextDecoder().decode(buf)) as {
+    content?: { survey?: Record<string, unknown>[] };
+  };
+  const out: Record<string, string> = {};
+  for (const q of json?.content?.survey ?? []) {
+    const name = String(q["name"] ?? q["$autoname"] ?? "").trim();
+    const raw = q["label"];
+    const label = (Array.isArray(raw) ? String(raw.find((l) => l != null && l !== "") ?? "") : String(raw ?? "")).trim();
+    if (name && label && label.toLowerCase() !== "null") out[name.toLowerCase()] = label;
+  }
+  cacheSet(cacheKey, out);
+  return out;
+}
+
+/** Fusionne les libellés de plusieurs assets (le premier prime en cas de doublon). */
+async function fetchLabelsFor(assetUids: string[]): Promise<Record<string, string> | undefined> {
+  const out: Record<string, string> = {};
+  for (const uid of assetUids) {
+    try {
+      const labels = await fetchAssetLabels(uid);
+      for (const [k, v] of Object.entries(labels)) if (!(k in out)) out[k] = v;
+    } catch {
+      /* asset indisponible : on continue avec les autres */
+    }
+  }
+  return Object.keys(out).length ? out : undefined;
 }
 
 /**
@@ -190,6 +232,7 @@ export async function fetchSource(src: KoboSource, opts: { force?: boolean } = {
     // Legacy explicite (config) + auto-découverte parmi les formulaires du
     // compte. Un échec sur le legacy ne casse jamais la source principale.
     let merged = rows;
+    const labelUids: string[] = [src.assetUid];
     try {
       const discovered = await discoverLegacySupervisionAssets(src.key).catch(() => [] as KoboAssetInfo[]);
       const legacyList: { assetUid: string; exportUid?: string }[] = [
@@ -198,6 +241,7 @@ export async function fetchSource(src: KoboSource, opts: { force?: boolean } = {
           .filter((a) => a.uid !== src.legacy?.assetUid)
           .map((a) => ({ assetUid: a.uid })),
       ];
+      labelUids.push(...legacyList.map((l) => l.assetUid));
       for (const legacy of legacyList) {
         try {
           const legacySrc: KoboSource = {
@@ -222,7 +266,11 @@ export async function fetchSource(src: KoboSource, opts: { force?: boolean } = {
     } catch {
       /* legacy indisponible : on garde la source principale + le seed local */
     }
-    const result: SourceFetch = { level: src.key, label: src.label, rows: mergeCsSeed(src.key, merged), ok: true };
+    // Libellés réels des questions (asset principal + assets legacy) — un échec
+    // n'empêche jamais le chargement des données (les noms techniques restent
+    // le repli d'affichage).
+    const labels = await fetchLabelsFor(labelUids);
+    const result: SourceFetch = { level: src.key, label: src.label, rows: mergeCsSeed(src.key, merged), ok: true, labels };
     cacheSet(cacheKey, result);
     return result;
   } catch (err) {

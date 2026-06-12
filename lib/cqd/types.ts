@@ -123,6 +123,30 @@ export interface CqdLevelBundle {
     registrePointage: CqdConcordanceAS[];
     dhis2Snis: CqdConcordanceAS[];
   };
+  /**
+   * Comparaison des indicateurs de contrôle qualité PAR STRUCTURE (page
+   * « Comparaison par structure » — maquette Dr Léandre, 12/06/2026) :
+   * écart moyen (absolu, définition n°2) et facteur de vérification par
+   * antigène, taux d'erreur unique par structure.
+   * Référence : registre (niveau CS) · SNIS (niveau ZS).
+   */
+  comparaison: {
+    /** Outil de référence (libellé). */
+    reference: string;
+    /** Outils comparés (libellé). */
+    compares: string;
+    ecartMoyenGlobal: number | null;
+    fvMoyenGlobal: number | null;
+    erreurMoyenneGlobale: number | null;
+    structures: {
+      name: string;
+      ecart: { p1: number | null; p3: number | null; rr1: number | null; rr2: number | null; total: number | null };
+      fv: { p1: number | null; p3: number | null; rr1: number | null; rr2: number | null; moyen: number | null };
+      erreur: number | null;
+    }[];
+    /** Structures prioritaires (taux d'erreur puis écart les plus élevés). */
+    prioritaires: string[];
+  };
   /** Détail par structure (concordance + erreur + outils + enfants). */
   parStructure: {
     name: string;
