@@ -109,10 +109,25 @@ function collect(node: unknown, ctx: Record<string, unknown>, out: Record<string
   if (isChild(sm)) out.push(merged);
 }
 
+/** Antigènes du tableau comparatif CV RCM vs CV DHIS2 (feedback TL). */
+const CV_ANTIGENS = ["penta1", "penta3", "rr1", "rr2"] as const;
+type CvAntigen = (typeof CV_ANTIGENS)[number];
+/** Champs réels par antigène (RR1/RR2 = VAR1/VAR2 dans certains exports). */
+const CV_FIELDS: Record<CvAntigen, string[]> = {
+  penta1: ["penta1"],
+  penta3: ["penta3"],
+  rr1: ["var_rr1", "rr1", "var1"],
+  rr2: ["var_rr2", "rr2", "var2"],
+};
+
 interface Child {
   province: string | null; antenne: string | null; zone: string | null; aire: string | null;
   month: string | null; distance: string; carte: string; ageGroup: string;
+  /** Date de réalisation du RCM (date_enquete, ISO "YYYY-MM-DD"). */
+  date: string | null;
   vacc: Record<RcmAntigene, string>;
+  /** Statut vaccinal des 4 antigènes du comparatif CV RCM vs DHIS2. */
+  cvVacc: Record<CvAntigen, string>;
   reasonsCarte: string[]; reasonsVacc: string[];
 }
 
@@ -120,6 +135,12 @@ function toMonth(v: unknown): string | null {
   const s = str(v);
   const m = s.match(/(\d{4})-(\d{2})/);
   return m ? `${m[1]}-${m[2]}` : null;
+}
+
+function toDate(v: unknown): string | null {
+  const s = str(v);
+  const m = s.match(/(\d{4})-(\d{2})-(\d{2})/);
+  return m ? `${m[1]}-${m[2]}-${m[3]}` : null;
 }
 
 function normalize(rows: RawRow[]): Child[] {
@@ -132,6 +153,12 @@ function normalize(rows: RawRow[]): Child[] {
   return raw.map((m) => {
     const vacc = {} as Record<RcmAntigene, string>;
     for (const ag of RCM_ANTIGENES) vacc[ag] = str(pick(m, ANTIGENE_FIELD[ag])).toLowerCase();
+    const cvVacc = {} as Record<CvAntigen, string>;
+    for (const ag of CV_ANTIGENS) {
+      let v = "";
+      for (const fld of CV_FIELDS[ag]) { v = str(pick(m, fld)).toLowerCase(); if (v) break; }
+      cvVacc[ag] = v;
+    }
     // Libellés géographiques nettoyés (retrait du code de niveau et des parents
     // encodés en préfixe) — appliqués en cascade Province → Antenne → ZS → Aire.
     const province = cleanGeoName(str(pick(m, "province")) || null, []);
@@ -144,10 +171,12 @@ function normalize(rows: RawRow[]): Child[] {
       zone,
       aire,
       month: toMonth(pick(m, "date_enquete")) ?? toMonth(pick(m, "today")) ?? toMonth(pick(m, "_submission_time")),
+      date: toDate(pick(m, "date_enquete")) ?? toDate(pick(m, "today")) ?? toDate(pick(m, "_submission_time")),
       distance: str(pick(m, "distance_cs")).toLowerCase(),
       carte: str(pick(m, "carte_vaccination")).toLowerCase(),
       ageGroup: str(pick(m, "age_group")).toLowerCase(),
       vacc,
+      cvVacc,
       reasonsCarte: selectMulti(pick(m, "raisons_absence_carte")),
       reasonsVacc: selectMulti(pick(m, "raisons_non_vaccination")),
     };
@@ -203,7 +232,16 @@ export function buildRcmBundle(
 
   const totalEnfants = children.length;
   const asSet = new Set(children.map((c) => c.aire).filter(Boolean));
-  const asTotal = filterOptions.aires.length;
+  // Dénominateur « AS ayant bénéficié du MRC » : aires de la MÊME portée
+  // géographique que la sélection (province/antenne/zone), pas de tout le jeu
+  // de données — sinon le numérateur (filtré) et le dénominateur (global)
+  // ne sont pas comparables (feedback Dr Léandre : « ça devrait être identique »).
+  const asScope = all.filter((c) =>
+    (!filters.province || eq(c.province, filters.province)) &&
+    (!filters.antenne || eq(canonAntenne(c.antenne), canonAntenne(filters.antenne))) &&
+    (!filters.zone || eq(c.zone, filters.zone))
+  );
+  const asTotal = new Set(asScope.map((c) => c.aire).filter(Boolean)).size;
 
   // Distance (au niveau enfant ≈ localité monitorée).
   const distance = { moins_5km: 0, entre_5_10km: 0, plus_10km: 0 } as Record<DistanceBand, number>;
@@ -260,6 +298,19 @@ export function buildRcmBundle(
     return { zone, values };
   });
 
+  // Heatmap AS × antigène (% manqués) — niveau affiché quand une ZS/AS est
+  // filtrée dans l'onglet (tableau « % enfants manqués » dynamique).
+  const airesMiss = uniq(children.map((c) => c.aire));
+  const missByAire = airesMiss.map((aire) => {
+    const ac = children.filter((c) => c.aire === aire);
+    const values: Record<string, number | null> = {};
+    for (const ag of RCM_ANTIGENES) {
+      const considered = ac.filter((c) => c.vacc[ag] && c.vacc[ag] !== "non_applicable");
+      values[RCM_ANTIGENE_LABEL[ag]] = pct(considered.filter((c) => isMissed(c.vacc[ag])).length, considered.length);
+    }
+    return { aire, zone: ac[0]?.zone ?? null, values };
+  });
+
   // Raisons.
   const carteMap = new Map<string, number>();
   const vaccMap = new Map<string, number>();
@@ -279,12 +330,29 @@ export function buildRcmBundle(
     return { name, zone: ac[0]?.zone ?? null, enfants: ac.length, reasonsCarte: rc, reasonsVacc: rv };
   });
 
+  // CV RCM par aire de santé (numérateur enquête) : vaccinés / enquêtés
+  // éligibles × 100, pour les 4 antigènes du comparatif RCM vs DHIS2.
+  const cvParAire = aires.map((name) => {
+    const ac = children.filter((c) => c.aire === name);
+    const cv = {} as Record<CvAntigen, number | null>;
+    for (const ag of CV_ANTIGENS) {
+      const considered = ac.filter((c) => c.cvVacc[ag] && c.cvVacc[ag] !== "non_applicable");
+      cv[ag] = pct(considered.filter((c) => isVacc(c.cvVacc[ag])).length, considered.length);
+    }
+    return { name, zone: ac[0]?.zone ?? null, enfants: ac.length, cv };
+  });
+
   const sansCartePct = cartePct == null ? null : Math.round((100 - cartePct) * 10) / 10;
+
+  // Date de réalisation RCM la plus récente de la sélection : sert de référence
+  // au mois DHIS2 du comparatif CV RCM vs CV administrative.
+  const lastRcmDate = children.reduce<string | null>((acc, c) => (c.date && (!acc || c.date > acc) ? c.date : acc), null);
 
   return {
     meta: {
       generatedAt: new Date().toISOString(),
       months: filterOptions.months,
+      lastRcmDate,
       source: { label: fetched.label, rows: fetched.rows.length, enfants: all.length, ok: fetched.ok, error: fetched.error },
       hasData: all.length > 0,
     },
@@ -293,6 +361,6 @@ export function buildRcmBundle(
       asBeneficiaires: asSet.size, asTotal, localites: distTotal || totalEnfants, totalEnfants,
       distance, distancePct, missAnyPct, cartePct, sansCartePct, vaccinePct, nonVaccinePct, antigenesPrioritaires,
     },
-    missByAntigene, byAge, missByZs, reasonsCarte, reasonsVacc, parAire,
+    missByAntigene, byAge, missByZs, missByAire, reasonsCarte, reasonsVacc, parAire, cvParAire,
   };
 }

@@ -2,7 +2,7 @@
 
 import useSWR from "swr";
 import type { SupervisionBundle } from "@/lib/supervision/types";
-import { useTabFilters, filtersToQuery } from "@/lib/state/filters";
+import { useTabFilters, filtersToQuery, orgLevelOf } from "@/lib/state/filters";
 
 const fetcher = async (url: string): Promise<SupervisionBundle> => {
   const res = await fetch(url, { headers: { Accept: "application/json" } });
@@ -15,7 +15,17 @@ const fetcher = async (url: string): Promise<SupervisionBundle> => {
 
 export function useSupervision() {
   const filters = useTabFilters("supervision");
-  const url = `/api/supervision${filtersToQuery(filters)}`;
+  // Sélecteur d'org unit (sous le titre des pages) : restreint la sélection à
+  // UNE entité du niveau d'affichage courant SANS changer ce niveau — on le
+  // traduit vers le filtre géographique du niveau correspondant.
+  const effective = { ...filters };
+  if (filters.org) {
+    const lvl = orgLevelOf(filters);
+    if (lvl === "antenne") effective.antenne = filters.org;
+    else if (lvl === "zs") effective.zone = filters.org;
+    else effective.aire = filters.org;
+  }
+  const url = `/api/supervision${filtersToQuery(effective)}`;
   const { data, error, isLoading, isValidating, mutate } = useSWR<SupervisionBundle>(url, fetcher, {
     revalidateOnFocus: false,
     keepPreviousData: true,

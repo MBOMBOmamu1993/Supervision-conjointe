@@ -33,6 +33,8 @@ export interface RcmBundle {
   meta: {
     generatedAt: string;
     months: string[];
+    /** Date de réalisation RCM la plus récente de la sélection (ISO "YYYY-MM-DD"). */
+    lastRcmDate: string | null;
     source: { label: string; rows: number; enfants: number; ok: boolean; error?: string };
     hasData: boolean;
   };
@@ -61,10 +63,23 @@ export interface RcmBundle {
   byAge: { group: AgeGroup; label: string; antigenes: { antigene: string; vaccines: number; nonVaccines: number }[] }[];
   /** Heatmap % enfants manqués ZS × antigène (dernier découpage mensuel agrégé). */
   missByZs: { zone: string; values: Record<string, number | null> }[];
+  /** Heatmap % enfants manqués AS × antigène (affichée quand une ZS/AS est filtrée). */
+  missByAire: { aire: string; zone: string | null; values: Record<string, number | null> }[];
   /** Raisons de non-possession de carte (triées). */
   reasonsCarte: ReasonCount[];
   /** Raisons de non vaccination (triées). */
   reasonsVacc: ReasonCount[];
   /** Détail par aire de santé pour les tableaux. */
   parAire: RcmAsRow[];
+  /**
+   * Couverture vaccinale RCM (enquête) par aire de santé pour les antigènes du
+   * tableau comparatif RCM vs DHIS2 : enfants vaccinés / enfants enquêtés
+   * éligibles × 100 (RR1/RR2 = VAR1/VAR2 dans certains exports).
+   */
+  cvParAire: {
+    name: string;
+    zone: string | null;
+    enfants: number;
+    cv: Record<"penta1" | "penta3" | "rr1" | "rr2", number | null>;
+  }[];
 }

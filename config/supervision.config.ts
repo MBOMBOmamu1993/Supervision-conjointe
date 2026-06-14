@@ -22,6 +22,13 @@ export interface KoboSource {
   label: string;
   assetUid: string;
   exportUid: string;
+  /**
+   * ANCIEN formulaire Kobo du même niveau (avant création du nouvel asset).
+   * Ses soumissions sont récupérées via l'API et fusionnées (dédoublonnage par
+   * _uuid) avec celles du nouvel asset — les anciennes données restent ainsi
+   * visibles dans le dashboard.
+   */
+  legacy?: { assetUid: string; exportUid?: string };
 }
 
 export const KOBO_BASE_URL = "https://eu.kobotoolbox.org";
@@ -33,7 +40,14 @@ export const KOBO_SOURCES: KoboSource[] = [
   { key: "antenne", label: "Checklist supervision Antenne PEV", assetUid: "axvaHRq3XGozr8o3z4wr5u", exportUid: "esTwbAKe5dn2FTAcbbagXL8" },
   { key: "zs", label: "Checklist supervision PEV — Zone de santé", assetUid: "axsB6RwiENF3FC2eZzsH3m", exportUid: "esTZSfTTAYYvcLtRbJdr6Jh" },
   // Centre de santé : NOUVEL asset (formulaire avec « Type de supervision »).
-  { key: "as", label: "Checklist supervision — Centre de santé", assetUid: "af5W55HqW8nPgqyC5jgALc", exportUid: "esiVtGnbm8cm2VKD2AR672n" },
+  // L'ANCIEN formulaire « Checklist supervision PEV — Centre de Santé — Tshuapa »
+  // (asset d'origine) est conservé en source legacy : ses soumissions sont
+  // récupérées via l'API et fusionnées avec celles du nouvel asset.
+  {
+    key: "as", label: "Checklist supervision — Centre de santé",
+    assetUid: "af5W55HqW8nPgqyC5jgALc", exportUid: "esiVtGnbm8cm2VKD2AR672n",
+    legacy: { assetUid: "ac8zZ9oE8VWoHXS3iSKRTQ", exportUid: "esNgSLpkCsawjAQXWtSgL6b" },
+  },
 ];
 
 /** Formulaires CQD (Contrôle Qualité des Données). */
@@ -42,6 +56,14 @@ export interface CqdSource {
   label: string;
   assetUid: string;
   exportUid: string;
+  /**
+   * ANCIEN formulaire de contrôle qualité du même niveau (asset d'origine,
+   * avant création du nouveau). Ses soumissions sont récupérées via l'API et
+   * fusionnées par _uuid — renseignable ici OU via les variables
+   * d'environnement KOBO_CQD_LEGACY_CS / KOBO_CQD_LEGACY_ZS
+   * (format : « assetUid » ou « assetUid:exportUid »).
+   */
+  legacy?: { assetUid: string; exportUid?: string };
 }
 export const CQD_SOURCES: CqdSource[] = [
   { key: "zs", label: "Contrôle qualité des données — Zone de santé", assetUid: "ajhW22rQEkVs39SuhBuwCC", exportUid: "es8g2L4gEfMbGCGADHyXVwR" },
@@ -69,6 +91,39 @@ export const RCM_SOURCE: RcmSource = {
 };
 export const rcmExportUrl = (base = KOBO_BASE_URL) => koboExportUrl(RCM_SOURCE, base);
 export const rcmDataUrl = (base = KOBO_BASE_URL) => koboDataUrl(RCM_SOURCE, base);
+
+/* ----------------------- Sources SAV (Semaine Africaine de Vaccination) ----------------------- */
+/**
+ * Les 5 formulaires KoboToolbox de la SAV (activité terminée → exports XLSX
+ * figés exhaustifs). Même projet / même token que le reste du dashboard.
+ */
+export interface SavSource { key: string; label: string; assetUid: string; exportUid: string; }
+
+export const SAV_SOURCES: SavSource[] = [
+  { key: "ident_cs",     label: "SAV — Identification EZD/ESV par Centre de santé", assetUid: "auKr7bzjsRNoohpveySTVA", exportUid: "esvjFiKSo7tfMQMcpxvrYga" },
+  { key: "ident_relais", label: "SAV — Identification EZD/ESV par relais",          assetUid: "asJpNSD7cpyqDyrkrUp7kL", exportUid: "esULo4gSfeEmuKBn4n3dgg5" },
+  { key: "resultats",    label: "SAV — Résultats vaccination par équipe",           assetUid: "akKgEGx4H4ngXpf6jecCnG", exportUid: "esVv8TpVCDXyWzDy5reV3LE" },
+  { key: "supervision",  label: "SAV — Supervision des équipes",                    assetUid: "aNbqyLNEssNK8SJjP5C52Z", exportUid: "esJpDYBSSBSB4GAFkxYWs4x" },
+  { key: "planif",       label: "SAV — Planification session de vaccination",       assetUid: "aTULFAgubcP55V7VsSbcer", exportUid: "esMPxESLfJK4Dsh4ediJdBb" },
+];
+
+/* ----------------------- Source Rapport mensuel + Évaluation des AT ----------------------- */
+/**
+ * Formulaire « Rapport mensuel des AT ». Source unique des onglets « Rapport
+ * mensuel des consultants » et « Évaluation des consultants » (collecte
+ * continue → synchronisation temps réel, TTL court).
+ */
+export interface AtSource { key: "at"; label: string; assetUid: string; exportUid: string; }
+export const AT_SOURCE: AtSource = {
+  key: "at",
+  label: "Rapport mensuel des AT et Évaluation",
+  assetUid: "avvVUwZZwkg24iz2Ztj3wi",
+  exportUid: "esJkyaePnnusbTbfLRZRpbk",
+};
+export const savExportUrl = (src: SavSource, base = KOBO_BASE_URL) => koboExportUrl(src, base);
+export const savDataUrl = (src: SavSource, base = KOBO_BASE_URL) => koboDataUrl(src, base);
+export const atExportUrl = (base = KOBO_BASE_URL) => koboExportUrl(AT_SOURCE, base);
+export const atDataUrl = (base = KOBO_BASE_URL) => koboDataUrl(AT_SOURCE, base);
 
 export function koboExportUrl(src: { assetUid: string; exportUid: string }, base = KOBO_BASE_URL): string {
   return `${base}/api/v2/assets/${src.assetUid}/export-settings/${src.exportUid}/data.xlsx`;
@@ -98,7 +153,7 @@ export const COMPOSANTES: Composante[] = [
     key: "planification",
     label: "Planification & gestion des ressources",
     short: "Planification & ressources",
-    tokens: ["planification", "plan", "docs", "document", "cdf", "chaine_froid", "froid", "gestion_vaccins", "vaccins", "gestion_dechets", "dechets", "securite_injections", "securite", "injection", "intrant", "logistique", "ressource"],
+    tokens: ["planification", "plan", "docs", "document", "cdf", "chaine_froid", "froid", "gestion_vaccins", "vaccins", "gestion_dechets", "dechets", "securite_injections", "securite", "injection", "intrant", "logistique", "ressource", "res"],
   },
   {
     key: "prestation",
@@ -199,6 +254,31 @@ export const COTATION_LABEL: Record<CotationLevel, string> = { tres_bon: "Très 
 export const COTATION_COLOR: Record<CotationLevel, string> = { tres_bon: "#1f9d57", bon: "#0093d5", moyen: "#f59e0b", faible: "#e23636" };
 export const COTATION_ORDER: CotationLevel[] = ["tres_bon", "bon", "moyen", "faible"];
 
+/* ------------------ Interprétation du score de conformité ------------------ */
+/**
+ * Échelle d'interprétation du SCORE DE CONFORMITÉ (note explicative du système
+ * de scorage — feedback TL p.5-6). Mêmes seuils que la cotation historique
+ * (80/60/40), mais libellés et couleurs propres à la page « Score de
+ * conformité » (vert / jaune / orange / rouge).
+ */
+export interface ConformiteClass {
+  key: "conforme" | "partiel" | "faible" | "non_conforme";
+  label: string;
+  min: number;
+  color: string;
+  desc: string;
+}
+export const CONFORMITE_CLASSES: ConformiteClass[] = [
+  { key: "conforme", label: "Conforme", min: 80, color: "#1f9d57", desc: "Les standards du PEV sont globalement respectés." },
+  { key: "partiel", label: "Partiellement conforme", min: 60, color: "#eab308", desc: "Plusieurs standards sont respectés, mais des améliorations restent nécessaires." },
+  { key: "faible", label: "Faible conformité", min: 40, color: "#f08c00", desc: "Le niveau de respect des standards est insuffisant et nécessite un appui rapproché." },
+  { key: "non_conforme", label: "Non conforme", min: 0, color: "#e23636", desc: "Les standards du PEV sont faiblement respectés et des actions correctrices prioritaires sont requises." },
+];
+export function conformiteFor(scorePct: number): ConformiteClass {
+  for (const c of CONFORMITE_CLASSES) if (scorePct >= c.min) return c;
+  return CONFORMITE_CLASSES[CONFORMITE_CLASSES.length - 1];
+}
+
 /* ----- Seuils CQD (complétude / promptitude / concordance) ----- */
 export const CQD_THRESHOLDS: { level: CotationLevel; label: string; min: number; color: string }[] = [
   { level: "tres_bon", label: "Très bon", min: 90, color: "#1f9d57" },
@@ -214,29 +294,36 @@ export function cqdAppreciation(pct: number | null): CotationLevel | null {
 
 /* ------------------------ Cibles attendues ------------------------ */
 /**
- * Dénominateurs « attendus » par mois (échelle provinciale), utilisés pour le
- * « % réalisé ». Ils sont multipliés par le nombre de mois de la période.
+ * Dénominateurs « attendus » (feedback Dr Léandre, 11/06/2026), exprimés en
+ * TAUX PAR UNITÉ GÉOGRAPHIQUE pour rester dynamiques quel que soit le filtre :
+ *  - auto-supervision : 1 par antenne par mois ;
+ *  - supervision conjointe PEV central-OMS : 1 par antenne par trimestre ;
+ *  - supervision conjointe (MCA/AT/ECZS) : 2 ZS par antenne par mois et
+ *    3 aires de santé par mois (soit 4 ZS et 6 aires pour la province
+ *    et ses 2 antennes) ;
+ *  - MCA seul : 1/3 de ses ZS par mois ;
+ *  - ECZS seul : TOUTES les aires de santé de la ZS par mois (dénominateur
+ *    dérivé de la hiérarchie provinciale, pas de constante).
+ * L'attendu d'une sélection = taux × nombre d'unités dans la sélection ×
+ * nombre de mois (ou trimestres) de la période filtrée.
  */
 export interface SupervisionTargets {
-  conjointe_pev_oms_per_month: number;
-  conjointe_antennes_per_month: number;
-  conjointe_zs_per_month: number;
-  conjointe_aires_per_month: number;
-  auto_eval_per_month: number;
-  mca_seul_per_month: number;
-  ecz_seul_per_month: number;
+  /** Conjointe PEV central-OMS : supervisions d'antenne par antenne et par trimestre. */
+  conjointe_pev_oms_antenne_per_trimestre: number;
+  /** Auto-supervision : par antenne et par mois. */
+  auto_eval_antenne_per_month: number;
+  /** Conjointe (équipe) : ZS supervisées par antenne et par mois. */
+  conjointe_zs_per_antenne_per_month: number;
+  /** Conjointe (équipe) : aires de santé supervisées par antenne et par mois (3/antenne → 6/province). */
+  conjointe_aires_per_antenne_per_month: number;
+  /** MCA seul : part de ses ZS à superviser chaque mois (1/3). */
+  mca_seul_zs_share_per_month: number;
 }
 
-/**
- * Valeurs provinciales par défaut (Tshuapa).
- * Province ≈ 2 antennes, ≈ 23 ZS, nombreuses aires.
- */
 export const SUPERVISION_TARGETS: SupervisionTargets = {
-  conjointe_pev_oms_per_month: 1 / 3,
-  conjointe_antennes_per_month: 2 / 3,
-  conjointe_zs_per_month: 4,
-  conjointe_aires_per_month: 12,
-  auto_eval_per_month: 2,
-  mca_seul_per_month: 8,
-  ecz_seul_per_month: 23,
+  conjointe_pev_oms_antenne_per_trimestre: 1,
+  auto_eval_antenne_per_month: 1,
+  conjointe_zs_per_antenne_per_month: 2,
+  conjointe_aires_per_antenne_per_month: 3,
+  mca_seul_zs_share_per_month: 1 / 3,
 };

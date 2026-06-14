@@ -35,6 +35,10 @@ export interface SupervisionRecord {
   answers: Record<AnswerValue, number>;
   /** Décompte des réponses par composante. */
   answersByComposante: Record<string, Record<AnswerValue, number>>;
+  /** Constats : commentaires/observations renseignés sur les questions notées. */
+  constats: { question: string; composante: string | null; answer: AnswerValue; text: string }[];
+  /** Recommandations (champs texte « recommand… » du formulaire). */
+  recommandations: string[];
 }
 
 export interface ScoreStat {
@@ -105,6 +109,12 @@ export interface TopNonItem {
 export interface LevelBundle {
   level: StructureLevel;
   records: number;
+  /**
+   * Décompte TOTAL des réponses du niveau (toutes questions notées du
+   * formulaire, y compris celles sans composante reconnue) — source du
+   * « Total questions administrées ».
+   */
+  answers: Record<AnswerValue, number>;
   score: ScoreStat;
   cotations: CotationDist[];
   perStructure: NamedScore[];
@@ -114,8 +124,16 @@ export interface LevelBundle {
   composantesMonthly: ComposanteMonthly[];
   trend: TrendPoint[];
   monthlyMatrix: MonthlyMatrixRow[];
+  /** % mensuel de réponses « Oui » par structure (lignes = org units, colonnes = mois). */
+  ouiMonthlyMatrix: { name: string; scores: Record<string, number | null> }[];
   topNon: TopNonItem[];
   radar: { entities: { name: string; values: number[] }[]; indicators: string[] };
+  /** Constats & recommandations par structure (page « Constats & recommandations »). */
+  constats: {
+    name: string;
+    constats: { question: string; composante: string | null; answer: AnswerValue; text: string }[];
+    recommandations: string[];
+  }[];
 }
 
 export interface KpiBlock {
@@ -144,6 +162,8 @@ export interface SupervisionBundle {
   };
   kpi: {
     antennes_total: KpiBlock;
+    /** Réalisation trimestrielle des antennes (cible : 2 / trimestre). */
+    antennes_trimestre: KpiBlock;
     zs_total: KpiBlock;
     as_total: KpiBlock;
     conjointe_pev_oms: KpiBlock;

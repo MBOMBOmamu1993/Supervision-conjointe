@@ -14,7 +14,18 @@ export const ENV = {
   KOBO_USERNAME: opt("KOBO_USERNAME"),
   KOBO_PASSWORD: opt("KOBO_PASSWORD"),
   CACHE_TTL_SECONDS: Number(opt("CACHE_TTL_SECONDS", "300")) || 300,
+  /** TTL court pour les onglets AT (collecte continue → temps réel). */
+  AT_CACHE_TTL_SECONDS: Number(opt("AT_CACHE_TTL_SECONDS", "60")) || 60,
+  /**
+   * ANCIENS formulaires de contrôle qualité (assets d'origine, avant création
+   * des nouveaux) — format « assetUid » ou « assetUid:exportUid ». Leurs
+   * soumissions sont fusionnées par _uuid avec celles des nouveaux assets.
+   */
+  CQD_LEGACY_CS: opt("KOBO_CQD_LEGACY_CS"),
+  CQD_LEGACY_ZS: opt("KOBO_CQD_LEGACY_ZS"),
   TARGETS_JSON: opt("SUPERVISION_TARGETS_JSON"),
+  /** URL CSV publiée du Google Sheet « BASE SAISIE DONNEES SAV » (optionnel). */
+  SAV_BASE_SAISIE_CSV_URL: opt("SAV_BASE_SAISIE_CSV_URL"),
 };
 
 /** Cibles attendues (mensuelles, échelle provinciale). Surchargeable via JSON. */

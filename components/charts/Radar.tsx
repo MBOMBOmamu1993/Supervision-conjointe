@@ -6,14 +6,17 @@ export default function Radar({
   indicators,
   entities,
   height = 300,
+  exportTitle,
 }: {
   indicators: string[];
   entities: { name: string; values: number[] }[];
   height?: number;
+  exportTitle?: string;
 }) {
   return (
     <EChart
       height={height}
+      exportTitle={exportTitle}
       option={{
         color: ["#0093d5", "#22b457", "#7c3aed", "#f29e0b", "#e23636", "#0f766e", "#db2777", "#65a30d"],
         tooltip: { trigger: "item" },

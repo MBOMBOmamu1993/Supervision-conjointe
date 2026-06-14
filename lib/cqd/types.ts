@@ -30,6 +30,10 @@ export interface CqdRecord {
   enfantsIdentifies: number;
   enfantsRetrouves: number;
   enfantsRecuperes: number;
+  /** Enfants manqués par antigène × tranche d'âge (si champs présents dans le formulaire). */
+  manquesAntigene: Record<string, { a0_11: number; a12_23: number; a24_59: number }> | null;
+  /** Liste des enfants manqués remise à l'équipe du CS (oui/non). */
+  listeRemise: boolean | null;
 }
 
 export interface ConcordanceStat {
@@ -75,6 +79,18 @@ export interface CqdLevelBundle {
   outils: { registre: number | null; pointage: number | null; snis: number | null };
   /** Enfants perdus de vue : identifiés / retrouvés / récupérés (%). */
   enfants: { aRecuperer: number; identifies: number; retrouves: number; recuperes: number; tauxRecuperes: number | null };
+  /**
+   * Enfants manqués par antigène × tranche d'âge (0–11 · 12–23 · 24–59 mois),
+   * par structure — `available` est faux si le formulaire CQD n'expose pas
+   * (encore) les champs antigène × âge.
+   */
+  manquesParAntigene: {
+    available: boolean;
+    antigenes: string[];
+    structures: { name: string; values: Record<string, { a0_11: number; a12_23: number; a24_59: number }> }[];
+  };
+  /** % des listes d'enfants manqués remises aux équipes des centres de santé. */
+  listesRemisesPct: number | null;
   /** Comparaison des antigènes (sommes) entre sources. */
   antigenes: { antigene: string; registre: number; pointage: number; snis: number; dhis2: number }[];
   /** Concordance DHIS2/référence et erreur SNIS↔DHIS2 par antigène (%). */
@@ -106,6 +122,30 @@ export interface CqdLevelBundle {
     snisRegistre: CqdConcordanceAS[];
     registrePointage: CqdConcordanceAS[];
     dhis2Snis: CqdConcordanceAS[];
+  };
+  /**
+   * Comparaison des indicateurs de contrôle qualité PAR STRUCTURE (page
+   * « Comparaison par structure » — maquette Dr Léandre, 12/06/2026) :
+   * écart moyen (absolu, définition n°2) et facteur de vérification par
+   * antigène, taux d'erreur unique par structure.
+   * Référence : registre (niveau CS) · SNIS (niveau ZS).
+   */
+  comparaison: {
+    /** Outil de référence (libellé). */
+    reference: string;
+    /** Outils comparés (libellé). */
+    compares: string;
+    ecartMoyenGlobal: number | null;
+    fvMoyenGlobal: number | null;
+    erreurMoyenneGlobale: number | null;
+    structures: {
+      name: string;
+      ecart: { p1: number | null; p3: number | null; rr1: number | null; rr2: number | null; total: number | null };
+      fv: { p1: number | null; p3: number | null; rr1: number | null; rr2: number | null; moyen: number | null };
+      erreur: number | null;
+    }[];
+    /** Structures prioritaires (taux d'erreur puis écart les plus élevés). */
+    prioritaires: string[];
   };
   /** Détail par structure (concordance + erreur + outils + enfants). */
   parStructure: {

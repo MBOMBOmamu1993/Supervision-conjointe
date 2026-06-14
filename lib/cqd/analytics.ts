@@ -12,9 +12,12 @@
  * avec repli sur des libellés. Niveau AS : noms plats (total_*, registre_*…).
  * Niveau ZS : champs de somme s_snis_* / s_dhis2_* (totaux des 3 aires).
  */
-import { norm, findColumn, getColumns } from "@/lib/supervision/schema";
+import { norm, findColumns, getColumns } from "@/lib/supervision/schema";
 import { resolveTypeLabel } from "@/lib/supervision/schema";
-import { canonAntenne } from "@/lib/geo";
+import {
+  antenneOfZone, canonAntenne, zoneOfAire,
+  prettifyName, cleanStructureName, snapToKnown, isKnownZone, isKnownAire,
+} from "@/lib/geo";
 import type { CqdFetch } from "@/lib/supervision/kobo-client";
 import type { RawRow } from "@/lib/supervision/types";
 import type {
@@ -75,29 +78,6 @@ function boolFr(v: unknown): boolean | null {
   return null;
 }
 
-/** Met en forme un nom de structure : « lofima 2 » → « Lofima 2 ». */
-function prettifyName(s: string): string {
-  return s
-    .split(/[_\s]+/)
-    .filter(Boolean)
-    .map((w) => (/^\d+$/.test(w) ? w : w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()))
-    .join(" ");
-}
-
-/**
- * Nettoie un nom de centre/aire encodé « aire_zs_antenne » (valeurs XML Kobo)
- * en retirant les segments terminaux correspondant à la ZS et à l'antenne, puis
- * met le résultat en forme. Ex. « lofima_2_bokungu_bokungu » → « Lofima 2 ».
- */
-function cleanStructureName(raw: string | null, zone: string | null, antenne: string | null): string | null {
-  if (!raw) return raw;
-  const suffixes = new Set([zone, antenne].filter((x): x is string => !!x).map((x) => norm(x)));
-  const parts = raw.split("_").filter(Boolean);
-  while (parts.length > 1 && suffixes.has(norm(parts[parts.length - 1]))) parts.pop();
-  const cleaned = prettifyName(parts.join("_"));
-  return cleaned || prettifyName(raw);
-}
-
 function classify(taux: number | null): ConcordanceClass {
   if (taux === null) return "na";
   if (taux < 95) return "sous";
@@ -105,21 +85,110 @@ function classify(taux: number | null): ConcordanceClass {
   return "normal";
 }
 
-/** Première colonne existante parmi des candidats (nom technique exact prioritaire). */
-function col(columns: string[], candidates: string[]): string | null {
-  for (const c of candidates) if (columns.includes(c)) return c;
-  return findColumn(columns, candidates);
+/**
+ * TOUTES les colonnes candidates pour un champ (noms techniques exacts
+ * prioritaires, puis correspondances normalisées). Les exports des différentes
+ * VERSIONS d'un même formulaire Kobo nomment différemment le même champ
+ * (aplati, préfixé par groupe, libellé français) : la lecture se fait ensuite
+ * ligne par ligne sur la première colonne renseignée, pour ne perdre aucune
+ * ancienne soumission.
+ */
+function cols(columns: string[], candidates: string[]): string[] {
+  const exact = candidates.filter((c) => columns.includes(c));
+  const fuzzy = findColumns(columns, candidates);
+  const out: string[] = [];
+  for (const c of [...exact, ...fuzzy]) if (!out.includes(c)) out.push(c);
+  return out;
+}
+
+/** Valeur de la première colonne candidate renseignée sur la ligne. */
+function pickRow(row: RawRow, candidates: string[]): unknown {
+  for (const c of candidates) {
+    const v = row[c];
+    if (v !== null && v !== undefined && String(v).trim() !== "") return v;
+  }
+  return null;
+}
+
+/* ---------- Enfants manqués par antigène × tranche d'âge (feedback TL) ---------- */
+
+/** Antigènes du tableau « enfants manqués par antigène » (ordre du feedback). */
+export const MISSED_ANTIGENS: { label: string; tokens: string[] }[] = [
+  { label: "BCG", tokens: ["bcg"] },
+  { label: "VPO1", tokens: ["vpo1", "opv1"] },
+  { label: "VPO2", tokens: ["vpo2", "opv2"] },
+  { label: "VPO3", tokens: ["vpo3", "opv3"] },
+  { label: "PENTA1", tokens: ["penta1", "dtc1"] },
+  { label: "PENTA2", tokens: ["penta2", "dtc2"] },
+  { label: "PENTA3", tokens: ["penta3", "dtc3"] },
+  { label: "PCV1", tokens: ["pcv13_1", "pcv1"] },
+  { label: "PCV2", tokens: ["pcv13_2", "pcv2"] },
+  { label: "PCV3", tokens: ["pcv13_3", "pcv3"] },
+  { label: "ROTA1", tokens: ["rota1"] },
+  { label: "ROTA2", tokens: ["rota2"] },
+  { label: "ROTA3", tokens: ["rota3"] },
+  { label: "VPI1", tokens: ["vpi1", "vpi_1", "ipv1"] },
+  { label: "VPI2", tokens: ["vpi2", "vpi_2", "ipv2"] },
+  { label: "VAA", tokens: ["vaa", "yf"] },
+  { label: "RR1", tokens: ["rr1", "var1"] },
+  { label: "RR2", tokens: ["rr2", "var2"] },
+  { label: "VAP1", tokens: ["vap1", "hpv1"] },
+  { label: "VAP2", tokens: ["vap2", "hpv2"] },
+  { label: "VAP3", tokens: ["vap3", "hpv3"] },
+  { label: "VAP4", tokens: ["vap4", "hpv4"] },
+];
+const AGE_KEYS = ["a0_11", "a12_23", "a24_59"] as const;
+const AGE_TOKENS: Record<(typeof AGE_KEYS)[number], string[]> = {
+  a0_11: ["0_11", "0a11", "0 11"],
+  // « 12_24 » : coquille du formulaire CQD CS (VPO3_12_24_mois) pour 12–23 mois.
+  a12_23: ["12_23", "12a23", "12 23", "12_24"],
+  a24_59: ["24_59", "24a59", "24 59"],
+};
+
+/**
+ * Détecte les colonnes « enfants manqués » antigène × âge du formulaire CQD :
+ * la feuille du nom doit contenir un jeton d'antigène ET un jeton d'âge ; les
+ * colonnes contenant « manq »/« enfant » sont prioritaires en cas d'ambiguïté.
+ * Renvoie null si AUCUNE paire n'est trouvée (champs pas encore au formulaire).
+ */
+function detectMissedAntigenColumns(columns: string[]): Map<string, Partial<Record<(typeof AGE_KEYS)[number], string>>> | null {
+  const leafN = (c: string) => norm(c.slice(c.lastIndexOf("/") + 1)).replace(/ /g, "_");
+  const out = new Map<string, Partial<Record<(typeof AGE_KEYS)[number], string>>>();
+  let found = 0;
+  for (const ag of MISSED_ANTIGENS) {
+    for (const ageKey of AGE_KEYS) {
+      let best: string | null = null;
+      let bestScore = -1;
+      for (const c of columns) {
+        const n = leafN(c);
+        if (!ag.tokens.some((t) => n.includes(t))) continue;
+        if (!AGE_TOKENS[ageKey].some((t) => n.includes(t.replace(/ /g, "_")))) continue;
+        const score = (n.includes("manq") ? 2 : 0) + (n.includes("enfant") ? 1 : 0);
+        if (score > bestScore) { bestScore = score; best = c; }
+      }
+      if (best) {
+        if (!out.has(ag.label)) out.set(ag.label, {});
+        out.get(ag.label)![ageKey] = best;
+        found++;
+      }
+    }
+  }
+  return found > 0 ? out : null;
 }
 
 function buildRecords(src: CqdFetch): CqdRecord[] {
   const rows = src.rows;
   const columns = getColumns(rows);
-  const c = (cands: string[]) => col(columns, cands);
+  // Chaque champ est résolu vers TOUTES ses colonnes candidates (les formats de
+  // colonnes des différentes versions du formulaire cohabitent dans un même jeu
+  // de lignes) ; la valeur est lue ligne par ligne sur la première renseignée.
+  const c = (cands: string[]) => cols(columns, cands);
 
   const province = c(["province", "liste_province"]);
   const antenne = c(["antenne", "liste_antenne"]);
   const zone = c(["zone_sante", "zone de sante", "zone"]);
   const aire = c(["aire_sante", "aire de sante", "aire"]);
+  const aireAutre = c(["aire_sante_autre", "preciser l autre aire"]);
   const ess = c(["ess", "nom_ess", "etablissement"]);
   const dateCol = c(["date_supervision", "date de supervision", "date", "today", "end"]);
   const typeCol = c(["Type_de_supervision", "type de supervision", "type_supervision"]);
@@ -146,30 +215,49 @@ function buildRecords(src: CqdFetch): CqdRecord[] {
   const eIdent = c(["nb_enfants_identifies_precedemment", "enfants_identifies_precedemment"]);
   const eRetr = c(["nb_enfants_retrouves_relais", "enfants_retrouves_relais"]);
   const eRecup = c(["nb_enfants_effectivement_recuperes", "enfants_effectivement_recuperes"]);
+  // Enfants manqués par antigène × âge + remise des listes aux équipes CS.
+  const missedCols = detectMissedAntigenColumns(columns);
+  const listeRemiseCol = columns.find((cc) => {
+    const n = norm(cc.slice(cc.lastIndexOf("/") + 1));
+    return n.includes("liste") && (n.includes("remis") || n.includes("transmis"));
+  }) ?? null;
 
-  const grab = (row: RawRow, cc: { p1: string | null; p3: string | null; rr1: string | null; rr2: string | null }) => ({
-    p1: cc.p1 ? num(row[cc.p1]) : 0,
-    p3: cc.p3 ? num(row[cc.p3]) : 0,
-    rr1: cc.rr1 ? num(row[cc.rr1]) : 0,
-    rr2: cc.rr2 ? num(row[cc.rr2]) : 0,
+  const grab = (row: RawRow, cc: { p1: string[]; p3: string[]; rr1: string[]; rr2: string[] }) => ({
+    p1: num(pickRow(row, cc.p1)),
+    p3: num(pickRow(row, cc.p3)),
+    rr1: num(pickRow(row, cc.rr1)),
+    rr2: num(pickRow(row, cc.rr2)),
   });
 
   return rows.map((row, i) => {
-    const z = zone ? str(row[zone]) : null;
-    const a = aire ? str(row[aire]) : null;
-    const e = ess ? str(row[ess]) : null;
-    const an = antenne ? str(row[antenne]) : null;
-    const rawStruct = src.key === "zs" ? z : (a ?? e);
-    const structure = cleanStructureName(rawStruct, z, an);
+    const z = str(pickRow(row, zone));
+    // AS « Autre à préciser » : le nom réel est dans le champ texte dédié.
+    const aSel = str(pickRow(row, aire));
+    const aAutre = str(pickRow(row, aireAutre));
+    const a = aSel && norm(aSel).startsWith("autre") && aAutre ? aAutre : aSel;
+    const e = str(pickRow(row, ess));
+    const an = str(pickRow(row, antenne));
     // Libellés géographiques nettoyés (retrait des suffixes parents encodés
     // « aire_zs_antenne », mise en forme) → filtres sans doublon ni nom collé
     // au parent par underscore/tiret. Les filtres et le prédicat pass()
     // s'appuient sur ces mêmes valeurs : la concordance reste garantie.
-    const provRaw = province ? str(row[province]) : null;
+    const provRaw = str(pickRow(row, province));
     const provClean = provRaw ? prettifyName(provRaw) : null;
-    const anClean = an ? prettifyName(canonAntenne(an) ?? an) : null;
-    const zoneClean = cleanStructureName(z, null, an);
-    const aireClean = cleanStructureName(a, z, an);
+    let anClean = an ? prettifyName(canonAntenne(an) ?? an) : null;
+    let zoneClean = snapToKnown(cleanStructureName(z, null, an), isKnownZone);
+    const aireClean = snapToKnown(cleanStructureName(a, z, an), isKnownAire);
+    // Rattachement hiérarchique statique (AS → ZS → antenne, base État de
+    // lieux) : corrige les ZS dont l'encodage n'a pas pu être résolu et
+    // complète les parents manquants — garantit le matching des filtres
+    // (ex. ZS Boende et ses aires de santé au contrôle qualité CS). Au niveau
+    // ZS, le champ « aire » agrège plusieurs aires : pas de rattachement par aire.
+    const parent = src.key === "as" ? zoneOfAire(aireClean) : null;
+    if (parent) {
+      if (!zoneClean || !isKnownZone(zoneClean)) zoneClean = parent.zone;
+      if (!anClean) anClean = parent.antenne;
+    }
+    if (zoneClean && !anClean) anClean = antenneOfZone(zoneClean);
+    const structure = src.key === "zs" ? zoneClean : (aireClean ?? cleanStructureName(e, z, an));
     return {
       id: `cqd-${src.key}-${i}`,
       level: src.key,
@@ -177,32 +265,54 @@ function buildRecords(src: CqdFetch): CqdRecord[] {
       antenne: anClean,
       zone: zoneClean,
       aire: aireClean,
-      structure: structure ?? `${src.key.toUpperCase()} ${i + 1}`,
-      month: normalizeCqdMonth(dateCol ? toMonth(row[dateCol]) : null),
-      typeLabel: typeCol ? resolveTypeLabel(row[typeCol]) : resolveTypeLabel(null),
+      structure: structure ?? null,
+      month: normalizeCqdMonth(toMonth(pickRow(row, dateCol))),
+      typeLabel: resolveTypeLabel(pickRow(row, typeCol)),
       registre: grab(row, reg),
       pointage: grab(row, poi),
       snis: grab(row, sni),
       dhis2: grab(row, dhi),
-      nbValeursVerifiees: nbVerif ? num(row[nbVerif]) : 0,
-      nbDiscordSnisDhis2: nbDiscSD ? num(row[nbDiscSD]) : 0,
-      nbDiscordPointageRegistre: nbDiscPR ? num(row[nbDiscPR]) : 0,
-      registreCorrect: regCorrect ? boolFr(row[regCorrect]) : null,
-      pointageCorrect: poiCorrect ? boolFr(row[poiCorrect]) : null,
-      snisCorrect: sniCorrect ? boolFr(row[sniCorrect]) : null,
-      enfantsARecuperer: eARec ? num(row[eARec]) : 0,
-      enfantsIdentifies: eIdent ? num(row[eIdent]) : 0,
-      enfantsRetrouves: eRetr ? num(row[eRetr]) : 0,
-      enfantsRecuperes: eRecup ? num(row[eRecup]) : 0,
+      nbValeursVerifiees: num(pickRow(row, nbVerif)),
+      nbDiscordSnisDhis2: num(pickRow(row, nbDiscSD)),
+      nbDiscordPointageRegistre: num(pickRow(row, nbDiscPR)),
+      registreCorrect: boolFr(pickRow(row, regCorrect)),
+      pointageCorrect: boolFr(pickRow(row, poiCorrect)),
+      snisCorrect: boolFr(pickRow(row, sniCorrect)),
+      enfantsARecuperer: num(pickRow(row, eARec)),
+      enfantsIdentifies: num(pickRow(row, eIdent)),
+      enfantsRetrouves: num(pickRow(row, eRetr)),
+      enfantsRecuperes: num(pickRow(row, eRecup)),
+      manquesAntigene: missedCols
+        ? (() => {
+            const m: Record<string, { a0_11: number; a12_23: number; a24_59: number }> = {};
+            for (const [label, cols] of missedCols.entries()) {
+              m[label] = {
+                a0_11: cols.a0_11 ? num(row[cols.a0_11]) : 0,
+                a12_23: cols.a12_23 ? num(row[cols.a12_23]) : 0,
+                a24_59: cols.a24_59 ? num(row[cols.a24_59]) : 0,
+              };
+            }
+            return m;
+          })()
+        : null,
+      listeRemise: listeRemiseCol ? boolFr(row[listeRemiseCol]) : null,
     };
   });
 }
 
 function pass(r: CqdRecord, f: CqdFilters): boolean {
+  // STRICT sur antenne / zone / aire : un enregistrement dont le niveau
+  // demandé est illisible (null) ne doit PAS « passer » tous les filtres —
+  // sinon il est compté dans toutes les sélections et fausse les agrégats.
   if (f.province && r.province && norm(r.province) !== norm(f.province)) return false;
-  if (f.antenne && r.antenne && norm(canonAntenne(r.antenne) ?? "") !== norm(canonAntenne(f.antenne) ?? "")) return false;
-  if (f.zone && r.zone && norm(r.zone) !== norm(f.zone)) return false;
-  if (f.aire && r.aire && norm(r.aire) !== norm(f.aire)) return false;
+  if (f.antenne && norm(canonAntenne(r.antenne) ?? "") !== norm(canonAntenne(f.antenne) ?? "")) return false;
+  if (f.zone && norm(r.zone ?? "") !== norm(f.zone)) {
+    // Repli hiérarchique : une AS dont la ZS encodée n'a pas pu être résolue
+    // reste rattachée à sa ZS canonique via la hiérarchie provinciale.
+    const p = zoneOfAire(r.aire);
+    if (!p || norm(p.zone) !== norm(f.zone)) return false;
+  }
+  if (f.aire && norm(r.aire ?? "") !== norm(f.aire)) return false;
   if (f.months && f.months.length && (!r.month || !f.months.includes(r.month))) return false;
   if (f.types && f.types.length && (!r.typeLabel || !f.types.some((t) => norm(t) === norm(r.typeLabel)))) return false;
   return true;
@@ -295,12 +405,13 @@ function buildLevel(level: "zs" | "as", records: CqdRecord[]): CqdLevelBundle {
       };
     });
 
-  // Détail par structure.
+  // Détail par structure — les enregistrements sans nom de structure lisible
+  // restent dans les agrégats globaux mais ne créent PAS de fausse ligne.
   const byStruct = new Map<string, CqdRecord[]>();
   for (const r of records) {
-    const name = r.structure ?? "—";
-    if (!byStruct.has(name)) byStruct.set(name, []);
-    byStruct.get(name)!.push(r);
+    if (!r.structure) continue;
+    if (!byStruct.has(r.structure)) byStruct.set(r.structure, []);
+    byStruct.get(r.structure)!.push(r);
   }
   const firstBool = (recs: CqdRecord[], pick: (r: CqdRecord) => boolean | null): boolean | null => {
     for (const r of recs) { const v = pick(r); if (v !== null) return v; }
@@ -403,6 +514,85 @@ function buildLevel(level: "zs" | "as", records: CqdRecord[]): CqdLevelBundle {
     dhis2Snis: buildConcTable((r) => r.dhis2, (r) => r.snis),
   };
 
+  // ---- Comparaison des indicateurs PAR STRUCTURE (maquette Dr Léandre) ----
+  // Niveau CS : référence = registre de vaccination, outils comparés = fiche de
+  // pointage + canevas SNIS (FV = SNIS/registre). Niveau ZS : référence = SNIS,
+  // outil comparé = DHIS2 (FV = DHIS2/SNIS). Écart moyen ABSOLU (définition
+  // n°2 : Σ |outil − référence| / nombre d'outils comparés).
+  const isAs = level === "as";
+  const cmpStructures = Array.from(byStruct.entries())
+    .map(([name, recs]) => {
+      const s = (src: (r: CqdRecord) => Antigen4, k: keyof Antigen4) => recs.reduce((a, r) => a + src(r)[k], 0);
+      const perAnt = (k: keyof Antigen4) => {
+        const ref = isAs ? s((r) => r.registre, k) : s((r) => r.snis, k);
+        const comps = isAs ? [s((r) => r.pointage, k), s((r) => r.snis, k)] : [s((r) => r.dhis2, k)];
+        const controlled = ref > 0 || comps.some((x) => x > 0);
+        const ecart = controlled ? r1(comps.reduce((a, x) => a + Math.abs(x - ref), 0) / comps.length) : null;
+        const verif = isAs ? s((r) => r.snis, k) : s((r) => r.dhis2, k);
+        const fv = ref > 0 ? r1((verif / ref) * 100) : null;
+        return { ecart, fv };
+      };
+      const v = { p1: perAnt("p1"), p3: perAnt("p3"), rr1: perAnt("rr1"), rr2: perAnt("rr2") };
+      const ecarts = ANTIGEN_KEYS.map((k) => v[k].ecart).filter((x): x is number => x !== null);
+      const fvs = ANTIGEN_KEYS.map((k) => v[k].fv).filter((x): x is number => x !== null);
+      return {
+        name,
+        ecart: {
+          p1: v.p1.ecart, p3: v.p3.ecart, rr1: v.rr1.ecart, rr2: v.rr2.ecart,
+          total: ecarts.length ? r1(ecarts.reduce((a, x) => a + x, 0)) : null,
+        },
+        fv: {
+          p1: v.p1.fv, p3: v.p3.fv, rr1: v.rr1.fv, rr2: v.rr2.fv,
+          moyen: fvs.length ? r1(fvs.reduce((a, x) => a + x, 0) / fvs.length) : null,
+        },
+        erreur: isAs ? errRegistreSnis(recs) : errSnisDhis2(recs),
+      };
+    })
+    .sort((a, b) => a.name.localeCompare(b.name));
+  const mean = (xs: (number | null)[]) => {
+    const v = xs.filter((x): x is number => x !== null);
+    return v.length ? r1(v.reduce((a, x) => a + x, 0) / v.length) : null;
+  };
+  const comparaison = {
+    reference: isAs ? "Registre de vaccination" : "Canevas SNIS",
+    compares: isAs ? "Fiche de pointage · Canevas SNIS" : "DHIS2",
+    ecartMoyenGlobal: mean(cmpStructures.map((x) => x.ecart.total)),
+    fvMoyenGlobal: mean(cmpStructures.map((x) => x.fv.moyen)),
+    erreurMoyenneGlobale: isAs ? errRegistreSnis(records) : errSnisDhis2(records),
+    structures: cmpStructures,
+    prioritaires: [...cmpStructures]
+      .filter((x) => x.erreur !== null || x.ecart.total !== null)
+      .sort((a, b) => (b.erreur ?? -1) - (a.erreur ?? -1) || (b.ecart.total ?? -1) - (a.ecart.total ?? -1))
+      .slice(0, 3)
+      .map((x) => x.name),
+  };
+
+  // Enfants manqués par antigène × âge, par structure (si champs présents).
+  const withMissed = records.filter((r) => r.manquesAntigene !== null);
+  const missedAntigenes = MISSED_ANTIGENS.map((a) => a.label);
+  const manquesParAntigene = {
+    available: withMissed.length > 0,
+    antigenes: missedAntigenes,
+    structures: withMissed.length
+      ? Array.from(byStruct.entries())
+          .map(([name, recs]) => {
+            const values: Record<string, { a0_11: number; a12_23: number; a24_59: number }> = {};
+            for (const label of missedAntigenes) {
+              const acc = { a0_11: 0, a12_23: 0, a24_59: 0 };
+              for (const r of recs) {
+                const v = r.manquesAntigene?.[label];
+                if (v) { acc.a0_11 += v.a0_11; acc.a12_23 += v.a12_23; acc.a24_59 += v.a24_59; }
+              }
+              values[label] = acc;
+            }
+            return { name, values };
+          })
+          .sort((a, b) => a.name.localeCompare(b.name))
+      : [],
+  };
+  const listesVals = records.map((r) => r.listeRemise).filter((v): v is boolean => v !== null);
+  const listesRemisesPct = listesVals.length ? r1((listesVals.filter(Boolean).length / listesVals.length) * 100) : null;
+
   return {
     level,
     records: records.length,
@@ -424,6 +614,8 @@ function buildLevel(level: "zs" | "as", records: CqdRecord[]): CqdLevelBundle {
       recuperes: eRecup,
       tauxRecuperes: eIdent > 0 ? r1((eRecup / eIdent) * 100) : null,
     },
+    manquesParAntigene,
+    listesRemisesPct,
     antigenes: [
       { antigene: "PENTA1", registre: sumOf((r) => r.registre.p1), pointage: sumOf((r) => r.pointage.p1), snis: sumOf((r) => r.snis.p1), dhis2: sumOf((r) => r.dhis2.p1) },
       { antigene: "PENTA3", registre: regP3, pointage: sumOf((r) => r.pointage.p3), snis: snisP3, dhis2: dhis2P3 },
@@ -452,6 +644,7 @@ function buildLevel(level: "zs" | "as", records: CqdRecord[]): CqdLevelBundle {
       });
     })(),
     csConcordance,
+    comparaison,
     trend,
     parStructure,
   };

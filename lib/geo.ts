@@ -89,21 +89,246 @@ export function canonTuples(tuples: GeoTuple[]): GeoTuple[] {
   }));
 }
 
+/* ----- Rattachement hiérarchique statique (base État de lieux Tshuapa) ----- */
+// Les formulaires Kobo ne renseignent pas toujours les niveaux parents (ex.
+// l'antenne d'une soumission ZS). On complète via la hiérarchie provinciale
+// connue : ZS → antenne et AS → ZS. Les clés sont normalisées (casse/accents).
+// NB : il existe une *antenne* « Boende » ET une *ZS* « Boende » — le
+// rattachement se fait toujours du niveau enfant vers le parent, jamais par
+// égalité de nom, pour éviter toute collision.
+import { EDL } from "@/data/edl-data";
+
+let _zsToAntenne: Map<string, string> | null = null;
+let _asToZs: Map<string, { zone: string; antenne: string }> | null = null;
+
+function zsToAntenneMap(): Map<string, string> {
+  if (!_zsToAntenne) {
+    _zsToAntenne = new Map();
+    for (const z of EDL.zsPop) _zsToAntenne.set(norm(z.zs), canonAntenne(z.antenne) ?? z.antenne);
+  }
+  return _zsToAntenne;
+}
+function asToZsMap(): Map<string, { zone: string; antenne: string }> {
+  if (!_asToZs) {
+    _asToZs = new Map();
+    for (const a of EDL.asPop) {
+      const key = norm(a.as);
+      const parent = { zone: a.zs, antenne: canonAntenne(a.antenne) ?? a.antenne };
+      // En cas d'homonymie d'AS entre ZS, on garde la première occurrence.
+      if (!_asToZs.has(key)) _asToZs.set(key, parent);
+      // La base État de lieux préfixe les aires « AS Iyongo » alors que les
+      // formulaires Kobo utilisent le nom nu (« Iyongo ») : on indexe les deux.
+      const bare = key.replace(/^as /, "");
+      if (bare && !_asToZs.has(bare)) _asToZs.set(bare, parent);
+    }
+  }
+  return _asToZs;
+}
+
+/** Antenne de rattachement d'une ZS (hiérarchie provinciale statique). */
+export function antenneOfZone(zone: string | null | undefined): string | null {
+  if (!zone) return null;
+  return zsToAntenneMap().get(norm(zone)) ?? null;
+}
+
+/** ZS (et antenne) de rattachement d'une aire de santé. */
+export function zoneOfAire(aire: string | null | undefined): { zone: string; antenne: string } | null {
+  if (!aire) return null;
+  return asToZsMap().get(norm(aire)) ?? null;
+}
+
 /**
- * Options en cascade : chaque niveau est restreint par les niveaux parents
- * déjà sélectionnés. Les listes sont dédoublonnées.
+ * Aires de santé d'une ZS d'après la hiérarchie provinciale (base État de
+ * lieux), en libellés d'affichage (préfixe « AS » retiré). Sert à proposer la
+ * liste complète des aires d'une ZS dans les sélecteurs, même lorsque certaines
+ * aires n'ont pas encore de données.
+ */
+export function airesOfZone(zone: string | null | undefined): string[] {
+  if (!zone) return [];
+  const key = norm(zone);
+  return EDL.asPop
+    .filter((a) => norm(a.zs) === key)
+    .map((a) => a.as.replace(/^AS\s+/i, "").trim())
+    .filter(Boolean)
+    .sort((a, b) => a.localeCompare(b, "fr"));
+}
+
+/**
+ * Nombre d'unités géographiques (antennes / ZS / aires de santé) couvertes par
+ * une sélection de filtres, d'après la hiérarchie provinciale (base État de
+ * lieux). Sert de base aux DÉNOMINATEURS « attendus » dynamiques : l'attendu
+ * d'une sélection = taux par unité × unités dans la sélection × mois.
+ */
+export function geoScopeCounts(sel: GeoSelection): { antennes: number; zones: number; aires: number } {
+  const selAntenne = canonAntenne(sel.antenne ?? null);
+  const zones = EDL.zsPop.filter(
+    (z) => (!selAntenne || eqGeo(canonAntenne(z.antenne), selAntenne)) && (!sel.zone || eqGeo(z.zs, sel.zone))
+  );
+  const bareAs = (s: string) => s.replace(/^AS\s+/i, "").trim();
+  const aires = EDL.asPop.filter(
+    (a) =>
+      (!selAntenne || eqGeo(canonAntenne(a.antenne), selAntenne)) &&
+      (!sel.zone || eqGeo(a.zs, sel.zone)) &&
+      (!sel.aire || eqGeo(bareAs(a.as), sel.aire) || eqGeo(a.as, sel.aire))
+  );
+  const antennes = selAntenne
+    ? 1
+    : new Set(EDL.zsPop.map((z) => norm(canonAntenne(z.antenne) ?? "")).filter(Boolean)).size;
+  return { antennes, zones: zones.length, aires: aires.length };
+}
+
+/* ----- Nettoyage des libellés encodés Kobo (valeurs XML) ----- */
+
+/**
+ * Normalisation TOKENISANTE pour la comparaison de segments encodés : les
+ * codes XML Kobo séparent par underscore (« monkoto_boende ») — tout caractère
+ * non alphanumérique devient un séparateur (contrairement à `norm` ci-dessus
+ * qui ne réduit que les espaces).
+ */
+function tokNorm(s: string | null | undefined): string {
+  return stripAccents((s ?? "").toLowerCase()).replace(/[^a-z0-9]+/g, " ").trim();
+}
+
+/** Met en forme un nom de structure : « lofima 2 » → « Lofima 2 ». */
+export function prettifyName(s: string): string {
+  return s
+    .split(/[_\s]+/)
+    .filter(Boolean)
+    .map((w) => (/^\d+$/.test(w) ? w : w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()))
+    .join(" ");
+}
+
+/**
+ * Nettoie un nom de centre/aire encodé « aire_zs_antenne » (valeurs XML Kobo)
+ * en retirant les SÉQUENCES terminales de segments correspondant à la ZS puis à
+ * l'antenne, puis met le résultat en forme. La ZS est elle-même encodée
+ * « zs_antenne » (plusieurs segments) : on compare donc des séquences, pas des
+ * segments isolés. Ex. « iyongo_monkoto_boende » (ZS « monkoto_boende »,
+ * antenne « boende ») → « Iyongo » ; « lofima_2_bokungu_bokungu » → « Lofima 2 ».
+ */
+export function cleanStructureName(raw: string | null, zone: string | null, antenne: string | null): string | null {
+  if (!raw) return raw;
+  let parts = raw.split("_").filter(Boolean);
+  const parentSeqs = [zone, antenne]
+    .filter((p): p is string => !!p)
+    .map((p) => tokNorm(p).split(" ").filter(Boolean))
+    .filter((seq) => seq.length > 0);
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (const seq of parentSeqs) {
+      if (parts.length > seq.length && seq.every((tok, k) => tokNorm(parts[parts.length - seq.length + k]) === tok)) {
+        parts = parts.slice(0, parts.length - seq.length);
+        changed = true;
+      }
+    }
+  }
+  const cleaned = prettifyName(parts.join("_"));
+  return cleaned || prettifyName(raw);
+}
+
+/**
+ * Nettoie un nom d'unité d'organisation DHIS2/SNIS (repo snis-vaccination-api).
+ * Ces libellés suivent la convention « tu <Nom> <Niveau> » avec un préfixe de
+ * province (« tu ») et un suffixe de niveau (« Aire de Santé », « Zone de
+ * Santé », « Centre de Santé », « Antenne », « Province »). On retire le préfixe
+ * et le suffixe pour retrouver le nom nu, harmonisé avec l'orthographe de la
+ * base État de lieux (filtres). Ex. « tu Anzi Aire de Santé » → « Anzi » ;
+ * « tu Boende Zone de Santé » → « Boende ».
+ */
+export function cleanDhis2OrgUnit(raw: string | null | undefined): string | null {
+  if (raw == null) return null;
+  let s = String(raw).trim();
+  if (!s) return null;
+  s = s.replace(/^tu\s+/i, "");                                   // préfixe province
+  s = s.replace(/\s+(aire|zone|centre)\s+de\s+sant[eé]\s*$/i, ""); // suffixe niveau
+  s = s.replace(/\s+antenne(\s+pev)?\s*$/i, "");
+  s = s.replace(/\s+province\s*$/i, "");
+  s = s.trim();
+  return s ? prettifyName(s) : null;
+}
+
+/**
+ * Rabat un libellé nettoyé sur une entité CONNUE de la hiérarchie provinciale
+ * (base État de lieux) en retirant d'éventuels mots terminaux résiduels —
+ * segments parents d'un code Kobo qui n'ont pas pu être identifiés (parent
+ * absent de la ligne, encodage hérité d'une ancienne version du formulaire).
+ * Ex. « Iyongo Monkoto » → « Iyongo » ; « Boende Boende » → « Boende ».
+ */
+export function snapToKnown(name: string | null, isKnown: (s: string) => boolean): string | null {
+  if (!name || isKnown(name)) return name;
+  const words = name.split(" ");
+  for (let n = words.length - 1; n >= 1; n--) {
+    const cand = words.slice(0, n).join(" ");
+    if (isKnown(cand)) return cand;
+  }
+  return name;
+}
+export const isKnownZone = (s: string) => antenneOfZone(s) !== null;
+export const isKnownAire = (s: string) => zoneOfAire(s) !== null;
+
+/** Nettoyage complet d'un libellé de ZS issu d'un formulaire Kobo. */
+export function cleanZoneLabel(zone: string | null, antenne: string | null): string | null {
+  return snapToKnown(cleanStructureName(zone, null, antenne), isKnownZone);
+}
+
+/** Nettoyage complet d'un libellé d'aire de santé issu d'un formulaire Kobo. */
+export function cleanAireLabel(aire: string | null, zone: string | null, antenne: string | null): string | null {
+  return snapToKnown(cleanStructureName(aire, zone, antenne), isKnownAire);
+}
+
+/**
+ * Options en cascade STRICTE : chaque niveau est restreint par les niveaux
+ * parents déjà sélectionnés, en s'appuyant à la fois sur les tuples issus des
+ * données ET sur la hiérarchie provinciale statique (base État de lieux) :
+ *  - ZS sélectionnée → la liste « Aire de santé » ne propose QUE les aires de
+ *    cette ZS (liste complète de la hiérarchie, même sans donnée), jamais les
+ *    aires d'autres ZS dont le rattachement encodé serait illisible ;
+ *  - Antenne sélectionnée → les listes ZS et Aire sont restreintes aux entités
+ *    rattachées à cette antenne. Les listes sont dédoublonnées.
  */
 export function cascadeOptions(tuples: GeoTuple[], sel: GeoSelection): CascadeOptions {
   const matchProvince = (t: GeoTuple) => !sel.province || eqGeo(t.province, sel.province);
   const matchAntenne = (t: GeoTuple) => !sel.antenne || eqGeo(t.antenne, sel.antenne);
   const matchZone = (t: GeoTuple) => !sel.zone || eqGeo(t.zone, sel.zone);
+  const selAntenne = canonAntenne(sel.antenne ?? null);
+
+  let zones = dedupeLabels(tuples.filter((t) => matchProvince(t) && matchAntenne(t)).map((t) => t.zone));
+  if (selAntenne) {
+    // Une ZS dont l'antenne de rattachement est CONNUE et différente est exclue.
+    zones = zones.filter((z) => {
+      const a = antenneOfZone(z);
+      return !a || eqGeo(canonAntenne(a), selAntenne);
+    });
+  }
+
+  let aires = dedupeLabels(
+    tuples.filter((t) => matchProvince(t) && matchAntenne(t) && matchZone(t)).map((t) => t.aire)
+  );
+  if (sel.zone) {
+    // Liste de référence : TOUTES les aires de la ZS (hiérarchie provinciale),
+    // même celles sans donnée. Les aires issues des données ne sont conservées
+    // que si elles appartiennent bien à cette ZS.
+    const ofZone = airesOfZone(sel.zone);
+    const allowed = new Set(ofZone.map((a) => norm(a)));
+    aires = dedupeLabels([
+      ...aires.filter((a) => {
+        const p = zoneOfAire(a);
+        return p ? eqGeo(p.zone, sel.zone) : allowed.has(norm(a));
+      }),
+      ...ofZone,
+    ]);
+  } else if (selAntenne) {
+    aires = aires.filter((a) => {
+      const p = zoneOfAire(a);
+      return !p || eqGeo(canonAntenne(p.antenne), selAntenne);
+    });
+  }
 
   return {
     provinces: dedupeLabels(tuples.map((t) => t.province)),
     antennes: dedupeLabels(tuples.filter(matchProvince).map((t) => t.antenne)),
-    zones: dedupeLabels(tuples.filter((t) => matchProvince(t) && matchAntenne(t)).map((t) => t.zone)),
-    aires: dedupeLabels(
-      tuples.filter((t) => matchProvince(t) && matchAntenne(t) && matchZone(t)).map((t) => t.aire)
-    ),
+    zones,
+    aires,
   };
 }

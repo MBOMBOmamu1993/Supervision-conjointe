@@ -53,12 +53,14 @@ export function CardHeader({
   );
 }
 
-/** Bandeau de section bleu marine OMS (cf. maquette). */
-export function SectionBar({ children, icon }: { children: React.ReactNode; icon?: IconName }) {
+/** Bandeau de section bleu marine OMS (cf. maquette). `right` : contenu aligné
+ *  à droite (boutons d'export des tableaux, cf. specs feedback TL 01). */
+export function SectionBar({ children, icon, right }: { children: React.ReactNode; icon?: IconName; right?: React.ReactNode }) {
   return (
     <div className="section-bar">
       {icon ? <Icon name={icon} /> : null}
       {children}
+      {right ? <span className="ml-auto inline-flex items-center gap-2">{right}</span> : null}
     </div>
   );
 }

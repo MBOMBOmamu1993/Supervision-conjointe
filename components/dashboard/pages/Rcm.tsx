@@ -4,12 +4,17 @@
    (hook useRcm). Le formulaire peut être sans soumission : un bandeau l'indique
    et les visuels s'alimentent automatiquement dès les premières données. */
 import { useRcm } from "@/lib/client/rcm-api";
+import { useDhis2Cv } from "@/lib/client/dhis2-api";
+import { useTabFilters } from "@/lib/state/filters";
+import { norm } from "@/lib/geo";
+import { fmtMonth } from "@/lib/client/format";
 import type { RcmBundle } from "@/lib/rcm/types";
 import { SectionBar } from "@/components/ui/Card";
-import { KpiTile, CardTitle, Banner, C } from "@/components/proto/proto";
+import { KpiTile, CardTitle, Banner, C, covCellStyle } from "@/components/proto/proto";
 import { DIcon } from "@/components/dashboard/icons";
 import { ProtoGroupedBar, ProtoHBar } from "@/components/proto/charts";
 import Donut from "@/components/charts/Donut";
+import { TableExportButtons } from "@/components/ui/TableExport";
 
 const pctTxt = (v: number | null) => (v == null ? "—" : `${v}%`);
 function Pending() {
@@ -55,7 +60,7 @@ export function RcmVue() {
           ]} />
         </div>
         <div className="card card-pad lg:col-span-7">
-          <CardTitle icon="table" tone="navy" title="Lecture rapide" />
+          <CardTitle icon="table" tone="navy" title="Lecture rapide" right={<TableExportButtons filename="Lecture rapide" />} />
           <table className="dtable">
             <thead><tr><th className="name">Indicateur</th><th>Valeur</th></tr></thead>
             <tbody>
@@ -88,9 +93,17 @@ export function RcmVue() {
 /* ===================== 2. Vaccination ===================== */
 export function RcmVaccination() {
   const { data } = useRcm();
+  const f = useTabFilters("rcm");
   if (!data) return <Empty msg="Synchronisation…" />;
   const k = data.kpi;
   const ANT = data.missByAntigene.map((m) => m.antigene);
+  // Tableau « % enfants manqués » DYNAMIQUE : par ZS par défaut ; dès qu'une
+  // ZS (ou une AS) est filtrée, le détail s'affiche par aire de santé.
+  const showAires = !!(f.zone || f.aire);
+  const missRows = showAires
+    ? data.missByAire.map((r) => ({ name: r.aire, values: r.values }))
+    : data.missByZs.map((r) => ({ name: r.zone, values: r.values }));
+  const missLevel = showAires ? "aire de santé" : "zone de santé";
   return (
     <div className="space-y-4">
       {!data.meta.hasData && <Pending />}
@@ -98,8 +111,8 @@ export function RcmVaccination() {
       <section>
         <SectionBar icon="bars">Indicateurs clés</SectionBar>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          <KpiTile icon="form" tone="blue" label="Enfants avec carte" value={pctTxt(k.cartePct)} />
-          <KpiTile icon="syringe" tone="green" label="Enfants vaccinés" value={pctTxt(k.vaccinePct)} />
+          <KpiTile icon="form" tone="blue" label="Enfants avec carte" value={pctTxt(k.cartePct)} perf={k.cartePct ?? undefined} />
+          <KpiTile icon="syringe" tone="green" label="Enfants vaccinés" value={pctTxt(k.vaccinePct)} perf={k.vaccinePct ?? undefined} />
           <KpiTile icon="enfants" tone="red" label="Enfants non vaccinés" value={pctTxt(k.nonVaccinePct)} />
           <KpiTile icon="rr" tone="violet" label="Antigènes prioritaires" value={k.antigenesPrioritaires} />
         </div>
@@ -117,16 +130,17 @@ export function RcmVaccination() {
         </div>
       </section>
       <div className="card card-pad">
-        <CardTitle icon="table" tone="navy" title="% enfants manqués par zone de santé et antigène" />
-        {data.missByZs.length ? (
+        <CardTitle icon="table" tone="navy" title={`% enfants manqués par ${missLevel} et antigène`} right={<TableExportButtons filename={`% enfants manqués par ${missLevel} et antigène`} />} />
+        {missRows.length ? (
           <div className="overflow-x-auto"><table className="dtable">
-            <thead><tr><th className="name">Zone de santé</th>{ANT.map((a) => <th key={a}>{a}</th>)}</tr></thead>
-            <tbody>{data.missByZs.map((r) => (
-              <tr key={r.zone}><td className="name">{r.zone}</td>{ANT.map((a) => { const v = r.values[a]; return <td key={a} style={{ background: heat(v) }}>{pctTxt(v)}</td>; })}</tr>
+            <thead><tr><th className="name">{showAires ? "Aire de santé" : "Zone de santé"}</th>{ANT.map((a) => <th key={a}>{a}</th>)}</tr></thead>
+            <tbody>{missRows.map((r) => (
+              <tr key={r.name}><td className="name">{r.name}</td>{ANT.map((a) => { const v = r.values[a]; return <td key={a} style={{ background: heat(v) }}>{pctTxt(v)}</td>; })}</tr>
             ))}</tbody>
           </table></div>
         ) : <Empty />}
       </div>
+      <CvComparisonTable data={data} />
     </div>
   );
 }
@@ -180,6 +194,100 @@ export function RcmRaisons() {
   );
 }
 
+/* ============= Tableau comparatif CV RCM vs CV DHIS2 (SNIS) ============= */
+
+const CV_AGS: { key: "penta1" | "penta3" | "rr1" | "rr2"; label: string }[] = [
+  { key: "penta1", label: "PENTA1" },
+  { key: "penta3", label: "PENTA3" },
+  { key: "rr1", label: "RR1" },
+  { key: "rr2", label: "RR2" },
+];
+
+/** Légende des couleurs du tableau de couverture (cf. barème covCellStyle). */
+function CvLegend() {
+  const items: [string, string, string][] = [
+    ["< 50 %", "#dc2626", "#fff"], ["50 – 80 %", "#f7cf4d", "#4a3700"],
+    ["80 – 90 %", "#9ad99e", "#13441f"], ["90 – 100 %", "#36ad56", "#fff"], ["> 100 %", "#3f8ef2", "#fff"],
+  ];
+  return (
+    <div className="mb-2.5 flex flex-wrap items-center gap-2">
+      <span className="text-[11px] font-bold text-surface-700">Légende :</span>
+      {items.map(([t, bg, fg]) => (
+        <span key={t} className="rounded-md px-3 py-1 text-[11.5px] font-extrabold"
+          style={{ background: bg, color: fg, boxShadow: "0 2px 6px rgba(15,23,42,.14)" }}>{t}</span>
+      ))}
+    </div>
+  );
+}
+
+function CvComparisonTable({ data }: { data: RcmBundle }) {
+  // Mois de référence DHIS2 calculé à partir de la date de réalisation du RCM
+  // (la plus récente de la sélection), et non de la date du jour.
+  const { data: dhis2, error } = useDhis2Cv(data.meta.lastRcmDate);
+  const moisLabel = dhis2 ? fmtMonth(dhis2.month) : "…";
+  // Jointure par nom d'AS normalisé (casse/accents) : lignes = AS couvertes par
+  // le RCM (suivent les filtres de l'onglet) ; à défaut de données RCM, les AS
+  // DHIS2 sont listées pour exposer au moins la couverture administrative.
+  const dhisByName = new Map((dhis2?.aires ?? []).map((a) => [norm(a.name), a]));
+  const rcmRows = data.cvParAire;
+  const rows = rcmRows.length
+    ? rcmRows.map((r) => ({ name: r.name, rcm: r.cv, snis: dhisByName.get(norm(r.name))?.cv ?? null }))
+    : (dhis2?.aires ?? []).map((a) => ({ name: a.name, rcm: null as RcmBundle["cvParAire"][number]["cv"] | null, snis: a.cv }));
+  const exportData = {
+    columns: ["Aire de santé", ...CV_AGS.flatMap((ag) => [`${ag.label} RCM`, `${ag.label} SNIS`])],
+    rows: rows.map((r) => [
+      r.name,
+      ...CV_AGS.flatMap((ag) => [r.rcm?.[ag.key] ?? null, r.snis?.[ag.key] ?? null] as (number | null)[]),
+    ]),
+  };
+  return (
+    <div className="card card-pad">
+      <CardTitle icon="syringe" tone="violet"
+        title={`Couverture vaccinale RCM vs couverture administrative (DHIS2) — ${moisLabel}`}
+        right={<TableExportButtons filename={`Couverture vaccinale RCM vs DHIS2 ${moisLabel}`} data={exportData} />} />
+      <CvLegend />
+      {error ? <Empty msg="Données administratives DHIS2 indisponibles (snis-vaccination-api)." /> : null}
+      {!error && rows.length ? (
+        <div className="overflow-x-auto">
+          <table className="dtable">
+            <thead>
+              <tr>
+                <th className="name" rowSpan={2}>Aire de santé</th>
+                {CV_AGS.map((ag) => <th key={ag.key} colSpan={2}>{ag.label}</th>)}
+              </tr>
+              <tr>
+                {CV_AGS.flatMap((ag) => [
+                  <th key={`${ag.key}-rcm`}>RCM</th>,
+                  <th key={`${ag.key}-snis`}>SNIS</th>,
+                ])}
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((r) => (
+                <tr key={r.name}>
+                  <td className="name">{r.name}</td>
+                  {CV_AGS.flatMap((ag) => {
+                    const rcm = r.rcm?.[ag.key] ?? null;
+                    const snis = r.snis?.[ag.key] ?? null;
+                    return [
+                      <td key={`${ag.key}-rcm`} style={covCellStyle(rcm)}>{pctTxt(rcm)}</td>,
+                      <td key={`${ag.key}-snis`} style={covCellStyle(snis)}>{pctTxt(snis)}</td>,
+                    ];
+                  })}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : null}
+      {!error && !rows.length ? <Empty msg="En attente des données RCM et DHIS2." /> : null}
+      {!rcmRows.length && rows.length ? (
+        <div className="mt-2 text-[11px] text-surface-500">CV RCM en attente des premières soumissions du formulaire — couverture administrative (DHIS2/SNIS) affichée seule.</div>
+      ) : null}
+    </div>
+  );
+}
+
 /* ===================== 4. Tableaux ===================== */
 export function RcmTableaux() {
   const { data } = useRcm();
@@ -201,7 +309,7 @@ export function RcmTableaux() {
         </div>
       </section>
       <div className="card card-pad">
-        <CardTitle icon="table" tone="navy" title="Raisons de non-possession de carte par aire de santé" sub="% des enfants concernés" />
+        <CardTitle icon="table" tone="navy" title="Raisons de non-possession de carte par aire de santé" sub="% des enfants concernés" right={<TableExportButtons filename="Raisons de non-possession de carte par aire de santé" />} />
         {data.parAire.length && carteCats.length ? (
           <div className="overflow-x-auto"><table className="dtable">
             <thead><tr><th className="name">Aire de santé</th>{carteCats.map((c) => <th key={c.key}>{c.label}</th>)}</tr></thead>
@@ -212,7 +320,7 @@ export function RcmTableaux() {
         ) : <Empty />}
       </div>
       <div className="card card-pad">
-        <CardTitle icon="table" tone="navy" title="Raisons principales de non vaccination par aire de santé" sub="% des enfants concernés" />
+        <CardTitle icon="table" tone="navy" title="Raisons principales de non vaccination par aire de santé" sub="% des enfants concernés" right={<TableExportButtons filename="Raisons principales de non vaccination par aire de santé" />} />
         {data.parAire.length && vaccCats.length ? (
           <div className="overflow-x-auto"><table className="dtable">
             <thead><tr><th className="name">Aire de santé</th>{vaccCats.map((c) => <th key={c.key}>{c.label}</th>)}</tr></thead>

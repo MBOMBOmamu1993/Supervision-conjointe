@@ -11,6 +11,7 @@ import { DIcon, DTONES } from "./icons";
 import { MODULES, LVL_FILTERS, LVL_LABEL, moduleByKey, pagesOf, findPage, type ModuleDef, type PageDef } from "./modules";
 import { FilterBarShell } from "./FilterBarShell";
 import { PAGE_REGISTRY } from "./registry";
+import { GlobalRefreshButton } from "./GlobalRefresh";
 
 const OMS = "/logo/oms-white.png";
 const PEV = "/logo/pev-transparent.png";
@@ -108,12 +109,12 @@ function Welcome({ onStart }: { onStart: () => void }) {
           </span>
           <div>
             <h1 className="text-[30px] font-extrabold leading-none">Tableau de bord Tshuapa</h1>
-            <p className="mt-1 text-[16px] font-medium text-[#bcd6f5]">Supervision conjointe, Contrôle qualité des données & Monitorage rapide de convenance — PEV / OMS</p>
+            <p className="mt-1 text-[16px] font-medium text-[#bcd6f5]">Supervision conjointe · Qualité des données · Monitorage de convenance · SAV · Rapport mensuel & Évaluation des AT — PEV / OMS</p>
           </div>
         </div>
         <div className="px-8 pb-8 pt-6">
           <div className="rounded-xl px-5 py-4 text-[15.5px] leading-relaxed text-surface-800" style={{ background: "#eaf4fd", borderLeft: "5px solid #0093d5" }}>
-            <b className="text-navy-700">Plateforme intégrée unique</b> regroupant les modules de supervision conjointe, de contrôle qualité des données et de monitorage rapide de convenance pour le suivi-évaluation du Programme Élargi de Vaccination dans la province de la <b className="text-navy-700">Tshuapa</b>.
+            <b className="text-navy-700">Plateforme intégrée unique</b> regroupant désormais <b className="text-navy-700">six modules</b> : supervision conjointe, contrôle qualité des données, monitorage rapide de convenance, <b className="text-navy-700">Semaine Africaine de Vaccination (SAV)</b>, <b className="text-navy-700">rapport mensuel des AT</b> et <b className="text-navy-700">évaluation des AT</b>, pour le suivi-évaluation du Programme Élargi de Vaccination dans la province de la <b className="text-navy-700">Tshuapa</b>.
           </div>
           <div className="mt-5 grid grid-cols-1 gap-5 md:grid-cols-2">
             <div>
@@ -122,6 +123,10 @@ function Welcome({ onStart }: { onStart: () => void }) {
                 <div><b>Supervision conjointe :</b> formulaires KoboToolbox Antenne, ZS et Aire de santé</div>
                 <div><b>Contrôle qualité des données :</b> contrôle qualité CS & ZS (Pointage · Registre · SNIS · DHIS2)</div>
                 <div><b>Monitorage rapide de convenance :</b> formulaire RCM KoboToolbox</div>
+                <div><b>SAV :</b> 5 formulaires de la Semaine Africaine de Vaccination + BASE SAISIE DONNEES SAV</div>
+                <div><b>Rapport mensuel & Évaluation des AT :</b> formulaire « Rapport mensuel des AT » (temps réel)</div>
+                <div><b>Gestion des vaccins · Prestation de services · Triangulation :</b> données de routine <b>DHIS2 / SNIS</b> de la province (logistique, couvertures et doses disponibles)</div>
+                <div className="mt-1 rounded-lg px-3 py-2 text-[12.5px]" style={{ background: "#eaf4fd" }}>La plupart des onglets combinent plusieurs sources : <b>KoboToolbox</b> (collecte terrain), <b>fichiers Excel</b> (bases de saisie) et <b>DHIS2 / SNIS</b> (données de routine national).</div>
               </div>
             </div>
             <div>
@@ -156,12 +161,13 @@ function Home({ onOpen }: { onOpen: (key: string) => void }) {
           <div className="text-[11px] font-bold uppercase tracking-[0.22em] text-white/60">Programme Élargi de Vaccination · OMS — République Démocratique du Congo</div>
           <h1 className="mt-0.5 text-[23px] font-extrabold">Plateforme — Tableau de bord Tshuapa</h1>
         </div>
+        <GlobalRefreshButton />
         <img src={PEV} alt="PEV" className="h-[58px] w-auto" />
       </div>
       <div className="mx-auto w-full max-w-[1240px] px-8 py-10">
         <div className="rounded-2xl border border-surface-200 bg-white px-10 py-9 text-center shadow-[0_10px_30px_-18px_rgba(15,23,42,.25)]" style={{ borderTop: "5px solid #f5c518" }}>
           <h2 className="text-[34px] font-extrabold text-navy-700">Bienvenue sur le Tableau de bord Tshuapa</h2>
-          <p className="mx-auto mt-3 max-w-[760px] text-[16.5px] leading-relaxed text-surface-700">Votre outil centralisé de suivi de la supervision conjointe, de la qualité des données et du monitorage rapide de convenance du PEV dans la province de la Tshuapa. Sélectionnez un module pour commencer l'exploration.</p>
+          <p className="mx-auto mt-3 max-w-[820px] text-[16.5px] leading-relaxed text-surface-700">Votre outil centralisé de suivi de la supervision conjointe, de la qualité des données, du monitorage rapide de convenance, de la <b className="text-navy-700">Semaine Africaine de Vaccination</b> ainsi que du <b className="text-navy-700">rapport mensuel</b> et de l'<b className="text-navy-700">évaluation des Assistants Techniques</b> du PEV dans la province de la Tshuapa. Sélectionnez un module pour commencer l'exploration.</p>
         </div>
         <div className="my-9 flex items-center gap-3"><span className="h-px flex-1 bg-[#d7dfea]" /><span className="text-[13px] font-extrabold uppercase tracking-[0.12em] text-surface-500">Modules disponibles</span><span className="h-px flex-1 bg-[#d7dfea]" /></div>
         <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
@@ -189,9 +195,19 @@ function ModuleView({ mod, page, onSelectPage, onHome }: { mod: ModuleDef; page:
   // Le filtre « Type de supervision » n'a de sens que pour l'onglet Supervision :
   // les formulaires Qualité (CQD), Monitorage (RCM) et État de lieux n'ont pas ce
   // champ — on le retire pour éviter un filtre qui ne filtre rien.
-  const allow = (mod.key === "supervision" ? LVL_FILTERS[page.lvl] : LVL_FILTERS[page.lvl].filter((k) => k !== "type"));
+  // Les onglets AT (Rapport mensuel · Évaluation) filtrent par Antenne / AT /
+  // Période ; les autres onglets non-Supervision n'exposent pas « Type ».
+  const allow =
+    mod.key === "rapport" || mod.key === "evaluation" ? ["antenne", "at", "periode"]
+    : mod.key === "supervision" ? LVL_FILTERS[page.lvl]
+    : LVL_FILTERS[page.lvl].filter((k) => k !== "type");
   const Comp = PAGE_REGISTRY[page.id];
   const [a, b] = DTONES[mod.tone] ?? DTONES.navy;
+  // Sections dépliables de la barre latérale (onglets à groupes, ex. Contrôle
+  // qualité) : repliées par défaut — seul l'en-tête de section est visible,
+  // un clic déroule / replie son contenu.
+  const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({});
+  const toggleGroup = (name: string) => setOpenGroups((s) => ({ ...s, [name]: !s[name] }));
 
   const navLink = (p: PageDef) => (
     <button key={p.id} type="button" onClick={() => onSelectPage(p.id)}
@@ -201,7 +217,7 @@ function ModuleView({ mod, page, onSelectPage, onHome }: { mod: ModuleDef; page:
     </button>
   );
 
-  const filterLabels: Record<string, string> = { province: "Province", antenne: "Antenne", zs: "ZS", as: "Aire de santé", type: "Type de supervision", periode: "Période" };
+  const filterLabels: Record<string, string> = { province: "Province", antenne: "Antenne", zs: "ZS", as: "Aire de santé", at: "Assistant technique", type: "Type de supervision", periode: "Période" };
 
   return (
     <div className="flex h-full">
@@ -218,12 +234,26 @@ function ModuleView({ mod, page, onSelectPage, onHome }: { mod: ModuleDef; page:
         </div>
         <nav className="flex-1 overflow-y-auto px-2 py-3 thin-scroll">
           {mod.groups
-            ? mod.groups.map((g) => (
-              <div key={g.name}>
-                <div className="px-3 pb-1.5 pt-3 text-[10px] font-extrabold uppercase tracking-[0.12em] text-white/40">{g.name}</div>
-                {g.pages.map(navLink)}
-              </div>
-            ))
+            ? mod.groups.map((g) => {
+              const open = !!openGroups[g.name];
+              return (
+                <div key={g.name}>
+                  <button
+                    type="button"
+                    onClick={() => toggleGroup(g.name)}
+                    aria-expanded={open}
+                    className="flex w-full items-center gap-2 rounded-[9px] px-3 pb-1.5 pt-3 text-left text-[10px] font-extrabold uppercase tracking-[0.12em] text-white/40 transition hover:text-white/70"
+                  >
+                    <span className="flex-1">{g.name}</span>
+                    <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth={2.4} strokeLinecap="round" strokeLinejoin="round"
+                      className="shrink-0 transition-transform duration-200" style={{ transform: open ? "rotate(180deg)" : "none" }}>
+                      <path d="m6 9 6 6 6-6" />
+                    </svg>
+                  </button>
+                  {open ? g.pages.map(navLink) : null}
+                </div>
+              );
+            })
             : (mod.pages ?? []).map(navLink)}
         </nav>
         <div className="flex items-center gap-2 border-t border-white/10 px-[18px] py-3 text-[10.5px] text-white/40">
@@ -239,6 +269,7 @@ function ModuleView({ mod, page, onSelectPage, onHome }: { mod: ModuleDef; page:
             <div className="text-[9.5px] font-bold uppercase tracking-[0.2em] text-white/60">Tableau de bord Tshuapa · PEV / OMS</div>
             <h1 className="mt-px truncate text-[16px] font-extrabold uppercase">{page.label} — {mod.name}</h1>
           </div>
+          <GlobalRefreshButton />
           <img src={PEV} alt="PEV" className="h-[46px] w-auto" />
         </div>
         {allow.length > 0 && <FilterBarShell allow={allow} source={mod.key} />}

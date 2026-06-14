@@ -14,6 +14,8 @@ import { useTabFilters, TYPE_GROUPS } from "@/lib/state/filters";
 import { useSupervision } from "@/lib/client/api";
 import { useCqd } from "@/lib/client/cqd-api";
 import { useRcm } from "@/lib/client/rcm-api";
+import { useSav } from "@/lib/client/sav-api";
+import { useRapportAt, useEvaluationAt } from "@/lib/client/at-api";
 import { cascadeOptions, type GeoTuple } from "@/lib/geo";
 import { edlGeoTuples } from "@/lib/etat-lieux/edl-filter";
 import { PeriodFilter } from "@/components/shell/PeriodFilter";
@@ -42,25 +44,32 @@ function Field({ label, children, onReset, active }: { label: string; children: 
   );
 }
 
-function Select({ value, onChange, options, placeholder }: {
+function Select({ value, onChange, options, placeholder, allowEmpty = true }: {
   value: string | null; onChange: (v: string | null) => void; options: string[]; placeholder: string;
+  /** false : pas d'état « vide » — la première option est affichée par défaut. */
+  allowEmpty?: boolean;
 }) {
+  const effective = value ?? (allowEmpty ? "" : options[0] ?? "");
   return (
     <div className="flex items-center rounded-xl border border-slate-200 bg-white px-2.5 py-2 shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition hover:border-oms-500">
       <select
         className="w-full cursor-pointer bg-transparent text-[12.5px] font-bold text-navy-700 outline-none"
-        value={value ?? ""}
+        value={effective}
         onChange={(e) => onChange(e.target.value || null)}
       >
-        <option value="">{placeholder}</option>
+        {allowEmpty ? <option value="">{placeholder}</option> : null}
         {options.map((o) => <option key={o} value={o}>{o}</option>)}
       </select>
     </div>
   );
 }
 
-/** Présentation pure : reçoit les tuples géo + mois de l'onglet actif. */
-function FilterBarView({ tab, allow, geoTuples, months }: { tab: string; allow: string[]; geoTuples: GeoTuple[]; months: string[] }) {
+/** Présentation pure : reçoit les tuples géo + mois (+ liste AT) de l'onglet actif.
+ *  `provinceLocked` (onglet Supervision conjointe) : la province est unique —
+ *  « Tshuapa » est affichée sélectionnée par défaut, jamais d'état « Toutes ». */
+function FilterBarView({ tab, allow, geoTuples, months, ats = [], provinceLocked = false }: {
+  tab: string; allow: string[]; geoTuples: GeoTuple[]; months: string[]; ats?: string[]; provinceLocked?: boolean;
+}) {
   const f = useTabFilters(tab);
   const geo = cascadeOptions(geoTuples, { province: f.province, antenne: f.antenne, zone: f.zone, aire: f.aire });
   const selectedGroup = TYPE_GROUPS.find((g) => g.key === f.types[0]);
@@ -70,8 +79,8 @@ function FilterBarView({ tab, allow, geoTuples, months }: { tab: string; allow: 
     <div className="relative z-20 shrink-0 border-b border-slate-200 bg-white">
       <div className="flex flex-wrap items-end gap-2.5 px-4 py-2.5">
         {show("province") && (
-          <Field label="Province" active={!!f.province} onReset={() => f.resetField("province")}>
-            <Select value={f.province} placeholder="Toutes" options={geo.provinces}
+          <Field label="Province" active={!provinceLocked && !!f.province} onReset={provinceLocked ? undefined : () => f.resetField("province")}>
+            <Select value={f.province} placeholder="Toutes" options={geo.provinces} allowEmpty={!provinceLocked}
               onChange={(v) => f.set({ province: v, antenne: null, zone: null, aire: null })} />
           </Field>
         )}
@@ -91,6 +100,12 @@ function FilterBarView({ tab, allow, geoTuples, months }: { tab: string; allow: 
           <Field label="Aire de santé" active={!!f.aire} onReset={() => f.resetField("aire")}>
             <Select value={f.aire} placeholder="Toutes" options={geo.aires}
               onChange={(v) => f.set({ aire: v })} />
+          </Field>
+        )}
+        {show("at") && (
+          <Field label="Assistant technique" active={!!f.at} onReset={() => f.resetField("at")}>
+            <Select value={f.at} placeholder="Tous les AT" options={ats}
+              onChange={(v) => f.set({ at: v })} />
           </Field>
         )}
         {show("type") && (
@@ -126,7 +141,7 @@ function FilterBarView({ tab, allow, geoTuples, months }: { tab: string; allow: 
 function SupervisionFilters({ allow }: { allow: string[] }) {
   const { data } = useSupervision();
   const opt = data?.filters;
-  return <FilterBarView tab="supervision" allow={allow} geoTuples={(opt?.geo as GeoTuple[]) ?? []} months={opt?.months ?? []} />;
+  return <FilterBarView tab="supervision" allow={allow} geoTuples={(opt?.geo as GeoTuple[]) ?? []} months={opt?.months ?? []} provinceLocked />;
 }
 
 function CqdFilters({ allow }: { allow: string[] }) {
@@ -146,10 +161,31 @@ function EdlFilters({ allow }: { allow: string[] }) {
   return <FilterBarView tab="etat" allow={allow} geoTuples={edlGeoTuples()} months={[]} />;
 }
 
+function SavFilters({ allow }: { allow: string[] }) {
+  const { data } = useSav();
+  const opt = data?.filters;
+  return <FilterBarView tab="sav" allow={allow} geoTuples={(opt?.geo as GeoTuple[]) ?? []} months={opt?.months ?? []} />;
+}
+
+function RapportFilters({ allow }: { allow: string[] }) {
+  const { data } = useRapportAt();
+  const opt = data?.filters;
+  return <FilterBarView tab="rapport" allow={allow} geoTuples={(opt?.geo as GeoTuple[]) ?? []} months={opt?.months ?? []} ats={opt?.ats ?? []} />;
+}
+
+function EvalFilters({ allow }: { allow: string[] }) {
+  const { data } = useEvaluationAt();
+  const opt = data?.filters;
+  return <FilterBarView tab="evaluation" allow={allow} geoTuples={(opt?.geo as GeoTuple[]) ?? []} months={opt?.months ?? []} ats={opt?.ats ?? []} />;
+}
+
 /** Sélectionne la source d'options selon l'onglet actif (clé de module). */
 export function FilterBarShell({ allow, source }: { allow: string[]; source: string }) {
   if (source === "qualite") return <CqdFilters allow={allow} />;
   if (source === "rcm") return <RcmFilters allow={allow} />;
   if (source === "etat") return <EdlFilters allow={allow} />;
+  if (source === "sav") return <SavFilters allow={allow} />;
+  if (source === "rapport") return <RapportFilters allow={allow} />;
+  if (source === "evaluation") return <EvalFilters allow={allow} />;
   return <SupervisionFilters allow={allow} />;
 }

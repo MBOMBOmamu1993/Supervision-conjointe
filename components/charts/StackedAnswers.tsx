@@ -8,9 +8,11 @@ import { wrapText } from "@/lib/client/format";
 export default function StackedAnswers({
   rows,
   height,
+  exportTitle,
 }: {
   rows: { name: string; answers: Record<AnswerValue, number> }[];
   height?: number;
+  exportTitle?: string;
 }) {
   const order: AnswerValue[] = ["oui", "partiel", "non", "na"];
   const cats = rows.map((r) => r.name);
@@ -24,6 +26,7 @@ export default function StackedAnswers({
   return (
     <EChart
       height={h}
+      exportTitle={exportTitle}
       option={{
         tooltip: {
           trigger: "axis",
