@@ -3,8 +3,9 @@
 /* Onglet « Qualité des données » — Centres de santé (5 pages) + Zones de santé
    (3 pages). Données LIVE via /api/cqd (hook useCqd) ; réagissent aux filtres.
    Antigènes : PENTA1 · PENTA3 · RR1 · RR2 — sources Pointage · Registre · SNIS · DHIS2. */
-import { useState } from "react";
+import { Fragment, useState } from "react";
 import { useCqd } from "@/lib/client/cqd-api";
+import { useTriangulation } from "@/lib/client/triangulation-api";
 import type { CqdBundle, CqdConcordanceAS, CqdLevelBundle, ConcordanceClass } from "@/lib/cqd/types";
 import { SectionBar } from "@/components/ui/Card";
 import { KpiTile, CardTitle, Banner, C, TONES, apprConc, PointerIcon, Badge, type Tone } from "@/components/proto/proto";
@@ -838,3 +839,93 @@ function CqdComparaisonStructure({ level }: { level: "as" | "zs" }) {
 
 export function CqdCsStructures() { return <CqdComparaisonStructure level="as" />; }
 export function CqdZsStructures() { return <CqdComparaisonStructure level="zs" />; }
+
+/* ============ Page — Comparaison doses disponibles & nombre de vaccinés ============ */
+/* « Triangulation » DHIS2/SNIS (Tshuapa) reproduite du dashboard
+   snis-vaccination-api : Dose disponible = Stock début + Reçues ; Écart = Dose
+   disponible − Vaccinés. Niveau CS → par aire de santé ; niveau ZS → par zone
+   de santé. Sans filtres/boutons internes : on réutilise les filtres de l'onglet
+   et le design (TableExportButtons) de Supervision conjointe. */
+const frNum = (n: number) => n.toLocaleString("fr-FR");
+
+/** Cellule « Écart » : vert (+) si suffisant, rouge si négatif (doses insuffisantes). */
+function EcartCell({ v }: { v: number }) {
+  const neg = v < 0;
+  return (
+    <td className="tabular-nums" style={{ fontWeight: 700, color: neg ? C.red : C.green }}>
+      {neg ? "" : "+"}{frNum(v)}
+    </td>
+  );
+}
+
+function TriangulationTable({ level }: { level: "as" | "zs" }) {
+  const { data } = useTriangulation(level);
+  const labelStruct = level === "as" ? "Aire de santé" : "Zone de santé";
+  const rows = data?.rows ?? [];
+  const ants = data?.antigenes ?? [];
+  const monthsLabel = (data?.months ?? []).map(fmtMonth).join(" · ");
+  const tone: Tone = level === "as" ? "teal" : "navy";
+  return (
+    <div className="space-y-4">
+      <Banner icon="component" tone={tone}
+        title={`Comparaison Doses des vaccins disponibles et Nombre de vaccinés${level === "as" ? " — par aire de santé" : " — par zone de santé"}`}
+        sub={`Triangulation des données de vaccination et des doses de vaccins disponibles au cours du mois — DHIS2/SNIS Tshuapa${monthsLabel ? ` · ${monthsLabel}` : ""}`} />
+      <div className="card card-pad" style={{ background: "#eaf4fd" }}>
+        <div className="text-[12px] leading-relaxed text-surface-700">
+          <b>Dose disponible</b> = Stock début + Reçues au cours du mois. <b>Écart négatif</b> (rouge) = doses insuffisantes.
+          <b> Cohérence</b> : « Oui » si aucun antigène n'a un écart négatif (0 %), « Non » sinon.
+        </div>
+      </div>
+      <div className="card card-pad">
+        <CardTitle icon="table" tone={tone}
+          title="Triangulation données de vaccination et doses de vaccins disponibles au cours du mois"
+          sub={`Une ligne par ${level === "as" ? "aire de santé" : "zone de santé"} · Dose disponible · Vaccinés · Écart par antigène`}
+          right={<TableExportButtons filename={`Triangulation doses disponibles et vaccinés (${labelStruct})`} />} />
+        {rows.length && ants.length ? (
+          <div className="overflow-x-auto"><table className="dtable">
+            <thead>
+              <tr>
+                <th rowSpan={2} className="name">{labelStruct}</th>
+                {ants.map((a) => <th key={a} colSpan={3} style={{ textAlign: "center" }}>{a}</th>)}
+                <th rowSpan={2}>Proportion<br />écarts négatifs</th>
+                <th rowSpan={2}>Cohérence<br />vaccinés-doses</th>
+              </tr>
+              <tr>
+                {ants.map((a) => (
+                  <th key={`${a}-h`} colSpan={3} className="p-0">
+                    <div className="grid grid-cols-3 text-[10px]">
+                      <span className="px-1 py-0.5">Dose disponible</span>
+                      <span className="px-1 py-0.5">Vaccinés</span>
+                      <span className="px-1 py-0.5">Écart</span>
+                    </div>
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((r) => (
+                <tr key={r.name}>
+                  <td className="name">{r.name}</td>
+                  {r.antigenes.map((ant) => (
+                    <Fragment key={ant.label}>
+                      <td className="tabular-nums">{frNum(ant.dispo)}</td>
+                      <td className="tabular-nums">{frNum(ant.vaccines)}</td>
+                      <EcartCell v={ant.ecart} />
+                    </Fragment>
+                  ))}
+                  <td className="tabular-nums" style={{ fontWeight: 700, color: r.propNeg > 0 ? C.red : C.green }}>{r.propNeg}%</td>
+                  <td style={{ fontWeight: 800, textAlign: "center", background: r.coherence ? "#e6f6ec" : "#fde2e2", color: r.coherence ? "#178a44" : "#c81e1e" }}>
+                    {r.coherence ? "Oui ✓" : "Non ✗"}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table></div>
+        ) : <Empty msg={data?.error ? `Données DHIS2 indisponibles : ${data.error}` : "Aucune donnée disponible pour cette sélection."} />}
+      </div>
+    </div>
+  );
+}
+
+export function CqdCsTriangulation() { return <TriangulationTable level="as" />; }
+export function CqdZsTriangulation() { return <TriangulationTable level="zs" />; }
