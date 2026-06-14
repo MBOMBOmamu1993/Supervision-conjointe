@@ -530,11 +530,11 @@ export function RapPrestation() {
         sub="Sessions de vaccination (fixes · avancées · mobiles) et couvertures vaccinales — données DHIS2/SNIS (antennes Boende · Bokungu)" />
 
       <section>
-        <SectionBar icon="up">Réalisation des sessions de vaccination (% des AS ≥ 80 %) — situation 2025</SectionBar>
+        <SectionBar icon="up">Réalisation des sessions de vaccination (% des AS ≥ 80 %) — situation 2026</SectionBar>
         <div className="space-y-3">
           {sessions.map((s2) => (
             <AntenneLines key={s2.key} months={months} series={s2.series} ensemble={s2.ensemble}
-              title={`${s2.label}, par mois et par antenne (2025)`} icon="up" tone="blue" />
+              title={`${s2.label}, par mois et par antenne (2026)`} icon="up" tone="blue" />
           ))}
         </div>
       </section>

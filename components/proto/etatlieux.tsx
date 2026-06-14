@@ -153,7 +153,7 @@ export function Edl1() {
             <div className="mt-2 text-[11px] text-surface-500">Visites/mois = très haute×30 (quotidien) + haute×4 + moyenne×2 + faible×1. Niveaux estimés à partir des îlots, campements de pêcheurs et d'éleveurs recensés par ZS.</div>
           </div>
           <div className="card card-pad">
-            <CardTitle icon="alert" tone="red" title="Top 6 ZS avec plus de sites à très haute et haute priorité" sub="Sites très haute + haute priorité" right={<TableExportButtons filename="Top 6 ZS avec plus de sites à très haute et haute priorité" />} />
+            <CardTitle icon="alert" tone="red" title="Top 6 ZS avec plus de sites à très haute et haute priorité" sub="Sites très haute + haute priorité" rightBelow right={<TableExportButtons filename="Top 6 ZS avec plus de sites à très haute et haute priorité" />} />
             <table className="dtable">
               <thead><tr><th>#</th><th className="name">Zone de santé</th><th>Sites prioritaires</th></tr></thead>
               <tbody>

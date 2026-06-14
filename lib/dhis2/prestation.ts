@@ -18,7 +18,7 @@ import { ENV } from "@/lib/server/env";
 import { defaultTargetYm } from "@/lib/dhis2/triangulation";
 
 /** Année de référence pour les graphiques mensuels de prestation (feedback TL). */
-const CHART_YEAR = "2025";
+const CHART_YEAR = "2026";
 
 /** Taux annuel « nourrissons survivants » (PEV-RDC). */
 const NS_RATE = 0.0349;
