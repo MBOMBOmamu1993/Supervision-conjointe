@@ -101,10 +101,54 @@ export function ApprBadge({ p }: { p: number }) {
   );
 }
 
-export function KpiTile({ icon, tone, label, value, pct, sub }: {
-  icon: IconName; tone: Tone; label: React.ReactNode; value: React.ReactNode; pct?: number; sub?: string;
+/* Barème de performance/couverture (cf. légende) : aplat de couleur vive selon
+   la valeur. Partagé par KpiTile (prop `perf`) et la tuile de couverture. */
+function perfBand(v: number) {
+  if (isNaN(v)) return { grad: "linear-gradient(150deg,#64748b,#475569)", fg: "#fff", subfg: "rgba(255,255,255,.82)" };
+  if (v < 50)        return { grad: "linear-gradient(150deg,#ef5667,#cc2b3c)", fg: "#fff", subfg: "rgba(255,255,255,.86)" };
+  if (v < 80)        return { grad: "linear-gradient(150deg,#f7cf4d,#e0a106)", fg: "#4a3700", subfg: "rgba(50,38,0,.72)" };
+  if (v < 90)        return { grad: "linear-gradient(150deg,#9ad99e,#5fb466)", fg: "#13441f", subfg: "rgba(12,46,20,.72)" };
+  if (v <= 100)      return { grad: "linear-gradient(150deg,#36ad56,#1f8a40)", fg: "#fff", subfg: "rgba(255,255,255,.86)" };
+  return                 { grad: "linear-gradient(150deg,#3f8ef2,#1f6fd8)", fg: "#fff", subfg: "rgba(255,255,255,.86)" };
+}
+
+/** Fond de cellule de tableau de couverture vaccinale, coloré selon sa valeur. */
+export function covCellStyle(v: number | null): React.CSSProperties | undefined {
+  if (v == null || isNaN(v)) return undefined;
+  let bg: string, fg: string;
+  if (v < 50)        { bg = "#ef5667"; fg = "#fff"; }
+  else if (v < 80)   { bg = "#f7cf4d"; fg = "#4a3700"; }
+  else if (v < 90)   { bg = "#9ad99e"; fg = "#13441f"; }
+  else if (v <= 100) { bg = "#36ad56"; fg = "#fff"; }
+  else               { bg = "#3f8ef2"; fg = "#fff"; }
+  return { background: bg, color: fg, fontWeight: 800 };
+}
+
+export function KpiTile({ icon, tone, label, value, pct, sub, perf }: {
+  icon: IconName; tone: Tone; label: React.ReactNode; value: React.ReactNode; pct?: number; sub?: string; perf?: number;
 }) {
   const t = TONES[tone];
+  // perf défini → aplat de couleur vive selon la valeur (couverture/performance).
+  if (perf !== undefined) {
+    const b = perfBand(perf);
+    return (
+      <div className="relative flex flex-col items-center rounded-2xl p-4 pt-4 text-center transition hover:-translate-y-0.5 hover:shadow-[0_10px_24px_-12px_rgba(15,23,42,.34)]"
+        style={{ background: b.grad, color: b.fg }}>
+        <div className="mb-2 flex h-[54px] w-[54px] items-center justify-center rounded-full"
+          style={{ background: "rgba(255,255,255,.2)", border: "1px solid rgba(255,255,255,.45)", color: b.fg }}>
+          <Icon name={icon} style={{ width: 26, height: 26 }} strokeWidth={1.9} />
+        </div>
+        <div className="text-[11.5px] font-bold leading-tight" style={{ color: b.fg }}>{label}</div>
+        <div className="my-1 mt-[7px] text-[30px] font-extrabold leading-none tabular-nums" style={{ color: b.fg }}>{fmt(value as never)}</div>
+        {pct !== undefined ? (
+          <div className="text-[11.5px] font-medium" style={{ color: b.subfg }}>% réalisation : <b style={{ color: b.fg }}>{pct}%</b></div>
+        ) : null}
+        {sub ? (
+          <div className="text-[11.5px] font-medium" style={{ color: b.subfg }} dangerouslySetInnerHTML={{ __html: sub }} />
+        ) : null}
+      </div>
+    );
+  }
   return (
     <div className="relative flex flex-col items-center rounded-2xl border p-4 pt-4 text-center transition hover:-translate-y-0.5 hover:shadow-[0_10px_24px_-12px_rgba(15,23,42,.28)]"
       style={{ background: t.bg, borderColor: t.border }}>
@@ -125,32 +169,35 @@ export function KpiTile({ icon, tone, label, value, pct, sub }: {
 }
 
 export function CardTitle({ icon, tone, title, sub, right, rightBelow }: { icon: IconName; tone: Tone; title: string; sub?: string; right?: React.ReactNode; rightBelow?: boolean }) {
-  // rightBelow : pour les cartes étroites, les actions (ex. boutons d'export)
-  // passent sous le titre au lieu de l'écraser sur la même ligne.
+  // Bandeau d'en-tête navy → bleu à texte blanc, liseré jaune. Déborde le padding
+  // de `.card-pad` (marges négatives) pour occuper toute la largeur de la carte.
+  // `tone` reste accepté pour compatibilité mais n'influe plus sur la couleur.
+  const icoBox = (
+    <span className="flex h-[34px] w-[34px] flex-none items-center justify-center rounded-[9px]"
+      style={{ background: "rgba(255,255,255,.15)", border: "1px solid rgba(255,255,255,.22)" }}>
+      <Icon name={icon} style={{ width: 19, height: 19, color: "#fff" }} strokeWidth={2} />
+    </span>
+  );
+  const titleBlock = (
+    <div className="min-w-0 grow">
+      <div className="text-[13px] font-extrabold leading-tight text-white">{title}</div>
+      {sub ? <div className="text-[11px] leading-snug" style={{ color: "rgba(255,255,255,.78)" }}>{sub}</div> : null}
+    </div>
+  );
+  const band = { background: "linear-gradient(110deg,#00205c 0%,#0a3a86 55%,#0c63b4 100%)", borderBottom: "2px solid #f5c518" };
+  // rightBelow : pour les cartes étroites, les actions passent sous le titre.
   if (right && rightBelow) {
     return (
-      <div className="mb-2">
-        <div className="flex items-center gap-2.5">
-          <Badge icon={icon} tone={tone} size={34} />
-          <div className="min-w-0">
-            <div className="text-[12.5px] font-bold leading-tight text-navy-700">{title}</div>
-            {sub ? <div className="text-[11px] leading-snug text-surface-500">{sub}</div> : null}
-          </div>
-        </div>
+      <div className="-mx-4 -mt-[14px] mb-3 px-4 py-2.5" style={band}>
+        <div className="flex items-center gap-2.5">{icoBox}{titleBlock}</div>
         <div className="mt-2 flex flex-wrap items-center gap-2">{right}</div>
       </div>
     );
   }
-  // Le bloc titre garde une largeur minimale lisible (basis-52) : si les
-  // actions ne tiennent pas à côté, elles passent à la ligne au lieu
-  // d'écraser le titre.
   return (
-    <div className="mb-2 flex flex-wrap items-center gap-x-2.5 gap-y-2">
-      <Badge icon={icon} tone={tone} size={34} />
-      <div className="min-w-0 grow basis-52">
-        <div className="text-[12.5px] font-bold leading-tight text-navy-700">{title}</div>
-        {sub ? <div className="text-[11px] leading-snug text-surface-500">{sub}</div> : null}
-      </div>
+    <div className="-mx-4 -mt-[14px] mb-3 flex items-center gap-2.5 px-4 py-2.5" style={band}>
+      {icoBox}
+      {titleBlock}
       {right ? <div className="ml-auto flex shrink-0 items-center gap-2">{right}</div> : null}
     </div>
   );

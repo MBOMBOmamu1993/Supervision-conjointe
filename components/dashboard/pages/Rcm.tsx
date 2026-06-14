@@ -10,7 +10,7 @@ import { norm } from "@/lib/geo";
 import { fmtMonth } from "@/lib/client/format";
 import type { RcmBundle } from "@/lib/rcm/types";
 import { SectionBar } from "@/components/ui/Card";
-import { KpiTile, CardTitle, Banner, C } from "@/components/proto/proto";
+import { KpiTile, CardTitle, Banner, C, covCellStyle } from "@/components/proto/proto";
 import { DIcon } from "@/components/dashboard/icons";
 import { ProtoGroupedBar, ProtoHBar } from "@/components/proto/charts";
 import Donut from "@/components/charts/Donut";
@@ -111,8 +111,8 @@ export function RcmVaccination() {
       <section>
         <SectionBar icon="bars">Indicateurs clés</SectionBar>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          <KpiTile icon="form" tone="blue" label="Enfants avec carte" value={pctTxt(k.cartePct)} />
-          <KpiTile icon="syringe" tone="green" label="Enfants vaccinés" value={pctTxt(k.vaccinePct)} />
+          <KpiTile icon="form" tone="blue" label="Enfants avec carte" value={pctTxt(k.cartePct)} perf={k.cartePct ?? undefined} />
+          <KpiTile icon="syringe" tone="green" label="Enfants vaccinés" value={pctTxt(k.vaccinePct)} perf={k.vaccinePct ?? undefined} />
           <KpiTile icon="enfants" tone="red" label="Enfants non vaccinés" value={pctTxt(k.nonVaccinePct)} />
           <KpiTile icon="rr" tone="violet" label="Antigènes prioritaires" value={k.antigenesPrioritaires} />
         </div>
@@ -203,13 +203,21 @@ const CV_AGS: { key: "penta1" | "penta3" | "rr1" | "rr2"; label: string }[] = [
   { key: "rr2", label: "RR2" },
 ];
 
-/** Fond de cellule selon l'écart |RCM − SNIS| : ≥ 20 pts rouge clair, ≥ 10 pts orange. */
-function gapBg(rcm: number | null, snis: number | null): string | undefined {
-  if (rcm == null || snis == null) return undefined;
-  const gap = Math.abs(rcm - snis);
-  if (gap >= 20) return "#fde2e2";
-  if (gap >= 10) return "#ffe8cc";
-  return undefined;
+/** Légende des couleurs du tableau de couverture (cf. barème covCellStyle). */
+function CvLegend() {
+  const items: [string, string, string][] = [
+    ["< 50 %", "#ef5667", "#fff"], ["50 – 80 %", "#f7cf4d", "#4a3700"],
+    ["80 – 90 %", "#9ad99e", "#13441f"], ["90 – 100 %", "#36ad56", "#fff"], ["> 100 %", "#3f8ef2", "#fff"],
+  ];
+  return (
+    <div className="mb-2.5 flex flex-wrap items-center gap-2">
+      <span className="text-[11px] font-bold text-surface-700">Légende :</span>
+      {items.map(([t, bg, fg]) => (
+        <span key={t} className="rounded-md px-3 py-1 text-[11.5px] font-extrabold"
+          style={{ background: bg, color: fg, boxShadow: "0 2px 6px rgba(15,23,42,.14)" }}>{t}</span>
+      ))}
+    </div>
+  );
 }
 
 function CvComparisonTable({ data }: { data: RcmBundle }) {
@@ -237,6 +245,7 @@ function CvComparisonTable({ data }: { data: RcmBundle }) {
       <CardTitle icon="syringe" tone="violet"
         title={`Couverture vaccinale RCM vs couverture administrative (DHIS2) — ${moisLabel}`}
         right={<TableExportButtons filename={`Couverture vaccinale RCM vs DHIS2 ${moisLabel}`} data={exportData} />} />
+      <CvLegend />
       {error ? <Empty msg="Données administratives DHIS2 indisponibles (snis-vaccination-api)." /> : null}
       {!error && rows.length ? (
         <div className="overflow-x-auto">
@@ -260,10 +269,9 @@ function CvComparisonTable({ data }: { data: RcmBundle }) {
                   {CV_AGS.flatMap((ag) => {
                     const rcm = r.rcm?.[ag.key] ?? null;
                     const snis = r.snis?.[ag.key] ?? null;
-                    const bg = gapBg(rcm, snis);
                     return [
-                      <td key={`${ag.key}-rcm`} style={{ background: bg }}>{pctTxt(rcm)}</td>,
-                      <td key={`${ag.key}-snis`} style={{ background: bg }}>{pctTxt(snis)}</td>,
+                      <td key={`${ag.key}-rcm`} style={covCellStyle(rcm)}>{pctTxt(rcm)}</td>,
+                      <td key={`${ag.key}-snis`} style={covCellStyle(snis)}>{pctTxt(snis)}</td>,
                     ];
                   })}
                 </tr>
