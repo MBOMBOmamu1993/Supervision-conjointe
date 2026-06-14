@@ -206,7 +206,7 @@ const CV_AGS: { key: "penta1" | "penta3" | "rr1" | "rr2"; label: string }[] = [
 /** Légende des couleurs du tableau de couverture (cf. barème covCellStyle). */
 function CvLegend() {
   const items: [string, string, string][] = [
-    ["< 50 %", "#ef5667", "#fff"], ["50 – 80 %", "#f7cf4d", "#4a3700"],
+    ["< 50 %", "#dc2626", "#fff"], ["50 – 80 %", "#f7cf4d", "#4a3700"],
     ["80 – 90 %", "#9ad99e", "#13441f"], ["90 – 100 %", "#36ad56", "#fff"], ["> 100 %", "#3f8ef2", "#fff"],
   ];
   return (

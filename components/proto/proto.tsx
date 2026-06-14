@@ -116,7 +116,7 @@ function perfBand(v: number) {
 export function covCellStyle(v: number | null): React.CSSProperties | undefined {
   if (v == null || isNaN(v)) return undefined;
   let bg: string, fg: string;
-  if (v < 50)        { bg = "#ef5667"; fg = "#fff"; }
+  if (v < 50)        { bg = "#dc2626"; fg = "#fff"; }
   else if (v < 80)   { bg = "#f7cf4d"; fg = "#4a3700"; }
   else if (v < 90)   { bg = "#9ad99e"; fg = "#13441f"; }
   else if (v <= 100) { bg = "#36ad56"; fg = "#fff"; }

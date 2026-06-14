@@ -18,6 +18,7 @@
 import { useRapportAt } from "@/lib/client/at-api";
 import { useCqd } from "@/lib/client/cqd-api";
 import { useDhis2Prestation } from "@/lib/client/dhis2-prestation-api";
+import { useDhis2Logistique } from "@/lib/client/dhis2-logistique-api";
 import type { OpnCounts, AntenneSeries } from "@/lib/at/types";
 import { SectionBar } from "@/components/ui/Card";
 import { KpiTile, CardTitle, Banner, C, TONES, type Tone } from "@/components/proto/proto";
@@ -401,9 +402,14 @@ function InvCell({ v }: { v: string | null }) {
 
 export function RapVaccins() {
   const { data } = useRapportAt();
+  // Taux de disponibilité PENTA / RR : source LOGISTIQUE DHIS2/SNIS (situation
+  // 2026), méthode identique au dashboard snis-vaccination-api.
+  const { data: logi, error: logiErr } = useDhis2Logistique();
   if (!data) return <Empty msg="Synchronisation…" />;
   const v = data.vaccins;
   const months = v.months;
+  const dispoMonths = logi?.months ?? [];
+  const dispo = logi?.dispo ?? [];
   return (
     <div className="space-y-4">
       <RefreshBar />
@@ -449,9 +455,13 @@ export function RapVaccins() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-        {v.dispo.map((d) => (
-          <AntenneLines key={d.key} months={months} series={d.series} title={d.label} icon="up" tone={d.key.startsWith("penta") ? "blue" : "violet"} />
-        ))}
+        {dispo.length ? dispo.map((d) => (
+          <AntenneLines key={d.key} months={dispoMonths} series={d.series} title={d.label} icon="up" tone={d.key.startsWith("penta") ? "blue" : "violet"} />
+        )) : (
+          <div className="card card-pad lg:col-span-2">
+            <Empty msg={logiErr ? "Données de logistique DHIS2 indisponibles (snis-vaccination-api)." : "Chargement des taux de disponibilité (logistique DHIS2)…"} />
+          </div>
+        )}
       </div>
     </div>
   );
