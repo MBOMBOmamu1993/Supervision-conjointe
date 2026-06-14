@@ -21,7 +21,7 @@ import { useDhis2Prestation } from "@/lib/client/dhis2-prestation-api";
 import { useDhis2Logistique } from "@/lib/client/dhis2-logistique-api";
 import type { OpnCounts, AntenneSeries } from "@/lib/at/types";
 import { SectionBar } from "@/components/ui/Card";
-import { KpiTile, CardTitle, Banner, C, TONES, type Tone } from "@/components/proto/proto";
+import { KpiTile, CardTitle, Banner, C, TONES, covCellStyle, type Tone } from "@/components/proto/proto";
 import { ProtoGroupedBar } from "@/components/proto/charts";
 import LineTrend from "@/components/charts/LineTrend";
 import { DIcon } from "@/components/dashboard/icons";
@@ -400,6 +400,44 @@ function InvCell({ v }: { v: string | null }) {
   return <td style={{ ...style, fontWeight: 800 }}>{v}</td>;
 }
 
+/** Cellule de taux de disponibilité colorée selon la légende de couverture
+ *  (rouge < 50 · jaune 50–80 · vert clair 80–90 · vert ≥ 90). */
+function DispoCell({ v }: { v: number | null }) {
+  return <td className="tabular-nums" style={covCellStyle(v) ?? {}}>{v == null ? "—" : `${v}%`}</td>;
+}
+
+/**
+ * Taux de disponibilité d'un antigène présenté SOUS FORME DE TABLEAU (feedback
+ * TL) : 1re colonne = zone de santé, 1re ligne = mois de l'année, contenu = taux
+ * (%) par ZS et par mois. Conserve le design des autres tableaux (.dtable).
+ */
+function DispoZsTable({ title, tone, months, series }: {
+  title: string; tone: Tone; months: { key: string; label: string }[];
+  series: { antenne: string; values: (number | null)[] }[];
+}) {
+  const hasData = months.length > 0 && series.some((s) => s.values.some((v) => v != null));
+  return (
+    <div className="card card-pad">
+      <CardTitle icon="table" tone={tone} title={title} right={<TableExportButtons filename={title} />} />
+      {hasData ? (
+        <div className="overflow-x-auto"><table className="dtable">
+          <thead><tr><th className="name">Zone de santé</th>{months.map((m) => <th key={m.key}>{m.label}</th>)}</tr></thead>
+          <tbody>{series.map((s) => (
+            <tr key={s.antenne}><td className="name">{s.antenne}</td>{s.values.map((v, i) => <DispoCell key={i} v={v} />)}</tr>
+          ))}</tbody>
+        </table></div>
+      ) : <Empty />}
+      <div className="mt-2 flex flex-wrap items-center gap-3 text-[10.5px] font-bold text-surface-600">
+        <span className="font-extrabold uppercase tracking-wide text-surface-500">Légende :</span>
+        <span className="inline-flex items-center gap-1.5"><span className="h-3 w-6 rounded-sm" style={{ background: "#dc2626" }} />&lt; 50 %</span>
+        <span className="inline-flex items-center gap-1.5"><span className="h-3 w-6 rounded-sm" style={{ background: "#f7cf4d" }} />50–80 %</span>
+        <span className="inline-flex items-center gap-1.5"><span className="h-3 w-6 rounded-sm" style={{ background: "#9ad99e" }} />80–90 %</span>
+        <span className="inline-flex items-center gap-1.5"><span className="h-3 w-6 rounded-sm" style={{ background: "#36ad56" }} />≥ 90 %</span>
+      </div>
+    </div>
+  );
+}
+
 export function RapVaccins() {
   const { data } = useRapportAt();
   // Taux de disponibilité PENTA / RR : source LOGISTIQUE DHIS2/SNIS (situation
@@ -454,15 +492,26 @@ export function RapVaccins() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-        {dispo.length ? dispo.map((d) => (
-          <AntenneLines key={d.key} months={dispoMonths} series={d.series} title={d.label} icon="up" tone={d.key.startsWith("penta") ? "blue" : "violet"} />
-        )) : (
-          <div className="card card-pad lg:col-span-2">
-            <Empty msg={logiErr ? "Données de logistique DHIS2 indisponibles (snis-vaccination-api)." : "Chargement des taux de disponibilité (logistique DHIS2)…"} />
+      {dispo.length ? (
+        <>
+          {/* Niveau antenne : courbes mensuelles. */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+            {dispo.filter((d) => d.key.endsWith("_antenne")).map((d) => (
+              <AntenneLines key={d.key} months={dispoMonths} series={d.series} title={d.label} icon="up" tone={d.key.startsWith("penta") ? "blue" : "violet"} />
+            ))}
           </div>
-        )}
-      </div>
+          {/* Niveau zones de santé : tableaux (ZS × mois) — feedback TL. */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+            {dispo.filter((d) => d.key.endsWith("_zs")).map((d) => (
+              <DispoZsTable key={d.key} title={d.label} tone={d.key.startsWith("penta") ? "blue" : "violet"} months={dispoMonths} series={d.series} />
+            ))}
+          </div>
+        </>
+      ) : (
+        <div className="card card-pad">
+          <Empty msg={logiErr ? "Données de logistique DHIS2 indisponibles (snis-vaccination-api)." : "Chargement des taux de disponibilité (logistique DHIS2)…"} />
+        </div>
+      )}
     </div>
   );
 }
@@ -514,6 +563,78 @@ export function RapChaineFroid() {
 
       <NarrativeCard icon="message" tone="blue" title="Observations clés" sub="Commentaires sur le matériel de chaîne de froid saisis par les AT"
         items={c.commentaires} emptyMsg="Aucun commentaire de chaîne de froid saisi sur la période filtrée." />
+    </div>
+  );
+}
+
+/* Ligne « détail prestation » par antenne (couvertures et sessions, %). */
+type PrestaRow = { antenne: string; fixes: number | null; avancees: number | null; mobiles: number | null; p1: number | null; p3: number | null; rr1: number | null; rr2: number | null };
+
+/**
+ * Commentaire AUTOMATIQUE rédigé « comme un expert PEV » à partir des données de
+ * prestation de la page (couvertures Penta/RR, abandons, stratégies de sessions).
+ * Génère une appréciation globale + des constats et recommandations priorisés.
+ */
+function buildPrestationComment(rows: PrestaRow[]): { tone: Tone; lines: { tone: Tone; text: string }[] } {
+  const lines: { tone: Tone; text: string }[] = [];
+  const seen = rows.filter((r) => [r.fixes, r.avancees, r.mobiles, r.p1, r.p3, r.rr1, r.rr2].some((v) => v != null));
+  if (!seen.length) return { tone: "blue", lines };
+  const avg = (k: keyof PrestaRow) => {
+    const vals = seen.map((r) => r[k]).filter((v): v is number => typeof v === "number");
+    return vals.length ? Math.round(vals.reduce((a, b) => a + b, 0) / vals.length) : null;
+  };
+  const p1 = avg("p1"), p3 = avg("p3"), rr1 = avg("rr1"), rr2 = avg("rr2");
+  const fixes = avg("fixes"), avancees = avg("avancees"), mobiles = avg("mobiles");
+  const lvl = (v: number | null): Tone => (v == null ? "blue" : v >= 90 ? "green" : v >= 80 ? "teal" : v >= 50 ? "orange" : "red");
+  const word = (v: number | null) => (v == null ? "non documentée" : v >= 90 ? "atteint la cible (≥ 90 %)" : v >= 80 ? "proche de la cible (80–90 %)" : v >= 50 ? "insuffisant (50–80 %)" : "critique (< 50 %)");
+
+  // Complétude vaccinale (Penta3 = indicateur traceur).
+  if (p3 != null) lines.push({ tone: lvl(p3), text: `Complétude vaccinale (Penta3) : ${p3} % des aires de santé ≥ 90 % — niveau ${word(p3)}.` });
+  // Abandon Penta1 → Penta3.
+  if (p1 != null && p3 != null) {
+    const d = p1 - p3;
+    if (d >= 10) lines.push({ tone: "red", text: `Taux d'abandon Penta1–Penta3 élevé (${d} points) : des enfants commencent mais ne complètent pas la vaccination — renforcer le suivi des perdus de vue et les rappels communautaires.` });
+    else if (d > 0) lines.push({ tone: "green", text: `Abandon Penta1–Penta3 maîtrisé (${d} points), traduisant une bonne rétention des enfants dans le calendrier vaccinal.` });
+  }
+  // Deuxième dose rougeole-rubéole (RR2) et abandon RR1 → RR2.
+  if (rr2 != null) lines.push({ tone: lvl(rr2), text: `Couverture RR2 (2ᵉ dose rougeole-rubéole) ${word(rr2)}${rr2 < 80 ? " — antigène à prioriser dans les stratégies de rattrapage." : "."}` });
+  if (rr1 != null && rr2 != null && rr1 - rr2 >= 10) lines.push({ tone: "orange", text: `Abandon RR1–RR2 marqué (${rr1 - rr2} points) : organiser des sessions de rattrapage pour la deuxième dose.` });
+  // Stratégies de prestation (fixes / avancées / mobiles).
+  const weakStrat = [["sessions fixes", fixes], ["stratégies avancées", avancees], ["sessions mobiles", mobiles]].filter(([, v]) => v != null && (v as number) < 80) as [string, number][];
+  if (weakStrat.length) lines.push({ tone: "orange", text: `Réalisation des ${weakStrat.map(([l, v]) => `${l} (${v} %)`).join(", ")} en deçà de 80 % : revoir la micro-planification et la disponibilité des intrants/personnel pour atteindre les populations difficiles d'accès.` });
+  else if (fixes != null || avancees != null || mobiles != null) lines.push({ tone: "green", text: `Les stratégies de vaccination (fixes, avancées, mobiles) sont globalement réalisées au-delà du seuil de 80 %.` });
+
+  // Appréciation globale (moyenne des couvertures disponibles).
+  const cov = [p1, p3, rr1, rr2].filter((v): v is number => v != null);
+  const global = cov.length ? Math.round(cov.reduce((a, b) => a + b, 0) / cov.length) : null;
+  const tone = lvl(global);
+  if (global != null) {
+    const reco = global >= 90 ? "Maintenir la performance et documenter les bonnes pratiques pour les autres antennes."
+      : global >= 80 ? "Consolider les acquis et cibler les aires de santé encore en dessous du seuil."
+      : "Élaborer un plan de rattrapage priorisant les antigènes et les aires de santé les plus faibles, avec appui rapproché des AT.";
+    lines.unshift({ tone, text: `Appréciation globale : performance moyenne des couvertures de ${global} % (Penta1·3 · RR1·2). ${reco}` });
+  }
+  return { tone, lines };
+}
+
+/** Carte de commentaire automatique « expert PEV » sur la prestation de services. */
+function PrestationExpert({ rows }: { rows: PrestaRow[] }) {
+  const { tone, lines } = buildPrestationComment(rows);
+  if (!lines.length) return null;
+  return (
+    <div className="card card-pad">
+      <CardTitle icon="comment" tone={tone} title="Commentaire automatique — analyse d'expert PEV"
+        sub="Lecture générée à partir des couvertures, des abandons et des stratégies de sessions de cette page" />
+      <ul className="space-y-2 pt-1">
+        {lines.map((l, i) => (
+          <li key={i} className="flex items-start gap-2 rounded-lg border px-3 py-2 text-[12.5px] font-semibold leading-snug"
+            style={{ background: TONES[l.tone].bg, borderColor: TONES[l.tone].border, color: TONES[l.tone].text }}>
+            <span className="mt-[5px] h-1.5 w-1.5 shrink-0 rounded-full" style={{ background: TONES[l.tone].ico }} />
+            <span>{l.text}</span>
+          </li>
+        ))}
+      </ul>
+      <div className="mt-2 text-[10.5px] text-surface-400">Synthèse automatique à visée d'aide à la décision — à interpréter avec le contexte local et la complétude des rapportages.</div>
     </div>
   );
 }
@@ -588,6 +709,8 @@ export function RapPrestation() {
           <span className="inline-flex items-center gap-1.5"><span className="h-3 w-6 rounded-sm" style={{ background: "#22a44a" }} />&gt; 90 %</span>
         </div>
       </div>
+
+      <PrestationExpert rows={detail.rows} />
 
       <NarrativeCard icon="message" tone="green" title="Commentaires sur la prestation de service"
         sub="Saisis par les AT dans le rapport mensuel" items={p.commentaires}

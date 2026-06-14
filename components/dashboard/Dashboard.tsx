@@ -125,6 +125,8 @@ function Welcome({ onStart }: { onStart: () => void }) {
                 <div><b>Monitorage rapide de convenance :</b> formulaire RCM KoboToolbox</div>
                 <div><b>SAV :</b> 5 formulaires de la Semaine Africaine de Vaccination + BASE SAISIE DONNEES SAV</div>
                 <div><b>Rapport mensuel & Évaluation des AT :</b> formulaire « Rapport mensuel des AT » (temps réel)</div>
+                <div><b>Gestion des vaccins · Prestation de services · Triangulation :</b> données de routine <b>DHIS2 / SNIS</b> de la province (logistique, couvertures et doses disponibles)</div>
+                <div className="mt-1 rounded-lg px-3 py-2 text-[12.5px]" style={{ background: "#eaf4fd" }}>La plupart des onglets combinent plusieurs sources : <b>KoboToolbox</b> (collecte terrain), <b>fichiers Excel</b> (bases de saisie) et <b>DHIS2 / SNIS</b> (données de routine national).</div>
               </div>
             </div>
             <div>

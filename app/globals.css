@@ -45,12 +45,23 @@
     padding: 6px 8px; border: 1px solid #e8eef5; text-align: center; vertical-align: middle;
     font-variant-numeric: tabular-nums; color: #1e293b;
   }
-  /* 1re colonne (org unit / variable) — navy, texte blanc */
+  /* 1re colonne (org unit / variable) — navy, texte blanc. */
   table.dtable td.name, table.dtable th.name {
     text-align: left; font-weight: 700; color: #fff;
     background: linear-gradient(100deg, #0a3a86, #00205c);
     border-color: #1b3f7a;
   }
+  /* La PREMIÈRE colonne (unité d'organisation) est FIGÉE à gauche
+     (position: sticky) afin de rester visible lors du défilement horizontal des
+     tableaux larges (feedback TL). On cible uniquement la 1re colonne pour ne
+     pas perturber les tableaux à deux colonnes d'identité (ex. structure +
+     antigène). */
+  table.dtable td:first-child.name, table.dtable th:first-child.name {
+    position: sticky; left: 0; z-index: 2;
+    box-shadow: 2px 0 0 #1b3f7a;
+  }
+  /* l'en-tête de la colonne figée passe au-dessus des cellules du corps */
+  table.dtable thead th:first-child.name { z-index: 3; }
   table.dtable tbody tr:nth-child(even) { background: #fafcff; }
   /* le zébrage ne doit pas recouvrir la colonne navy */
   table.dtable tbody tr:nth-child(even) td.name { background: linear-gradient(100deg, #0a3a86, #00205c); }

@@ -14,6 +14,7 @@ import { fmtMonth } from "@/lib/client/format";
 import Donut from "@/components/charts/Donut";
 import EChart from "@/components/charts/EChart";
 import { TableExportButtons } from "@/components/ui/TableExport";
+import { usePaged, Pager } from "@/components/ui/Pagination";
 
 /* --------------------------- helpers --------------------------- */
 const round = (n: number) => Math.round(n * 10) / 10;
@@ -83,8 +84,8 @@ function CqdDefinitions() {
     {
       n: 2,
       titre: "Écart moyen",
-      definition: "Différence moyenne entre les chiffres retrouvés dans plusieurs outils et le chiffre de l'outil de référence (registre, fiche de pointage, rapport mensuel, DHIS2…).",
-      formule: "Σ |valeur outil comparé − valeur outil de référence| / nombre d'outils comparés",
+      definition: "Différence moyenne entre les chiffres retrouvés dans les outils comparés (fiche de pointage, canevas SNIS, DHIS2…) et le chiffre de l'outil de référence — au niveau CS le registre de vaccination, au niveau ZS le SNIS comparé au DHIS2.",
+      formule: "Σ |valeur outil comparé − valeur de l'outil de référence| ÷ nombre d'outils comparés, rapportée à la valeur de référence (%)",
       interp: [
         { txt: "Plus l'écart moyen est faible, plus les outils sont cohérents avec l'outil de référence.", color: C.green },
       ],
@@ -102,9 +103,11 @@ function CqdDefinitions() {
   ];
   return (
     <section>
-      <SectionBar icon="legend">Indicateurs de contrôle de qualité des données — Définitions, formules et interprétation</SectionBar>
+      <SectionBar icon="legend">Note explicative des indicateurs de contrôle qualité des données</SectionBar>
       {/* Fermée PAR DÉFAUT : un doigt indique qu'un clic déroule / replie la
-          note explicative (feedback Dr Léandre). */}
+          note explicative (feedback Dr Léandre). Regroupe TOUTES les définitions
+          (facteur de vérification, écart moyen, taux d'erreur) — les encadrés
+          autrefois affichés en permanence sont désormais repliés ici. */}
       <details className="card card-pad">
         <summary className="flex cursor-pointer select-none flex-wrap items-center gap-2 text-[12.5px] font-bold text-navy-700">
           <PointerIcon />
@@ -154,23 +157,31 @@ function ConcTable({ icon = "table", title, sub, label, data, months }: {
   icon?: "table"; title: string; sub: string; label: string; data: CqdConcordanceAS[]; months: string[];
 }) {
   const ok = data.length > 0 && months.length > 0;
+  // Pagination par structure : 30 structures par page (feedback TL).
+  const pg = usePaged(data, 30);
   return (
     <div className="card card-pad">
       <CardTitle icon={icon} tone="navy" title={title} sub={sub} right={<TableExportButtons filename={title} />} />
       {ok ? (
+        <>
         <div className="overflow-x-auto"><table className="dtable">
           <thead><tr>
             <th className="name">{label}</th><th className="name">Antigène</th>
             {months.map((m) => <th key={m}>{fmtMonth(m)}</th>)}
           </tr></thead>
-          <tbody>{data.map((s) => s.antigenes.map((ant, ai) => (
+          <tbody>{pg.slice.map((s) => s.antigenes.map((ant, ai) => (
             <tr key={s.name + ant.antigene}>
-              {ai === 0 ? <td className="name" rowSpan={s.antigenes.length}>{s.name}</td> : null}
+              {/* La colonne « structure » est présente sur chaque ligne (vide
+                  pour les antigènes suivants) afin que la 1re colonne figée
+                  reste alignée — équivalent visuel d'un rowSpan. */}
+              <td className="name">{ai === 0 ? s.name : ""}</td>
               <td className="name">{ant.antigene}</td>
               {ant.byMonth.map((v, mi) => <ConcCell key={mi} v={v} />)}
             </tr>
           )))}</tbody>
         </table></div>
+        <Pager page={pg.page} pageCount={pg.pageCount} setPage={pg.setPage} start={pg.start} end={pg.end} total={pg.total} />
+        </>
       ) : <Empty />}
     </div>
   );
@@ -183,14 +194,6 @@ export function CqdCsComparaison() {
     <div className="space-y-4">
       <Banner icon="chart" tone="blue" title="Centres de santé — Comparaison des sources de données" sub="Source de référence : registre de vaccination — comparé au pointage et au SNIS, par antigène" />
       <CqdDefinitions />
-      <div className="card card-pad" style={{ background: "#eaf4fd" }}>
-        <div className="text-[12px] leading-relaxed text-surface-700">
-          <b>Écart moyen :</b> différence moyenne entre les chiffres retrouvés dans les outils comparés (fiche de pointage,
-          canevas SNIS) et le chiffre de l'outil de référence — ici le <b>registre de vaccination</b>. Formule :
-          Σ |valeur outil comparé − valeur du registre| ÷ nombre d'outils comparés, rapportée à la valeur du registre (%).
-          Plus l'écart moyen est faible, plus les outils sont cohérents avec l'outil de référence.
-        </div>
-      </div>
       <section>
         <SectionBar icon="bars">Écart moyen par rapport au registre de vaccination, par antigène</SectionBar>
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
@@ -271,6 +274,7 @@ export function CqdCsErreurs() {
   // 12 comparaisons par aire de santé : 4 antigènes (PENTA1·3 · RR1·2) × 3 mois.
   const comparaisons = rows.length * 12;
   const top5 = [...rows].sort((a, b2) => (b2.erreurRegistreSnis ?? 0) - (a.erreurRegistreSnis ?? 0)).slice(0, 5);
+  const pg = usePaged(rows, 30);
   return (
     <div className="space-y-4">
       <Banner icon="erreurs" tone="red" title="Centres de santé — Taux d'erreur de transcription" sub="Registre → SNIS · feuille de pointage → registre" />
@@ -299,12 +303,15 @@ export function CqdCsErreurs() {
       <div className="card card-pad">
         <CardTitle icon="table" tone="navy" title="Taux d'erreur par aire de santé" sub="Registre/SNIS · Pointage/registre · appréciation" right={<TableExportButtons filename="Taux d'erreur par aire de santé" />} />
         {rows.length ? (
+          <>
           <div className="overflow-x-auto"><table className="dtable">
             <thead><tr><th className="name">Aire de santé</th><th>Registre – SNIS</th><th>Pointage – Registre</th><th>Appréciation</th></tr></thead>
-            <tbody>{rows.map((r) => { const a = errAppr(r.erreurRegistreSnis); return (
+            <tbody>{pg.slice.map((r) => { const a = errAppr(r.erreurRegistreSnis); return (
               <tr key={r.name}><td className="name">{r.name}</td><td style={{ color: C.red, fontWeight: 700 }}>{pctTxt(r.erreurRegistreSnis)}</td><td>{pctTxt(r.erreurPointageRegistre)}</td><td style={{ color: a.color, fontWeight: 800 }}>{a.label}</td></tr>
             ); })}</tbody>
           </table></div>
+          <Pager page={pg.page} pageCount={pg.pageCount} setPage={pg.setPage} start={pg.start} end={pg.end} total={pg.total} />
+          </>
         ) : <Empty />}
         <div className="mt-2 text-[11px] text-surface-500">Taux d'erreur = données discordantes / total des comparaisons × 100 ; le total comparé est de 12 par aire de santé (4 antigènes × 3 mois) ; ≥ 50 % = erreurs systématiques.</div>
       </div>
@@ -317,6 +324,7 @@ export function CqdCsOutils() {
   const { b, live } = useLevel("as");
   const o = b?.outils ?? { registre: null, pointage: null, snis: null };
   const rows = b?.parStructure ?? [];
+  const pg = usePaged(rows, 30);
   const aRenforcer = rows.filter((r) => r.outilsOk < 2).length;
   const okTxt = (v: boolean | null) => (v ? "Bien" : "Mal");
   return (
@@ -339,13 +347,16 @@ export function CqdCsOutils() {
       <div className="card card-pad">
         <CardTitle icon="table" tone="navy" title="Appréciation par aire de santé" sub="Bien / Mal rempli par outil" right={<TableExportButtons filename="Appréciation par aire de santé" />} />
         {rows.length ? (
+          <>
           <div className="overflow-x-auto"><table className="dtable">
             <thead><tr><th className="name">Aire de santé</th><th>Registre</th><th>Pointage</th><th>SNIS</th></tr></thead>
-            <tbody>{rows.map((r) => (
+            <tbody>{pg.slice.map((r) => (
               <tr key={r.name}><td className="name">{r.name}</td>
                 {[r.registreOk, r.pointageOk, r.snisOk].map((v, i) => <td key={i} style={{ background: v ? "#e6f6ec" : "#fde2e2", color: v ? "#178a44" : "#c81e1e", fontWeight: 800 }}>{okTxt(v)}</td>)}</tr>
             ))}</tbody>
           </table></div>
+          <Pager page={pg.page} pageCount={pg.pageCount} setPage={pg.setPage} start={pg.start} end={pg.end} total={pg.total} />
+          </>
         ) : <Empty />}
       </div>
     </div>
@@ -739,6 +750,7 @@ function CqdComparaisonStructure({ level }: { level: "as" | "zs" }) {
   const cmp = b?.comparaison;
   const rows = cmp?.structures ?? [];
   const withData = rows.filter((r) => r.ecart.total !== null || r.fv.moyen !== null || r.erreur !== null);
+  const pgMat = usePaged(withData, 30);
   const maxEcart = Math.max(1, ...rows.flatMap((r) => CMP_ANT.map((a) => r.ecart[a.key] ?? 0)));
   const labelStruct = level === "as" ? "Aire de santé" : "Zone de santé";
   const errRows: [string, number][] = withData
@@ -783,6 +795,7 @@ function CqdComparaisonStructure({ level }: { level: "as" | "zs" }) {
           sub="Plus faible = meilleur (écart, erreur) · 95 % – 105 % = bonne concordance (facteur de vérification)"
           right={<TableExportButtons filename="Matrice comparative des indicateurs par structure" />} />
         {withData.length ? (
+          <>
           <div className="overflow-x-auto"><table className="dtable">
             <thead>
               <tr>
@@ -797,7 +810,7 @@ function CqdComparaisonStructure({ level }: { level: "as" | "zs" }) {
               </tr>
             </thead>
             <tbody>
-              {withData.map((r) => (
+              {pgMat.slice.map((r) => (
                 <tr key={r.name}>
                   <td className="name">{r.name}</td>
                   {CMP_ANT.map((a) => <td key={`e${a.key}`} className="tabular-nums" style={ecartCellStyle(r.ecart[a.key], maxEcart)}>{r.ecart[a.key] ?? "—"}</td>)}
@@ -809,6 +822,8 @@ function CqdComparaisonStructure({ level }: { level: "as" | "zs" }) {
               ))}
             </tbody>
           </table></div>
+          <Pager page={pgMat.page} pageCount={pgMat.pageCount} setPage={pgMat.setPage} start={pgMat.start} end={pgMat.end} total={pgMat.total} />
+          </>
         ) : <Empty />}
       </div>
       <div className="card card-pad">
@@ -866,6 +881,9 @@ function TriangulationTable({ level }: { level: "as" | "zs" }) {
   const ants = data?.antigenes ?? [];
   const monthsLabel = (data?.months ?? []).map(fmtMonth).join(" · ");
   const tone: Tone = level === "as" ? "teal" : "navy";
+  // 30 lignes par page (feedback TL) — un tableau de triangulation peut compter
+  // plus de 100 aires de santé.
+  const pg = usePaged(rows, 30);
   return (
     <div className="space-y-4">
       <Banner icon="component" tone={tone}
@@ -883,6 +901,7 @@ function TriangulationTable({ level }: { level: "as" | "zs" }) {
           sub={`Une ligne par ${level === "as" ? "aire de santé" : "zone de santé"} · Dose disponible · Vaccinés · Écart par antigène`}
           right={<TableExportButtons filename={`Triangulation doses disponibles et vaccinés (${labelStruct})`} />} />
         {rows.length && ants.length ? (
+          <>
           <div className="overflow-x-auto"><table className="dtable">
             <thead>
               <tr>
@@ -902,7 +921,7 @@ function TriangulationTable({ level }: { level: "as" | "zs" }) {
               </tr>
             </thead>
             <tbody>
-              {rows.map((r) => (
+              {pg.slice.map((r) => (
                 <tr key={r.name}>
                   <td className="name">{r.name}</td>
                   {r.antigenes.map((ant) => (
@@ -920,6 +939,8 @@ function TriangulationTable({ level }: { level: "as" | "zs" }) {
               ))}
             </tbody>
           </table></div>
+          <Pager page={pg.page} pageCount={pg.pageCount} setPage={pg.setPage} start={pg.start} end={pg.end} total={pg.total} />
+          </>
         ) : <Empty msg={data?.error ? `Données DHIS2 indisponibles : ${data.error}` : "Aucune donnée disponible pour cette sélection."} />}
       </div>
     </div>
