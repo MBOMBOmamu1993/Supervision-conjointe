@@ -892,13 +892,11 @@ function TriangulationTable({ level }: { level: "as" | "zs" }) {
               </tr>
               <tr>
                 {ants.map((a) => (
-                  <th key={`${a}-h`} colSpan={3} className="p-0">
-                    <div className="grid grid-cols-3 text-[10px]">
-                      <span className="px-1 py-0.5">Dose disponible</span>
-                      <span className="px-1 py-0.5">Vaccinés</span>
-                      <span className="px-1 py-0.5">Écart</span>
-                    </div>
-                  </th>
+                  <Fragment key={`${a}-h`}>
+                    <th style={{ minWidth: 64, whiteSpace: "normal", wordBreak: "break-word" }}>Dose disponible</th>
+                    <th style={{ minWidth: 56, whiteSpace: "normal", wordBreak: "break-word" }}>Vaccinés</th>
+                    <th style={{ minWidth: 52, whiteSpace: "normal", wordBreak: "break-word" }}>Écart</th>
+                  </Fragment>
                 ))}
               </tr>
             </thead>

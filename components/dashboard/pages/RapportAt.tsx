@@ -28,6 +28,20 @@ import { TableExportButtons } from "@/components/ui/TableExport";
 
 const pctTxt = (v: number | null | undefined) => (v == null ? "—" : `${v}%`);
 
+/** Couleur d'une cellule de pourcentage selon la légende (capture TL) :
+ *  < 50 % rouge · 50–80 % jaune · 80–90 % vert clair · > 90 % vert. */
+function cvLegendStyle(v: number | null | undefined): React.CSSProperties {
+  if (v == null) return {};
+  if (v < 50) return { background: "#e8313b", color: "#fff", fontWeight: 800 };
+  if (v < 80) return { background: "#f5b50a", color: "#5c4500", fontWeight: 800 };
+  if (v < 90) return { background: "#a9e3a0", color: "#1e6b2a", fontWeight: 800 };
+  return { background: "#22a44a", color: "#fff", fontWeight: 800 };
+}
+/** Cellule de pourcentage colorée selon la légende de couverture. */
+function CvCell({ v }: { v: number | null | undefined }) {
+  return <td className="tabular-nums" style={cvLegendStyle(v)}>{pctTxt(v)}</td>;
+}
+
 function Empty({ msg = "En attente de données." }: { msg?: string }) {
   return <div className="py-10 text-center text-[12px] font-semibold text-surface-500">{msg}</div>;
 }
@@ -516,11 +530,11 @@ export function RapPrestation() {
         sub="Sessions de vaccination (fixes · avancées · mobiles) et couvertures vaccinales — données DHIS2/SNIS (antennes Boende · Bokungu)" />
 
       <section>
-        <SectionBar icon="up">Réalisation des sessions de vaccination (% des AS ≥ 80 %)</SectionBar>
+        <SectionBar icon="up">Réalisation des sessions de vaccination (% des AS ≥ 80 %) — situation 2025</SectionBar>
         <div className="space-y-3">
           {sessions.map((s2) => (
             <AntenneLines key={s2.key} months={months} series={s2.series} ensemble={s2.ensemble}
-              title={`${s2.label}, par mois et par antenne`} icon="up" tone="blue" />
+              title={`${s2.label}, par mois et par antenne (2025)`} icon="up" tone="blue" />
           ))}
         </div>
       </section>
@@ -545,17 +559,24 @@ export function RapPrestation() {
             <tbody>{detail.rows.map((row) => (
               <tr key={row.antenne}>
                 <td className="name">{row.antenne}</td>
-                <td className="tabular-nums">{pctTxt(row.fixes)}</td>
-                <td className="tabular-nums">{pctTxt(row.avancees)}</td>
-                <td className="tabular-nums">{pctTxt(row.mobiles)}</td>
-                <td className="tabular-nums">{pctTxt(row.p1)}</td>
-                <td className="tabular-nums">{pctTxt(row.p3)}</td>
-                <td className="tabular-nums">{pctTxt(row.rr1)}</td>
-                <td className="tabular-nums">{pctTxt(row.rr2)}</td>
+                <CvCell v={row.fixes} />
+                <CvCell v={row.avancees} />
+                <CvCell v={row.mobiles} />
+                <CvCell v={row.p1} />
+                <CvCell v={row.p3} />
+                <CvCell v={row.rr1} />
+                <CvCell v={row.rr2} />
               </tr>
             ))}</tbody>
           </table></div>
         ) : <Empty />}
+        <div className="mt-2 flex flex-wrap items-center gap-3 text-[10.5px] font-bold text-surface-600">
+          <span className="font-extrabold uppercase tracking-wide text-surface-500">Légende :</span>
+          <span className="inline-flex items-center gap-1.5"><span className="h-3 w-6 rounded-sm" style={{ background: "#e8313b" }} />&lt; 50 %</span>
+          <span className="inline-flex items-center gap-1.5"><span className="h-3 w-6 rounded-sm" style={{ background: "#f5b50a" }} />50–80 %</span>
+          <span className="inline-flex items-center gap-1.5"><span className="h-3 w-6 rounded-sm" style={{ background: "#a9e3a0" }} />80–90 %</span>
+          <span className="inline-flex items-center gap-1.5"><span className="h-3 w-6 rounded-sm" style={{ background: "#22a44a" }} />&gt; 90 %</span>
+        </div>
       </div>
 
       <NarrativeCard icon="message" tone="green" title="Commentaires sur la prestation de service"

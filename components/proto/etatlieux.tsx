@@ -116,7 +116,7 @@ export function Edl1() {
             </div>
           </div>
           <div className="card card-pad">
-            <CardTitle icon="child" tone="green" title="Top 50 aires de santé" sub="Plus grand poids démographique (0–11 mois ajustée)" right={<TableExportButtons filename="Top 50 aires de santé" />} />
+            <CardTitle icon="child" tone="green" title="Top 50 aires de santé" sub="Plus grand poids démographique (0–11 mois ajustée)" rightBelow right={<TableExportButtons filename="Top 50 aires de santé" />} />
             <div className="overflow-auto" style={{ maxHeight: 300 }}>
               <table className="dtable">
                 <thead><tr><th>#</th><th className="name">Aire de santé</th><th className="name">ZS</th><th>0–11 (ajustée)</th></tr></thead>
@@ -475,13 +475,13 @@ export function Edl3() {
           <div className="overflow-auto" style={{ maxHeight: 360 }}>
             <table className="dtable" style={{ fontSize: 10 }}>
               <thead><tr>
-                <th className="name" style={{ position: "sticky", left: 0, background: "#f1f5f9", zIndex: 2 }}>Zone de santé</th>
+                <th className="name" style={{ position: "sticky", left: 0, background: "#0a3a86", zIndex: 2 }}>Zone de santé</th>
                 {E.partnerCols.map((p) => <th key={p} style={{ minWidth: 78 }}>{p === "GAVI" ? "CAGF" : p}</th>)}
               </tr></thead>
               <tbody>
                 {E.partners.map((pr) => (
                   <tr key={pr.zs}>
-                    <td className="name" style={{ position: "sticky", left: 0, background: "#fff", zIndex: 1 }}>{pr.zs}</td>
+                    <td className="name" style={{ position: "sticky", left: 0, background: "#0a3a86", color: "#fff", zIndex: 1 }}>{pr.zs}</td>
                     {pr.vals.map((v, i) => {
                       const ras = !v || v.toUpperCase() === "RAS";
                       return <td key={i} style={ras ? { color: "#cbd5e1", textAlign: "left", maxWidth: 120 } : { background: TONES.teal.bg, color: TONES.teal.text, fontWeight: 600, textAlign: "left", maxWidth: 120 }}>{ras ? "—" : v}</td>;

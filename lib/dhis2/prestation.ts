@@ -11,10 +11,14 @@
  * CV mensuelle (identique au dashboard source / lib/dhis2/cv) :
  *   cible NS mensuelle = Pop_par_AS × 3,49 % / 12 ; CV = doses / cible × 100.
  */
-import { fetchTshuapaByAs, num, isoToYm, ymToIso } from "@/lib/dhis2/pages";
+import { fetchTshuapaByAs, num, ymToIso } from "@/lib/dhis2/pages";
 import { canonAntenne, norm } from "@/lib/geo";
 import { fmtMonth } from "@/lib/client/format";
 import { ENV } from "@/lib/server/env";
+import { defaultTargetYm } from "@/lib/dhis2/triangulation";
+
+/** Année de référence pour les graphiques mensuels de prestation (feedback TL). */
+const CHART_YEAR = "2025";
 
 /** Taux annuel « nourrissons survivants » (PEV-RDC). */
 const NS_RATE = 0.0349;
@@ -118,39 +122,45 @@ export async function fetchDhis2Prestation(
     const availYm = new Set<string>();
     for (const r of recs) if (r._YM && hasData(r)) availYm.add(String(r._YM));
     const available = [...availYm].sort();
-    const selectedYm = (filters.months ?? []).map(isoToYm).filter((ym) => availYm.has(ym));
-    const effectiveYm = selectedYm.length ? selectedYm.sort() : available;
-    if (!effectiveYm.length) { cache.set(cacheKey, { at: Date.now(), value: empty }); return empty; }
-    const lastYm = effectiveYm[effectiveYm.length - 1];
+    if (!available.length) { cache.set(cacheKey, { at: Date.now(), value: empty }); return empty; }
+
+    // Graphiques mensuels : situation de l'année 2025 (feedback TL), filtrables
+    // par antenne PEV. À défaut de données 2025, on retombe sur les mois publiés.
+    const ym2025 = available.filter((ym) => ym.slice(0, 4) === CHART_YEAR);
+    const chartYm = ym2025.length ? ym2025 : available;
+    // Mois de référence (détail & couvertures) : M−2 avant le 20, sinon M−1 ;
+    // à défaut de publication, dernier mois disponible.
+    const target = defaultTargetYm();
+    const refYm = availYm.has(target) ? target : available[available.length - 1];
 
     const sub = (ant: string, ym: string) => recs.filter((r) => sameAntenne(r._Antenne, ant) && String(r._YM) === ym);
     const subMonth = (ym: string) => recs.filter((r) => antennes.some((a) => sameAntenne(r._Antenne, a)) && String(r._YM) === ym);
 
-    // 1. Séances réalisées (≥ 80 %) — séries mensuelles par antenne + ensemble.
+    // 1. Séances réalisées (≥ 80 %) — séries mensuelles 2025 par antenne + ensemble.
     const sessions = SESSION_DEFS.map((s) => ({
       key: s.key,
       label: s.label,
       series: antennes.map((ant) => ({
         antenne: ant,
-        values: effectiveYm.map((ym) => sessionPct(sub(ant, ym), s.prev, s.real)),
+        values: chartYm.map((ym) => sessionPct(sub(ant, ym), s.prev, s.real)),
       })),
-      ensemble: effectiveYm.map((ym) => sessionPct(subMonth(ym), s.prev, s.real)),
+      ensemble: chartYm.map((ym) => sessionPct(subMonth(ym), s.prev, s.real)),
     }));
 
-    // 2. Couvertures ≥ 90 % par antigène — catégories antenne (dernier mois).
+    // 2. Couvertures ≥ 90 % par antigène — catégories antenne (mois de référence).
     const couvertures = {
       cats: antennes.slice(),
       series: CV_DEFS.map((c) => ({
         name: c.name,
-        data: antennes.map((ant) => cvPct(sub(ant, lastYm), c.field)),
+        data: antennes.map((ant) => cvPct(sub(ant, refYm), c.field)),
       })),
     };
 
-    // 3. Détail par antenne — dernier mois effectif.
+    // 3. Détail par antenne — mois de référence (M−2 / M−1).
     const detail = {
-      moisLabel: fmtMonth(ymToIso(lastYm)),
+      moisLabel: fmtMonth(ymToIso(refYm)),
       rows: antennes.map((ant) => {
-        const rs = sub(ant, lastYm);
+        const rs = sub(ant, refYm);
         return {
           antenne: ant,
           fixes: sessionPct(rs, "seances_fixes_prevues", "seances_fixes_realisees"),
@@ -165,11 +175,11 @@ export async function fetchDhis2Prestation(
     };
 
     const bundle: PrestationBundle = {
-      months: effectiveYm.map((ym) => ({ key: ymToIso(ym), label: fmtMonth(ymToIso(ym)) })),
+      months: chartYm.map((ym) => ({ key: ymToIso(ym), label: fmtMonth(ymToIso(ym)) })),
       sessions,
       couvertures,
       detail,
-      records: recs.filter((r) => effectiveYm.includes(String(r._YM)) && antennes.some((a) => sameAntenne(r._Antenne, a))).length,
+      records: recs.filter((r) => chartYm.includes(String(r._YM)) && antennes.some((a) => sameAntenne(r._Antenne, a))).length,
       generatedAt: new Date().toISOString(),
     };
     cache.set(cacheKey, { at: Date.now(), value: bundle });
