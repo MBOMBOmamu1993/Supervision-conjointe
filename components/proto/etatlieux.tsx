@@ -15,6 +15,11 @@ import { ProtoGroupedBar, ProtoHBar } from "./charts";
 import { TableExportButtons } from "@/components/ui/TableExport";
 
 const sortZS = (arr: EdlZsPop[]) => arr.slice().sort((a, b) => a.zs.localeCompare(b.zs));
+/** Taux annuel « nourrissons survivants » (PEV-RDC) appliqué à la population
+ *  aire de santé (DHIS2) pour obtenir la cible 0–11 mois administrative. */
+const NS_RATE = 0.0349;
+/** Cible 0–11 mois administrative (DHIS2) d'une AS = population AS × 3,49 %. */
+const cible0_11Dhis2 = (popSnis: number) => Math.round(popSnis * NS_RATE);
 /** Parse un nombre éventuellement stocké en texte (« 140 », « 12,5 »). */
 const dn = (v?: string | null): number | null => {
   const n = parseFloat(String(v ?? "").replace(",", "."));
@@ -41,7 +46,9 @@ function useEdl(): EdlData {
 export function Edl1() {
   const E = useEdl();
   const st = E.structure, pt = E.popTotals;
-  const ecart = pt.enf0_11_ajuste - pt.enf0_11_micro;
+  // Cible 0–11 mois administrative = source DHIS2 (population aire de santé ×
+  // 3,49 %), et non le microplan ; cible ajustée = fichier « cible ajustée 2026 ».
+  const ecart = pt.enf0_11_ajuste - pt.enf0_11_dhis2;
   const zss = sortZS(E.zsPop);
   if (!zss.length) return <div className="space-y-4"><Banner icon="map" tone="navy" title="Informations générales — Province de la Tshuapa" sub="Sélection filtrée" /><NoData /></div>;
 
@@ -78,7 +85,7 @@ export function Edl1() {
         <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
           <KpiTile icon="pop" tone="navy" label={<>Population totale<br />(administrative)</>} value={fmt(pt.snis)} />
           <KpiTile icon="pop" tone="teal" label={<>Population totale<br />(ajustée)</>} value={fmt(pt.ajuste)} />
-          <KpiTile icon="child" tone="violet" label={<>Enfants 0–11 mois<br />(administrative)</>} value={fmt(pt.enf0_11_micro)} />
+          <KpiTile icon="child" tone="violet" label={<>Enfants 0–11 mois<br />(administrative)</>} value={fmt(pt.enf0_11_dhis2)} />
           <KpiTile icon="child" tone="green" label={<>Enfants 0–11 mois<br />(ajustée)</>} value={fmt(pt.enf0_11_ajuste)} />
           <KpiTile icon="scale" tone={ecart >= 0 ? "orange" : "red"} label={<>Écart cible 0–11 mois<br />admin. vs ajustée</>} value={(ecart >= 0 ? "+" : "") + fmt(ecart)} />
         </div>
@@ -86,9 +93,9 @@ export function Edl1() {
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
         <div className="card card-pad">
-          <CardTitle icon="child" tone="violet" title="Population cible 0–11 mois par ZS" sub="Administrative (microplan) vs ajustée" />
+          <CardTitle icon="child" tone="violet" title="Population cible 0–11 mois par ZS" sub="Administrative (DHIS2) vs ajustée" />
           <ProtoGroupedBar height={260} rotateLabels colors={[C.violet, C.green]} cats={zss.map((z) => z.zs)} series={[
-            { name: "0–11 mois admin.", data: zss.map((z) => z.cMicro) },
+            { name: "0–11 mois admin.", data: zss.map((z) => z.cDhis2) },
             { name: "0–11 mois ajustée", data: zss.map((z) => z.cAj) },
           ]} />
         </div>
@@ -105,11 +112,12 @@ export function Edl1() {
             <div className="mb-2 text-[11px] text-surface-500">{E.asPop.length} aires de santé · tableau défilable · écart = ajustée − administrative</div>
             <div className="overflow-auto" style={{ maxHeight: 330 }}>
               <table className="dtable">
-                <thead><tr><th className="name">Aire de santé</th><th className="name">Zone de santé</th><th>Pop. admin.</th><th>Pop. ajustée</th><th>0–11 mois (micro)</th><th>0–11 mois (ajustée)</th><th>Écart 0–11</th></tr></thead>
+                <thead><tr><th className="name">Aire de santé</th><th className="name">Zone de santé</th><th>Pop. admin.</th><th>Pop. ajustée</th><th>0–11 mois (DHIS2)</th><th>0–11 mois (ajustée)</th><th>Écart 0–11</th></tr></thead>
                 <tbody>
                   {E.asPop.map((a, i) => {
-                    const ec = a.cAj - a.cMicro;
-                    return <tr key={i}><td className="name">{a.as}</td><td className="name">{a.zs}</td><td>{fmt(a.popSnis)}</td><td>{fmt(a.popAj)}</td><td>{fmt(a.cMicro)}</td><td>{fmt(a.cAj)}</td><td style={{ color: ec >= 0 ? C.orange : C.red, fontWeight: 700 }}>{(ec >= 0 ? "+" : "") + fmt(ec)}</td></tr>;
+                    const cDhis2 = cible0_11Dhis2(a.popSnis);
+                    const ec = a.cAj - cDhis2;
+                    return <tr key={i}><td className="name">{a.as}</td><td className="name">{a.zs}</td><td>{fmt(a.popSnis)}</td><td>{fmt(a.popAj)}</td><td>{fmt(cDhis2)}</td><td>{fmt(a.cAj)}</td><td style={{ color: ec >= 0 ? C.orange : C.red, fontWeight: 700 }}>{(ec >= 0 ? "+" : "") + fmt(ec)}</td></tr>;
                   })}
                 </tbody>
               </table>

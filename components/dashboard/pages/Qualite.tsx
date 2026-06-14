@@ -848,11 +848,12 @@ export function CqdZsStructures() { return <CqdComparaisonStructure level="zs" /
    et le design (TableExportButtons) de Supervision conjointe. */
 const frNum = (n: number) => n.toLocaleString("fr-FR");
 
-/** Cellule « Écart » : vert (+) si suffisant, rouge si négatif (doses insuffisantes). */
+/** Cellule « Écart » : remplissage vert (≥ 0) ou rouge (négatif, doses
+ *  insuffisantes), texte blanc pour une lecture immédiate. */
 function EcartCell({ v }: { v: number }) {
   const neg = v < 0;
   return (
-    <td className="tabular-nums" style={{ fontWeight: 700, color: neg ? C.red : C.green }}>
+    <td className="tabular-nums" style={{ fontWeight: 700, textAlign: "center", background: neg ? C.red : C.green, color: "#fff" }}>
       {neg ? "" : "+"}{frNum(v)}
     </td>
   );
