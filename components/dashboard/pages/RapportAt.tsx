@@ -17,6 +17,7 @@
    vue d'ensemble proviennent des formulaires CQ (hook useCqd). */
 import { useRapportAt } from "@/lib/client/at-api";
 import { useCqd } from "@/lib/client/cqd-api";
+import { useDhis2Prestation } from "@/lib/client/dhis2-prestation-api";
 import type { OpnCounts, AntenneSeries } from "@/lib/at/types";
 import { SectionBar } from "@/components/ui/Card";
 import { KpiTile, CardTitle, Banner, C, TONES, type Tone } from "@/components/proto/proto";
@@ -496,21 +497,28 @@ export function RapChaineFroid() {
 /* ===================== 5. Prestation de services ===================== */
 export function RapPrestation() {
   const { data } = useRapportAt();
+  // Visuels (séances planifiées/réalisées + couvertures) alimentés par le DHIS2
+  // (repo snis-vaccination-api) pour les antennes de Boende et Bokungu ; les
+  // commentaires libres restent issus du formulaire Kobo des AT.
+  const { data: dh } = useDhis2Prestation();
   if (!data) return <Empty msg="Synchronisation…" />;
   const p = data.prestation;
-  const months = p.months;
-  const couvHasData = p.couvertures.series.some((s) => s.data.some((v) => v != null));
+  const months = dh?.months ?? [];
+  const sessions = dh?.sessions ?? [];
+  const couvertures = dh?.couvertures ?? { cats: [], series: [] };
+  const detail = dh?.detail ?? { moisLabel: null, rows: [] };
+  const couvHasData = couvertures.series.some((s) => s.data.some((v) => v != null));
   return (
     <div className="space-y-4">
       <RefreshBar />
       {!data.meta.hasData && <Pending />}
       <Banner icon="chart" tone="green" title="Rapport mensuel AT — Prestation de services"
-        sub="Sessions de vaccination (fixes · avancées · mobiles) et couvertures vaccinales — données rapportées par les AT à partir du DHIS2" />
+        sub="Sessions de vaccination (fixes · avancées · mobiles) et couvertures vaccinales — données DHIS2/SNIS (antennes Boende · Bokungu)" />
 
       <section>
         <SectionBar icon="up">Réalisation des sessions de vaccination (% des AS ≥ 80 %)</SectionBar>
         <div className="space-y-3">
-          {p.sessions.map((s2) => (
+          {sessions.map((s2) => (
             <AntenneLines key={s2.key} months={months} series={s2.series} ensemble={s2.ensemble}
               title={`${s2.label}, par mois et par antenne`} icon="up" tone="blue" />
           ))}
@@ -519,22 +527,22 @@ export function RapPrestation() {
 
       <div className="card card-pad">
         <CardTitle icon="chart" tone="navy" title="% des aires de santé avec couverture vaccinale ≥ 90 %"
-          sub="Quatre antigènes (Penta1 · Penta3 · RR1 · RR2), par mois et par antenne" />
+          sub={`Quatre antigènes (Penta1 · Penta3 · RR1 · RR2), par antenne${detail.moisLabel ? ` — ${detail.moisLabel}` : ""}`} />
         {couvHasData ? (
           <ProtoGroupedBar height={280} unit="%" max={100} rotateLabels
             colors={["#00205c", "#0d9488", "#0093d5", "#7c3aed"]}
-            cats={p.couvertures.cats}
-            series={p.couvertures.series.map((s2) => ({ name: s2.name, data: s2.data.map((v) => v ?? 0) }))} />
+            cats={couvertures.cats}
+            series={couvertures.series.map((s2) => ({ name: s2.name, data: s2.data.map((v) => v ?? 0) }))} />
         ) : <Empty />}
       </div>
 
       <div className="card card-pad">
-        <CardTitle icon="table" tone="navy" title={`Détail par antenne — ${p.detail.moisLabel ?? "mois en cours"}`}
+        <CardTitle icon="table" tone="navy" title={`Détail par antenne — ${detail.moisLabel ?? "mois en cours"}`}
           right={<TableExportButtons filename="Prestation de services — détail par antenne" />} />
-        {p.detail.rows.length ? (
+        {detail.rows.length ? (
           <div className="overflow-x-auto"><table className="dtable">
             <thead><tr><th className="name">Antenne</th><th>Sessions fixes (%)</th><th>Stratégies avancées (%)</th><th>Sessions mobiles (%)</th><th>AS avec Penta1 ≥ 90%</th><th>AS avec Penta3 ≥ 90%</th><th>AS avec RR1 ≥ 90%</th><th>AS avec RR2 ≥ 90%</th></tr></thead>
-            <tbody>{p.detail.rows.map((row) => (
+            <tbody>{detail.rows.map((row) => (
               <tr key={row.antenne}>
                 <td className="name">{row.antenne}</td>
                 <td className="tabular-nums">{pctTxt(row.fixes)}</td>

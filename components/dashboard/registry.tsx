@@ -2,8 +2,8 @@
 
 import { SupervisionResultats, SupervisionScore, SupervisionComparaison, SupervisionConstats } from "./pages/Supervision";
 import {
-  CqdCsComparaison, CqdCsConcordance, CqdCsErreurs, CqdCsOutils, CqdCsEnfants, CqdCsStructures,
-  CqdZsComparaison, CqdZsConcordance, CqdZsErreurs, CqdZsStructures,
+  CqdCsComparaison, CqdCsConcordance, CqdCsErreurs, CqdCsOutils, CqdCsEnfants, CqdCsStructures, CqdCsTriangulation,
+  CqdZsComparaison, CqdZsConcordance, CqdZsErreurs, CqdZsStructures, CqdZsTriangulation,
 } from "./pages/Qualite";
 import { RcmVue, RcmVaccination, RcmRaisons, RcmTableaux } from "./pages/Rcm";
 import { SavVue, SavIdentCs, SavIdentRelais, SavPlanif, SavResultats, SavSupervision } from "./pages/Sav";
@@ -26,6 +26,7 @@ export const PAGE_REGISTRY: Record<string, () => JSX.Element> = {
   cqd_cs_concordance: CqdCsConcordance,
   cqd_cs_erreurs: CqdCsErreurs,
   cqd_cs_structures: CqdCsStructures,
+  cqd_cs_triangulation: CqdCsTriangulation,
   cqd_cs_outils: CqdCsOutils,
   cqd_cs_enfants: CqdCsEnfants,
   // Qualité des données — Zones de santé
@@ -33,6 +34,7 @@ export const PAGE_REGISTRY: Record<string, () => JSX.Element> = {
   cqd_zs_concordance: CqdZsConcordance,
   cqd_zs_erreurs: CqdZsErreurs,
   cqd_zs_structures: CqdZsStructures,
+  cqd_zs_triangulation: CqdZsTriangulation,
   // Monitorage rapide de convenance
   rcm_vue: RcmVue,
   rcm_vaccination: RcmVaccination,

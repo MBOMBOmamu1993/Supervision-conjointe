@@ -7,7 +7,7 @@
 import { useState } from "react";
 import { useSWRConfig } from "swr";
 
-const ENDPOINTS = ["/api/supervision", "/api/cqd", "/api/rcm", "/api/at", "/api/sav"];
+const ENDPOINTS = ["/api/supervision", "/api/cqd", "/api/rcm", "/api/at", "/api/sav", "/api/triangulation", "/api/dhis2-prestation"];
 
 export function GlobalRefreshButton() {
   const { mutate } = useSWRConfig();
