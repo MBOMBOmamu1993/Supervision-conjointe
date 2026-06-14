@@ -17,7 +17,7 @@ import {
   fetchTshuapaByAs, num, isoToYm, ymToIso,
 } from "@/lib/dhis2/pages";
 import {
-  canonAntenne, cleanStructureName, snapToKnown, isKnownZone, isKnownAire, norm,
+  canonAntenne, cleanDhis2OrgUnit, snapToKnown, isKnownZone, isKnownAire, norm,
 } from "@/lib/geo";
 import { ENV } from "@/lib/server/env";
 
@@ -88,21 +88,50 @@ const eq = (a: string | null | undefined, b: string | null | undefined) =>
  * Mois de référence par défaut (feedback TL) : si le jour du mois courant est
  * avant le 20, on présente la situation du mois M−2 (le mois précédent le mois
  * précédent) ; si l'on est le 20 ou après, on présente la situation du mois M−1
- * (le mois précédent). Renvoyé au format ISO « YYYY-MM ».
+ * (le mois précédent). Renvoyé au format DHIS2 « YYYYMM » (sans tiret), identique
+ * au champ `_YM` des enregistrements, pour pouvoir le comparer directement.
  */
 export function defaultTargetYm(now: Date = new Date()): string {
   const monthsBack = now.getDate() < 20 ? 2 : 1;
   const d = new Date(now.getFullYear(), now.getMonth() - monthsBack, 1);
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+  return `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, "0")}`;
+}
+
+/**
+ * Mois effectivement présenté, choisi parmi les mois RÉELLEMENT disponibles
+ * (`available`, au format brut des `_YM`). La comparaison se fait sur les seuls
+ * chiffres (« YYYYMM »), donc indépendante d'un éventuel tiret. On retient le
+ * mois cible (M−2 / M−1) s'il a des données ; sinon le dernier mois disponible
+ * ANTÉRIEUR OU ÉGAL au mois cible (jamais un mois postérieur à la règle) ; sinon
+ * le dernier mois disponible. La valeur renvoyée est celle de `available` afin
+ * de rester compatible avec le filtrage en aval (`String(_YM) === refYm`).
+ */
+export function resolveRefYm(target: string, available: string[]): string | null {
+  if (!available.length) return null;
+  const digits = (s: string) => s.replace(/\D/g, "");
+  const t = digits(target);
+  const exact = available.find((ym) => digits(ym) === t);
+  if (exact) return exact;
+  const before = available.filter((ym) => digits(ym) <= t);
+  if (before.length) return before[before.length - 1];
+  return available[available.length - 1];
 }
 
 /** Nom canonique d'une ZS DHIS2 (« tu Boende Zone de Santé » → « Boende »). */
-function cleanZs(raw: string | null | undefined, antenne: string | null): string | null {
-  return snapToKnown(cleanStructureName(raw ?? null, null, antenne), isKnownZone) ?? cleanStructureName(raw ?? null, null, antenne);
+function cleanZs(raw: string | null | undefined): string | null {
+  const base = cleanDhis2OrgUnit(raw);
+  if (!base) return null;
+  return snapToKnown(base, isKnownZone) ?? base;
 }
 /** Nom canonique d'une AS DHIS2 (« tu Motema Mosantu Aire de Santé » → « Motema Mosantu »). */
-function cleanAs(raw: string | null | undefined, zone: string | null, antenne: string | null): string | null {
-  return snapToKnown(cleanStructureName(raw ?? null, zone, antenne), isKnownAire) ?? cleanStructureName(raw ?? null, zone, antenne);
+function cleanAs(raw: string | null | undefined): string | null {
+  const base = cleanDhis2OrgUnit(raw);
+  if (!base) return null;
+  return snapToKnown(base, isKnownAire) ?? base;
+}
+/** Antenne canonique d'un libellé DHIS2 (« tu Boende Antenne » → « Boende »). */
+function cleanAntenneDhis2(raw: string | null | undefined): string | null {
+  return canonAntenne(cleanDhis2OrgUnit(raw));
 }
 
 type CacheEntry = { at: number; value: TriBundle };
@@ -138,24 +167,18 @@ export async function fetchTriangulation(
     const available = [...availYm].sort();
     const selectedYm = (filters.months ?? []).map(isoToYm).filter((ym) => availYm.has(ym));
     // À défaut de filtre mois : mois de référence (M−2 avant le 20, sinon M−1).
-    // Si ce mois n'a pas encore de données publiées, on retombe sur le dernier
-    // mois publié pour ne pas laisser le tableau vide.
-    const target = defaultTargetYm();
-    const effectiveYm = selectedYm.length
-      ? selectedYm
-      : availYm.has(target)
-        ? [target]
-        : available.length ? [available[available.length - 1]] : [];
+    const refYm = resolveRefYm(defaultTargetYm(), available);
+    const effectiveYm = selectedYm.length ? selectedYm : refYm ? [refYm] : [];
     const effSet = new Set(effectiveYm);
 
     // Filtrage géographique + restriction aux mois effectifs.
     const filtered = recs.filter((r) => {
       if (!effSet.has(String(r._YM))) return false;
-      if (filters.antenne && !eq(canonAntenne(r._Antenne), canonAntenne(filters.antenne))) return false;
-      const zone = cleanZs(r._ZS, r._Antenne ?? null);
+      if (filters.antenne && !eq(cleanAntenneDhis2(r._Antenne), canonAntenne(filters.antenne))) return false;
+      const zone = cleanZs(r._ZS);
       if (filters.zone && !eq(zone, filters.zone)) return false;
       if (level === "as" && filters.aire) {
-        const aire = cleanAs(r._AS, r._ZS ?? null, r._Antenne ?? null);
+        const aire = cleanAs(r._AS);
         if (!eq(aire, filters.aire)) return false;
       }
       return true;
@@ -164,8 +187,8 @@ export async function fetchTriangulation(
     // Regroupement par unité d'organisation (AS ou ZS).
     const groups = new Map<string, RawRec[]>();
     for (const r of filtered) {
-      const zone = cleanZs(r._ZS, r._Antenne ?? null);
-      const key = level === "as" ? cleanAs(r._AS, r._ZS ?? null, r._Antenne ?? null) : zone;
+      const zone = cleanZs(r._ZS);
+      const key = level === "as" ? cleanAs(r._AS) : zone;
       if (!key) continue;
       if (!groups.has(key)) groups.set(key, []);
       groups.get(key)!.push(r);
@@ -186,7 +209,7 @@ export async function fetchTriangulation(
         const propNeg = Math.round((neg / TRIANG_DEFS.length) * 100);
         return {
           name,
-          antenne: grp[0]?._Antenne ? String(grp[0]._Antenne) : null,
+          antenne: cleanAntenneDhis2(grp[0]?._Antenne),
           antigenes: ants,
           propNeg,
           coherence: propNeg === 0,

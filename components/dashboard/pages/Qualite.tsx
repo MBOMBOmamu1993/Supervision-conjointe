@@ -878,7 +878,7 @@ function TriangulationTable({ level }: { level: "as" | "zs" }) {
       </div>
       <div className="card card-pad">
         <CardTitle icon="table" tone={tone}
-          title="Triangulation données de vaccination et doses de vaccins disponibles au cours du mois"
+          title={`Triangulation données de vaccination et doses de vaccins disponibles${monthsLabel ? ` — ${monthsLabel}` : " au cours du mois"}`}
           sub={`Une ligne par ${level === "as" ? "aire de santé" : "zone de santé"} · Dose disponible · Vaccinés · Écart par antigène`}
           right={<TableExportButtons filename={`Triangulation doses disponibles et vaccinés (${labelStruct})`} />} />
         {rows.length && ants.length ? (
