@@ -84,6 +84,18 @@ interface RawRec {
 const eq = (a: string | null | undefined, b: string | null | undefined) =>
   !!a && !!b && norm(a) === norm(b);
 
+/**
+ * Mois de référence par défaut (feedback TL) : si le jour du mois courant est
+ * avant le 20, on présente la situation du mois M−2 (le mois précédent le mois
+ * précédent) ; si l'on est le 20 ou après, on présente la situation du mois M−1
+ * (le mois précédent). Renvoyé au format ISO « YYYY-MM ».
+ */
+export function defaultTargetYm(now: Date = new Date()): string {
+  const monthsBack = now.getDate() < 20 ? 2 : 1;
+  const d = new Date(now.getFullYear(), now.getMonth() - monthsBack, 1);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+}
+
 /** Nom canonique d'une ZS DHIS2 (« tu Boende Zone de Santé » → « Boende »). */
 function cleanZs(raw: string | null | undefined, antenne: string | null): string | null {
   return snapToKnown(cleanStructureName(raw ?? null, null, antenne), isKnownZone) ?? cleanStructureName(raw ?? null, null, antenne);
@@ -125,8 +137,15 @@ export async function fetchTriangulation(
     for (const r of recs) if (r._YM && hasData(r)) availYm.add(String(r._YM));
     const available = [...availYm].sort();
     const selectedYm = (filters.months ?? []).map(isoToYm).filter((ym) => availYm.has(ym));
-    // À défaut de filtre mois : dernier mois publié (le tableau est « au cours du mois »).
-    const effectiveYm = selectedYm.length ? selectedYm : available.length ? [available[available.length - 1]] : [];
+    // À défaut de filtre mois : mois de référence (M−2 avant le 20, sinon M−1).
+    // Si ce mois n'a pas encore de données publiées, on retombe sur le dernier
+    // mois publié pour ne pas laisser le tableau vide.
+    const target = defaultTargetYm();
+    const effectiveYm = selectedYm.length
+      ? selectedYm
+      : availYm.has(target)
+        ? [target]
+        : available.length ? [available[available.length - 1]] : [];
     const effSet = new Set(effectiveYm);
 
     // Filtrage géographique + restriction aux mois effectifs.
