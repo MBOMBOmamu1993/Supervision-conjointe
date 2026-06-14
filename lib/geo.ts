@@ -228,6 +228,27 @@ export function cleanStructureName(raw: string | null, zone: string | null, ante
 }
 
 /**
+ * Nettoie un nom d'unité d'organisation DHIS2/SNIS (repo snis-vaccination-api).
+ * Ces libellés suivent la convention « tu <Nom> <Niveau> » avec un préfixe de
+ * province (« tu ») et un suffixe de niveau (« Aire de Santé », « Zone de
+ * Santé », « Centre de Santé », « Antenne », « Province »). On retire le préfixe
+ * et le suffixe pour retrouver le nom nu, harmonisé avec l'orthographe de la
+ * base État de lieux (filtres). Ex. « tu Anzi Aire de Santé » → « Anzi » ;
+ * « tu Boende Zone de Santé » → « Boende ».
+ */
+export function cleanDhis2OrgUnit(raw: string | null | undefined): string | null {
+  if (raw == null) return null;
+  let s = String(raw).trim();
+  if (!s) return null;
+  s = s.replace(/^tu\s+/i, "");                                   // préfixe province
+  s = s.replace(/\s+(aire|zone|centre)\s+de\s+sant[eé]\s*$/i, ""); // suffixe niveau
+  s = s.replace(/\s+antenne(\s+pev)?\s*$/i, "");
+  s = s.replace(/\s+province\s*$/i, "");
+  s = s.trim();
+  return s ? prettifyName(s) : null;
+}
+
+/**
  * Rabat un libellé nettoyé sur une entité CONNUE de la hiérarchie provinciale
  * (base État de lieux) en retirant d'éventuels mots terminaux résiduels —
  * segments parents d'un code Kobo qui n'ont pas pu être identifiés (parent

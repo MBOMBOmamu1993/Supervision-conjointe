@@ -12,10 +12,10 @@
  *   cible NS mensuelle = Pop_par_AS × 3,49 % / 12 ; CV = doses / cible × 100.
  */
 import { fetchTshuapaByAs, num, ymToIso } from "@/lib/dhis2/pages";
-import { canonAntenne, norm } from "@/lib/geo";
+import { canonAntenne, cleanDhis2OrgUnit, norm } from "@/lib/geo";
 import { fmtMonth } from "@/lib/client/format";
 import { ENV } from "@/lib/server/env";
-import { defaultTargetYm } from "@/lib/dhis2/triangulation";
+import { defaultTargetYm, resolveRefYm } from "@/lib/dhis2/triangulation";
 
 /** Année de référence pour les graphiques mensuels de prestation (feedback TL). */
 const CHART_YEAR = "2026";
@@ -78,7 +78,8 @@ async function loadRecs(force: boolean): Promise<RawRec[]> {
   return recs;
 }
 
-const sameAntenne = (a: string | null | undefined, b: string) => norm(canonAntenne(a) ?? "") === norm(b);
+const sameAntenne = (a: string | null | undefined, b: string) =>
+  norm(canonAntenne(cleanDhis2OrgUnit(a)) ?? "") === norm(canonAntenne(cleanDhis2OrgUnit(b)) ?? "");
 
 /** % d'AS d'un sous-ensemble ayant réalisé ≥ 80 % de leurs séances (un type). */
 function sessionPct(recs: RawRec[], prev: string, real: string): number | null {
@@ -129,9 +130,8 @@ export async function fetchDhis2Prestation(
     const ym2025 = available.filter((ym) => ym.slice(0, 4) === CHART_YEAR);
     const chartYm = ym2025.length ? ym2025 : available;
     // Mois de référence (détail & couvertures) : M−2 avant le 20, sinon M−1 ;
-    // à défaut de publication, dernier mois disponible.
-    const target = defaultTargetYm();
-    const refYm = availYm.has(target) ? target : available[available.length - 1];
+    // à défaut de publication, dernier mois disponible ≤ mois cible.
+    const refYm = resolveRefYm(defaultTargetYm(), available) ?? available[available.length - 1];
 
     const sub = (ant: string, ym: string) => recs.filter((r) => sameAntenne(r._Antenne, ant) && String(r._YM) === ym);
     const subMonth = (ym: string) => recs.filter((r) => antennes.some((a) => sameAntenne(r._Antenne, a)) && String(r._YM) === ym);
