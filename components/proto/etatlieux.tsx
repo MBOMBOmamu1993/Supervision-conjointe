@@ -111,7 +111,7 @@ export function Edl1() {
           <div className="card card-pad lg:col-span-2">
             <div className="mb-2 text-[11px] text-surface-500">{E.asPop.length} aires de santé · tableau défilable · écart = ajustée − administrative</div>
             <div className="overflow-auto" style={{ maxHeight: 330 }}>
-              <table className="dtable">
+              <table className="dtable dtable-frozen">
                 <thead><tr><th className="name">Aire de santé</th><th className="name">Zone de santé</th><th>Pop. admin.</th><th>Pop. ajustée</th><th>0–11 mois (DHIS2)</th><th>0–11 mois (ajustée)</th><th>Écart 0–11</th></tr></thead>
                 <tbody>
                   {E.asPop.map((a, i) => {
@@ -302,7 +302,7 @@ export function Edl2() {
           <div className="card card-pad lg:col-span-2">
             <div className="mb-2 text-[11px] text-surface-500">Mise en forme conditionnée : vert &lt; 50 km · orange 50–99 km · rouge ≥ 100 km. Tableau défilable.</div>
             <div className="overflow-auto" style={{ maxHeight: 300 }}>
-              <table className="dtable">
+              <table className="dtable dtable-frozen">
                 <thead><tr><th className="name">Aire de santé</th><th className="name">Zone de santé</th><th>Distance AS–BCZ (km)</th><th>Distance dernier village et CS (km)</th><th>Voie d'accès</th><th>Réseau</th></tr></thead>
                 <tbody>
                   {E.asPop.map((a, i) => (
@@ -393,7 +393,7 @@ export function Edl2() {
         <div className="card card-pad">
           <CardTitle icon="home" tone="navy" title="Points d'entrée communautaires & localités résistantes" sub="Par zone de santé" right={<TableExportButtons filename="Points d'entrée communautaires & localités résistantes" />} />
           <div className="overflow-auto" style={{ maxHeight: 300 }}>
-            <table className="dtable">
+            <table className="dtable dtable-frozen">
               <thead><tr><th className="name">Zone de santé</th><th>Marchés</th><th>Églises</th><th>Éc. mat.</th><th>Éc. prim.</th><th>Éc. sec.</th><th>Localités résistantes</th></tr></thead>
               <tbody>
                 {E.infoZS.map((z) => {

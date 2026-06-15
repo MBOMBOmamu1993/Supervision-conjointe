@@ -76,7 +76,7 @@ export function SavVue() {
       <div className="card card-pad">
         <CardTitle icon="table" tone="navy" title="Synthèse SAV par zone de santé" sub="Identification & planification dédupliquées par centre de santé" right={<TableExportButtons filename="Synthèse SAV par zone de santé" />} />
         {data.vue.syntheseByZs.length ? (
-          <div className="overflow-x-auto"><table className="dtable">
+          <div className="overflow-x-auto"><table className="dtable dtable-frozen">
             <thead><tr><th className="name">Zone de santé</th><th>CS</th><th>Enfants identifiés</th><th>Zéro dose</th><th>Sous-vacc.</th><th>Sessions planifiées</th><th>Enfants attendus</th><th>Enfants récupérés</th><th>Taux récup.</th></tr></thead>
             <tbody>{data.vue.syntheseByZs.map((r) => (
               <tr key={r.zone}><td className="name">{r.zone}</td><td>{r.cs}</td><td>{r.enfantsIdentifies}</td><td>{r.zeroDose}</td><td>{r.sousVaccines}</td><td>{r.sessions}</td><td>{r.enfantsAttendus}</td><td>{r.enfantsRecuperes}</td><td style={{ background: heat(r.tauxRecup) }}>{pctTxt(r.tauxRecup)}</td></tr>
