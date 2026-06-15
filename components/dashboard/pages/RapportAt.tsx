@@ -266,7 +266,7 @@ export function RapVue() {
         <div className="card card-pad">
           <CardTitle icon="table" tone="navy" title="Supervisions attendues vs réalisées par AT et par niveau" sub="Antenne · Zone de santé · Aire de santé" right={<TableExportButtons filename="Supervisions attendues vs réalisées par AT et par niveau" />} />
           {s.parAtNiveau.length ? (
-            <div className="overflow-x-auto"><table className="dtable">
+            <div className="overflow-x-auto"><table className="dtable dtable-frozen">
               <thead>
                 <tr><th rowSpan={2} className="name">Assistant technique</th><th colSpan={2}>Antenne</th><th colSpan={2}>Zone de santé</th><th colSpan={2}>Aire de santé</th></tr>
                 <tr><th>Att.</th><th>Réal.</th><th>Att.</th><th>Réal.</th><th>Att.</th><th>Réal.</th></tr>
@@ -685,7 +685,7 @@ export function RapPrestation() {
         <CardTitle icon="table" tone="navy" title={`Détail par antenne — ${detail.moisLabel ?? "mois en cours"}`}
           right={<TableExportButtons filename="Prestation de services — détail par antenne" />} />
         {detail.rows.length ? (
-          <div className="overflow-x-auto"><table className="dtable">
+          <div className="overflow-x-auto"><table className="dtable dtable-frozen">
             <thead><tr><th className="name">Antenne</th><th>Sessions fixes (%)</th><th>Stratégies avancées (%)</th><th>Sessions mobiles (%)</th><th>AS avec Penta1 ≥ 90%</th><th>AS avec Penta3 ≥ 90%</th><th>AS avec RR1 ≥ 90%</th><th>AS avec RR2 ≥ 90%</th></tr></thead>
             <tbody>{detail.rows.map((row) => (
               <tr key={row.antenne}>

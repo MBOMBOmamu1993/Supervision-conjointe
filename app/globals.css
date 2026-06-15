@@ -54,6 +54,23 @@
   table.dtable tbody tr:nth-child(even) { background: #fafcff; }
   /* le zébrage ne doit pas recouvrir la colonne navy */
   table.dtable tbody tr:nth-child(even) td.name { background: linear-gradient(100deg, #0a3a86, #00205c); }
+
+  /* Variante OPT-IN « dtable-frozen » : 1re colonne FIGÉE à gauche, réservée aux
+     tableaux LARGES (triangulation, doses disponibles, couvertures par antigène,
+     détails mensuels…) afin de garder l'org unit visible au défilement horizontal.
+     Important — en border-collapse: collapse, les bordures fusionnées ne « suivent »
+     pas une cellule sticky, ce qui faisait apparaître EN DOUBLON la bordure grise de
+     la colonne de données voisine. Correctif : on neutralise la bordure droite de la
+     cellule figée (transparent → gagne le conflit de fusion et masque le gris) et on
+     dessine le séparateur via box-shadow INSET, qui lui suit la cellule au scroll. */
+  table.dtable-frozen td:first-child.name,
+  table.dtable-frozen th:first-child.name {
+    position: sticky; left: 0; z-index: 2;
+    border-right-color: transparent;
+    box-shadow: inset -1px 0 0 0 #1b3f7a;
+  }
+  /* l'en-tête de la colonne figée passe au-dessus des cellules du corps */
+  table.dtable-frozen thead th:first-child.name { z-index: 3; }
   table.dtable tfoot td { background: #eef4fc; font-weight: 800; border-top: 2px solid #c5d2ea; }
 
   .badge-appr {

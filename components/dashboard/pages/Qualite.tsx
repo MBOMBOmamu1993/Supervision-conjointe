@@ -796,7 +796,7 @@ function CqdComparaisonStructure({ level }: { level: "as" | "zs" }) {
           right={<TableExportButtons filename="Matrice comparative des indicateurs par structure" />} />
         {withData.length ? (
           <>
-          <div className="overflow-x-auto"><table className="dtable">
+          <div className="overflow-x-auto"><table className="dtable dtable-frozen">
             <thead>
               <tr>
                 <th rowSpan={2} className="name">{labelStruct}</th>
@@ -902,7 +902,7 @@ function TriangulationTable({ level }: { level: "as" | "zs" }) {
           right={<TableExportButtons filename={`Triangulation doses disponibles et vaccinés (${labelStruct})`} />} />
         {rows.length && ants.length ? (
           <>
-          <div className="overflow-x-auto"><table className="dtable">
+          <div className="overflow-x-auto"><table className="dtable dtable-frozen">
             <thead>
               <tr>
                 <th rowSpan={2} className="name">{labelStruct}</th>
